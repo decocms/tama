@@ -1,0 +1,25 @@
+name = "myvet"
+main = "api/main.cf.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Non-secret config. Secrets (CF_AI_GATEWAY_TOKEN, ANTHROPIC_API_KEY,
+# PERPLEXITY_API_KEY) go in .dev.vars locally and `wrangler secret put` for prod.
+[vars]
+AI_GATEWAY_ACCOUNT_ID = "55dd6d847f366735ef6e0f860c7bdc51"
+AI_GATEWAY_NAME = "default"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "myvet"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "api/db/migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "myvet-files"
+preview_bucket_name = "myvet-files-dev"
+
+[assets]
+directory = "dist/client"
+binding = "ASSETS"

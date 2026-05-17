@@ -1,0 +1,352 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMcpApp } from "@/context.tsx";
+import type {
+	Episode,
+	EpisodeDashboardResult,
+	Pet,
+	Prescription,
+	Recording,
+	RecordingChunk,
+	TimetableEntry,
+} from "@/types/api.ts";
+import { callTool } from "./mcp.ts";
+
+export const keys = {
+	pets: ["pets"] as const,
+	pet: (id: string) => ["pet", id] as const,
+	episodes: (petId?: string) => ["episodes", petId ?? "all"] as const,
+	episode: (id: string) => ["episode", id] as const,
+	timetable: (id: string) => ["timetable", id] as const,
+	prescriptions: (epId: string) => ["prescriptions", epId] as const,
+};
+
+export function usePets() {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.pets,
+		queryFn: () =>
+			callTool<{ pets: Pet[] }>(app, "pet_list").then((r) => r.pets),
+		enabled: !!app,
+	});
+}
+
+export function usePet(petId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.pet(petId ?? ""),
+		queryFn: () =>
+			callTool<{ pet: Pet | null }>(app, "pet_get", { petId }).then(
+				(r) => r.pet,
+			),
+		enabled: !!app && !!petId,
+	});
+}
+
+export function useEpisodes(petId?: string) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.episodes(petId),
+		queryFn: () =>
+			callTool<{ episodes: Episode[] }>(
+				app,
+				"episode_list",
+				petId ? { petId } : {},
+			).then((r) => r.episodes),
+		enabled: !!app,
+	});
+}
+
+export function useEpisode(episodeId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.episode(episodeId ?? ""),
+		queryFn: () =>
+			callTool<EpisodeDashboardResult>(app, "episode_get", { episodeId }),
+		enabled: !!app && !!episodeId,
+		refetchInterval: 30_000,
+	});
+}
+
+export function useCreatePet() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			name: string;
+			species?: string;
+			breed?: string;
+			dob?: string;
+			weightKg?: number;
+			ownerNotes?: string;
+		}) => callTool<{ pet: Pet }>(app, "pet_create", input).then((r) => r.pet),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pets }),
+	});
+}
+
+export function useUpdatePet() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			petId: string;
+			name?: string;
+			breed?: string | null;
+			dob?: string | null;
+			weightKg?: number | null;
+			ownerNotes?: string | null;
+		}) =>
+			callTool<{ pet: Pet | null }>(app, "pet_update", input).then(
+				(r) => r.pet,
+			),
+		onSuccess: (_, vars) => {
+			qc.invalidateQueries({ queryKey: keys.pet(vars.petId) });
+			qc.invalidateQueries({ queryKey: keys.pets });
+		},
+	});
+}
+
+export function useDeletePet() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (petId: string) =>
+			callTool<{ deleted: boolean }>(app, "pet_delete", { petId }),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pets }),
+	});
+}
+
+export function useDeleteEpisode() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (episodeId: string) =>
+			callTool<{ deleted: boolean }>(app, "episode_delete", { episodeId }),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: keys.episodes() });
+		},
+	});
+}
+
+export function useEnrichPet(petId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () =>
+			callTool<{ pet: Pet }>(app, "pet_enrich", { petId }).then((r) => r.pet),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: keys.pet(petId) });
+			qc.invalidateQueries({ queryKey: keys.pets });
+		},
+	});
+}
+
+export function useStartEpisode() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { petId: string; title: string; summary?: string }) =>
+			callTool<{ episode: Episode }>(app, "episode_start", input).then(
+				(r) => r.episode,
+			),
+		onSuccess: (_, vars) => {
+			qc.invalidateQueries({ queryKey: keys.episodes(vars.petId) });
+			qc.invalidateQueries({ queryKey: keys.episodes() });
+		},
+	});
+}
+
+export function useAddNote(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { kind: "text" | "chatlog"; content: string }) =>
+			callTool(app, "episode_add_note", { episodeId, ...input }),
+		onSuccess: () =>
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+	});
+}
+
+export function useUploadPrescription() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			episodeId: string;
+			imageBase64: string;
+			mimeType: string;
+			originalName?: string;
+			sourceNotes?: string;
+		}) =>
+			callTool<{ prescription: Prescription }>(
+				app,
+				"prescription_upload",
+				input,
+			).then((r) => r.prescription),
+		onSuccess: (_, vars) =>
+			qc.invalidateQueries({ queryKey: keys.episode(vars.episodeId) }),
+	});
+}
+
+export function useUpdatePrescription() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			prescriptionId: string;
+			scheduleItems?: Prescription["scheduleItems"];
+			status?: "draft" | "confirmed";
+			sourceNotes?: string;
+		}) =>
+			callTool<{ prescription: Prescription | null }>(
+				app,
+				"prescription_update",
+				input,
+			).then((r) => r.prescription),
+		onSuccess: (rx) => {
+			if (rx) {
+				qc.invalidateQueries({ queryKey: keys.episode(rx.episodeId) });
+			}
+		},
+	});
+}
+
+export function useLogDose(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			itemName: string;
+			kind?: "medication" | "meal";
+			plannedAt?: string;
+			actualAt?: string;
+			status?: "given" | "skipped" | "undone";
+			note?: string;
+			adjustment?: { kind: "shift-next-by-h"; hours: number };
+		}) => callTool(app, "dose_log", { episodeId, ...input }),
+		onSuccess: () =>
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+	});
+}
+
+export type TimetableEntryUI = TimetableEntry;
+
+// ---------- Recordings ----------
+
+export const recordingKeys = {
+	list: (episodeId: string) => ["recordings", episodeId] as const,
+	one: (recordingId: string) => ["recording", recordingId] as const,
+};
+
+export function useRecordings(episodeId: string) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: recordingKeys.list(episodeId),
+		queryFn: () =>
+			callTool<{ recordings: Recording[] }>(app, "recording_list", {
+				episodeId,
+			}).then((r) => r.recordings),
+		enabled: !!app && !!episodeId,
+	});
+}
+
+export function useRecording(recordingId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: recordingKeys.one(recordingId ?? ""),
+		queryFn: () =>
+			callTool<{ recording: Recording | null; chunks: RecordingChunk[] }>(
+				app,
+				"recording_get",
+				{ recordingId },
+			),
+		enabled: !!app && !!recordingId,
+		refetchInterval: 5_000,
+	});
+}
+
+export function useCreateRecording() {
+	const app = useMcpApp();
+	return useMutation({
+		mutationFn: (input: {
+			episodeId: string;
+			mimeType: string;
+			originalName?: string;
+			durationS?: number;
+			numChunks: number;
+			originalBase64?: string;
+		}) =>
+			callTool<{ recording: Recording }>(app, "recording_create", input).then(
+				(r) => r.recording,
+			),
+	});
+}
+
+export function useAddChunk() {
+	const app = useMcpApp();
+	return useMutation({
+		mutationFn: (input: {
+			recordingId: string;
+			idx: number;
+			startS: number;
+			endS: number;
+			audioBase64: string;
+		}) =>
+			callTool<{ chunkId: string; fileId: string }>(
+				app,
+				"recording_add_chunk",
+				input,
+			),
+	});
+}
+
+export function useTranscribeRecording() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { recordingId: string; language?: string }) =>
+			callTool<{ recording: Recording }>(
+				app,
+				"recording_transcribe",
+				input,
+			).then((r) => r.recording),
+		onSuccess: (rec) => {
+			qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
+			qc.invalidateQueries({ queryKey: recordingKeys.list(rec.episodeId) });
+		},
+	});
+}
+
+export function useSummarizeRecording() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (recordingId: string) =>
+			callTool<{ recording: Recording }>(app, "recording_summarize", {
+				recordingId,
+			}).then((r) => r.recording),
+		onSuccess: (rec) => {
+			qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
+		},
+	});
+}
+
+export function useApplyRecording() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			recordingId: string;
+			historyUpdate?: string;
+			episodeNote?: string;
+		}) =>
+			callTool<{ recording: Recording }>(app, "recording_apply", input).then(
+				(r) => r.recording,
+			),
+		onSuccess: (rec) => {
+			qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
+			qc.invalidateQueries({ queryKey: recordingKeys.list(rec.episodeId) });
+			qc.invalidateQueries({ queryKey: keys.episode(rec.episodeId) });
+			qc.invalidateQueries({ queryKey: keys.pets });
+		},
+	});
+}

@@ -1,0 +1,23 @@
+{
+	"scopeName": "deco",
+	"name": "myvet",
+	"friendlyName": "myvet",
+	"description": "Veterinary care for your pet: profile, illness episodes, medicine timetable.",
+	"icon": "",
+	"connection": {
+		"type": "HTTP",
+		"url": "http://localhost:8787/api/mcp",
+		"configSchema": {
+			"type": "object",
+			"properties": {},
+			"required": []
+		}
+	},
+	"unlisted": true,
+	"metadata": {
+		"categories": ["personal", "health"],
+		"official": false,
+		"tags": ["pet", "vet", "health", "schedule"],
+		"short_description": "Track your pet's care end-to-end."
+	}
+}

@@ -1,0 +1,14 @@
+# Copy to .dev.vars (gitignored). wrangler dev injects these into the Worker.
+# For production: bunx wrangler secret put CF_AI_GATEWAY_TOKEN
+
+# Gateway-level auth token. The only secret you need when Anthropic + Perplexity
+# keys are stored as BYOK in the gateway dashboard (Settings → Providers).
+CF_AI_GATEWAY_TOKEN=
+
+# Optional escape hatch — only set these if you removed BYOK from the gateway
+# and want the Worker to forward provider keys per-request.
+# ANTHROPIC_API_KEY=
+# PERPLEXITY_API_KEY=
+
+# Whisper transcription goes through the same AI Gateway and is billed via
+# AI Gateway credits — no extra secret needed.
