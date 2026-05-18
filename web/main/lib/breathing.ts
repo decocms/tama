@@ -26,20 +26,27 @@ export const SAMPLE_RATE_HZ = 30;
 export const BUFFER_SECONDS = 20;
 // 12 BPM is below the at-rest range for healthy dogs of any size, so the
 // lower bound here also defines the bandpass cutoff that excludes the
-// 5-10 BPM band where slow template-drift artifacts live.
+// 5-10 BPM band where slow template-drift artifacts live. Upper bound
+// has to comfortably cover stressed/panting small dogs, which can hit
+// 120 BPM — leave a margin so the spectral peak isn't clipped near
+// the search edge.
 export const BPM_MIN = 12;
-export const BPM_MAX = 90;
+export const BPM_MAX = 140;
 
 const HAMPEL_WINDOW = 7;
 const MIN_ESTIMATE_SECONDS = 6;
 // Wide bandpass applied to the position signal before BOTH spectral
-// analysis and cycle counting. The low cutoff is set well above the
-// drifting-template's time constant so 1/f-style template noise gets
-// filtered out before it can bias the Welch peak picker downward.
+// analysis and cycle counting. Low cutoff well above template-drift
+// time constant; high cutoff well above the fastest expected breathing
+// frequency (so the 4th-order Butterworth's transition band doesn't
+// attenuate 120 BPM signals).
 const BANDPASS_LOW_HZ = 0.2;
-const BANDPASS_HIGH_HZ = 1.6;
-const ADAPTIVE_BANDPASS_HALF_WIDTH_HZ = 0.18;
-const MIN_BREATH_SEP_S = 0.5;
+const BANDPASS_HIGH_HZ = 2.6;
+const ADAPTIVE_BANDPASS_HALF_WIDTH_HZ = 0.25;
+// Cycle detector's minimum inter-crossing separation. 0.3s → can count
+// up to 200 BPM correctly; smaller than that risks counting noise
+// flicker as separate cycles.
+const MIN_BREATH_SEP_S = 0.3;
 const ZERO_CROSSING_HYSTERESIS_FRACTION = 0.15;
 const RECENT_LUMA_WINDOW = 12;
 const EXPOSURE_COOLDOWN_S = 2;

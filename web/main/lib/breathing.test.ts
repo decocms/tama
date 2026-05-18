@@ -332,10 +332,41 @@ describe("integrated estimator", () => {
 		}
 		const out = est.estimate();
 		// Either no detection or a value within the legal band — never an
-		// absurd 3 BPM from DC leak.
+		// absurd sub-band BPM from DC / drift leak.
 		if (out.bpm != null) {
-			expect(out.bpm).toBeGreaterThanOrEqual(5);
+			expect(out.bpm).toBeGreaterThanOrEqual(12);
 		}
+	});
+
+	test("locks onto fast breathing (~100 BPM)", () => {
+		const fs = 30;
+		const W = 80;
+		const H = 60;
+		const est = createBreathingEstimator({
+			sampleRateHz: fs,
+			bufferSeconds: 22,
+		});
+		const base = makeCheckerboard(W, H, 6);
+		const rgba = new Uint8ClampedArray(W * H * 4);
+		const tmp = new Uint8Array(W * H);
+		const estimateEvery = Math.round(fs / 4);
+		for (let i = 0; i < fs * 22; i++) {
+			// 100 BPM = 1.667 Hz. Small amplitude (~0.5 px) approximates
+			// shallow stressed-dog panting.
+			const yShift = 0.5 * Math.sin((2 * Math.PI * (100 / 60) * i) / fs);
+			translateSubpixel(base, W, H, yShift, tmp);
+			lumaToRgba(tmp, rgba);
+			est.feed({
+				roiRgba: rgba,
+				roiWidth: W,
+				roiHeight: H,
+			});
+			if (i > 0 && i % estimateEvery === 0) est.estimate();
+		}
+		const out = est.estimate();
+		expect(out.bpm).not.toBeNull();
+		expect(Math.abs((out.bpm ?? 0) - 100)).toBeLessThan(4);
+		expect(out.isLocked).toBe(true);
 	});
 
 	test("camera shake doesn't dislodge a locked BPM", () => {
