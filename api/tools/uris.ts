@@ -15,4 +15,5 @@ export const URI = {
 	prescriptionList: "ui://myvet/prescription-list",
 	timetableGet: "ui://myvet/timetable-get",
 	recordingGet: "ui://myvet/recording-get",
+	episodeInsights: "ui://myvet/episode-insights",
 } as const;

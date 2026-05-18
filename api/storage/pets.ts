@@ -12,6 +12,7 @@ export interface CreatePetInput {
 	dob?: string;
 	weightKg?: number;
 	ownerNotes?: string;
+	timezone?: string;
 }
 
 export async function createPet(env: Env, input: CreatePetInput): Promise<Pet> {
@@ -26,6 +27,7 @@ export async function createPet(env: Env, input: CreatePetInput): Promise<Pet> {
 			dob: input.dob,
 			weightKg: input.weightKg,
 			ownerNotes: input.ownerNotes,
+			timezone: input.timezone,
 		})
 		.returning();
 	return row;
@@ -67,6 +69,7 @@ export interface UpdatePetInput {
 	dob?: string | null;
 	weightKg?: number | null;
 	ownerNotes?: string | null;
+	timezone?: string | null;
 }
 
 export async function updatePet(
@@ -81,6 +84,7 @@ export async function updatePet(
 	if (patch.dob !== undefined) writable.dob = patch.dob;
 	if (patch.weightKg !== undefined) writable.weightKg = patch.weightKg;
 	if (patch.ownerNotes !== undefined) writable.ownerNotes = patch.ownerNotes;
+	if (patch.timezone !== undefined) writable.timezone = patch.timezone;
 	if (Object.keys(writable).length === 0) return getPet(env, id);
 	const [row] = await db(env)
 		.update(pets)

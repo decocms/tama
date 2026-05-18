@@ -1,11 +1,20 @@
 import type { Env } from "../env.ts";
 
+// Cloudflare AI Gateway expects specific provider slugs in the URL. Perplexity
+// is published as `perplexity-ai` — the bare "perplexity" slug returns 400
+// with code 2008 "Invalid provider".
+const PROVIDER_SLUG: Record<"anthropic" | "perplexity", string> = {
+	anthropic: "anthropic",
+	perplexity: "perplexity-ai",
+};
+
 function gatewayUrl(
 	env: Env,
 	provider: "anthropic" | "perplexity",
 	path: string,
 ) {
-	return `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/${provider}${path}`;
+	const slug = PROVIDER_SLUG[provider];
+	return `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/${slug}${path}`;
 }
 
 // Gateway-level auth (set when "Authenticated Gateway" is enabled in the dashboard).

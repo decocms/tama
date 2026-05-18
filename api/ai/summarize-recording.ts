@@ -74,6 +74,19 @@ function stripJsonFence(text: string): string {
 	return text.trim();
 }
 
+// Build a single transcript from multiple recordings, with labels so Claude
+// knows where each one begins. Used for group-analysis.
+export function joinTranscripts(
+	parts: Array<{ label: string; transcript: string }>,
+): string {
+	return parts
+		.map(
+			(p, i) =>
+				`--- Audio ${i + 1}${p.label ? ` (${p.label})` : ""} ---\n${p.transcript}`,
+		)
+		.join("\n\n");
+}
+
 export async function summarizeRecording(
 	env: Env,
 	input: SummarizeInput,

@@ -12,6 +12,7 @@ export const pets = sqliteTable("pets", {
 	weightKg: real("weight_kg"),
 	ownerNotes: text("owner_notes"),
 	enrichmentJson: text("enrichment_json"),
+	timezone: text("timezone"),
 	createdAt: text("created_at").notNull().default(nowSql),
 	deletedAt: text("deleted_at"),
 });
@@ -28,6 +29,8 @@ export const episodes = sqliteTable("episodes", {
 	startedAt: text("started_at").notNull().default(nowSql),
 	endedAt: text("ended_at"),
 	summary: text("summary"),
+	currentStatus: text("current_status"),
+	currentStatusAt: text("current_status_at"),
 	deletedAt: text("deleted_at"),
 });
 
@@ -85,6 +88,42 @@ export const doses = sqliteTable("doses", {
 	note: text("note"),
 	adjustmentJson: text("adjustment_json"),
 	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// Live runtime schedule per (episode, item). The prescriptions table is the
+// template; this is the drifting reality. See migration 0007 for the design.
+export const scheduleState = sqliteTable("schedule_state", {
+	id: text("id").primaryKey(),
+	episodeId: text("episode_id")
+		.notNull()
+		.references(() => episodes.id, { onDelete: "cascade" }),
+	itemKey: text("item_key").notNull(),
+	displayName: text("display_name").notNull(),
+	kind: text("kind", { enum: ["medication", "meal"] })
+		.notNull()
+		.default("medication"),
+	dosage: text("dosage"),
+	route: text("route"),
+	notes: text("notes"),
+	intervalHours: real("interval_hours").notNull(),
+	anchorAt: text("anchor_at").notNull(),
+	durationDays: integer("duration_days"),
+	prescriptionId: text("prescription_id").references(() => prescriptions.id, {
+		onDelete: "set null",
+	}),
+	active: integer("active", { mode: "boolean" }).notNull().default(true),
+	createdAt: text("created_at").notNull().default(nowSql),
+	updatedAt: text("updated_at").notNull().default(nowSql),
+});
+
+export const episodeInsights = sqliteTable("episode_insights", {
+	id: text("id").primaryKey(),
+	episodeId: text("episode_id")
+		.notNull()
+		.references(() => episodes.id, { onDelete: "cascade" }),
+	bulletsJson: text("bullets_json").notNull().default("[]"),
+	rawAiText: text("raw_ai_text"),
+	generatedAt: text("generated_at").notNull().default(nowSql),
 });
 
 export const recordings = sqliteTable("recordings", {
@@ -151,3 +190,7 @@ export type Recording = typeof recordings.$inferSelect;
 export type NewRecording = typeof recordings.$inferInsert;
 export type RecordingChunk = typeof recordingChunks.$inferSelect;
 export type NewRecordingChunk = typeof recordingChunks.$inferInsert;
+export type EpisodeInsightsRow = typeof episodeInsights.$inferSelect;
+export type NewEpisodeInsightsRow = typeof episodeInsights.$inferInsert;
+export type ScheduleStateRow = typeof scheduleState.$inferSelect;
+export type NewScheduleStateRow = typeof scheduleState.$inferInsert;

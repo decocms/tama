@@ -81,4 +81,9 @@ export const uiResources = [
 		"Recording",
 		"Inline view of a recording: transcript, summary, proposed updates.",
 	),
+	htmlResource(
+		URI.episodeInsights,
+		"AI insights",
+		"Up to 3 short AI insight bullets for an episode.",
+	),
 ];

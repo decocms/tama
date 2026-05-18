@@ -1,150 +1,89 @@
-import { Upload } from "lucide-react";
 import { useState } from "react";
-import { Badge } from "@/components/ui/badge.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card.tsx";
-import { Input } from "@/components/ui/input.tsx";
-import { formatDateTime } from "@/lib/format.ts";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
 import type { Prescription } from "@/types/api.ts";
-import {
-	useAddNote,
-	useEpisode,
-	useUploadPrescription,
-} from "../lib/queries.ts";
+import { useEpisode, usePet } from "../lib/queries.ts";
+import { DoseHistoryButton } from "./DoseHistoryButton.tsx";
+import { EpisodeHero } from "./EpisodeHero.tsx";
+import { InsightsPanel } from "./InsightsPanel.tsx";
+import { Medicines } from "./Medicines.tsx";
+import { NotesTimeline } from "./NotesTimeline.tsx";
+import { NowStrip } from "./NowStrip.tsx";
 import { PrescriptionReview } from "./PrescriptionReview.tsx";
+import { Prescriptions } from "./Prescriptions.tsx";
 import { Recordings } from "./Recordings.tsx";
+import { Section } from "./Section.tsx";
+import { StatusUpdate } from "./StatusUpdate.tsx";
 import { Timetable } from "./Timetable.tsx";
 
 export function EpisodeView({ episodeId }: { episodeId: string }) {
 	const { data, isLoading } = useEpisode(episodeId);
-	const upload = useUploadPrescription();
-	const addNote = useAddNote(episodeId);
+	const ep = data?.episode;
+	const { data: pet } = usePet(ep?.petId);
 
 	const [draftRx, setDraftRx] = useState<Prescription | null>(null);
-	const [sourceNotes, setSourceNotes] = useState("");
-	const [noteContent, setNoteContent] = useState("");
 
-	if (isLoading || !data?.episode) {
-		return <p className="text-sm text-muted-foreground">Loading…</p>;
+	if (isLoading || !ep || !data) {
+		return (
+			<div className="space-y-4">
+				<Skeleton className="h-36 w-full rounded-2xl" />
+				<Skeleton className="h-20 w-full rounded-xl" />
+				<Skeleton className="h-48 w-full rounded-xl" />
+			</div>
+		);
 	}
-	const ep = data.episode;
 
-	const handleFile = async (file: File) => {
-		const buf = await file.arrayBuffer();
-		const bytes = new Uint8Array(buf);
-		let binary = "";
-		const chunkSize = 0x8000;
-		for (let i = 0; i < bytes.length; i += chunkSize) {
-			binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-		}
-		const base64 = btoa(binary);
-		const rx = await upload.mutateAsync({
-			episodeId,
-			imageBase64: base64,
-			mimeType: file.type || "image/jpeg",
-			originalName: file.name,
-			sourceNotes: sourceNotes || undefined,
-		});
-		setDraftRx(rx);
-		setSourceNotes("");
-	};
+	const candidates = data.timetable.map((entry) => ({
+		episodeId,
+		episodeTitle: ep.title,
+		entry,
+	}));
 
 	return (
-		<div className="space-y-4">
-			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center justify-between">
-						<span className="flex items-center gap-2">
-							{ep.title}
-							<Badge variant={ep.status === "open" ? "default" : "secondary"}>
-								{ep.status}
-							</Badge>
-						</span>
-					</CardTitle>
-				</CardHeader>
-				<CardContent className="text-sm text-muted-foreground space-y-1">
-					<div>Started {formatDateTime(ep.startedAt)}</div>
-					{ep.summary ? (
-						<p className="whitespace-pre-wrap">{ep.summary}</p>
-					) : null}
-				</CardContent>
-			</Card>
+		<div className="space-y-6">
+			<EpisodeHero
+				episode={ep}
+				pet={pet ?? null}
+				prescriptions={data.prescriptions}
+				doses={data.doses ?? []}
+			/>
 
-			<section>
-				<h2 className="text-lg font-semibold mb-2">Timetable</h2>
-				<Timetable episodeId={episodeId} entries={data.timetable} />
-			</section>
+			<StatusUpdate episodeId={episodeId} />
 
-			<section>
-				<h2 className="text-lg font-semibold mb-2">Prescriptions</h2>
-				<Card>
-					<CardContent className="p-4 space-y-3">
-						<Input
-							placeholder="Optional context (vet instructions, first-dose time…)"
-							value={sourceNotes}
-							onChange={(e) => setSourceNotes(e.target.value)}
-						/>
-						<label className="inline-flex">
-							<input
-								type="file"
-								accept="image/*,application/pdf"
-								className="sr-only"
-								onChange={(e) => {
-									const f = e.target.files?.[0];
-									if (f) handleFile(f);
-									e.target.value = "";
-								}}
-								disabled={upload.isPending}
-							/>
-							<Button
-								size="sm"
-								type="button"
-								disabled={upload.isPending}
-								onClick={(e) => {
-									const input = (
-										e.currentTarget.parentElement as HTMLLabelElement
-									).querySelector("input");
-									input?.click();
-								}}
-							>
-								<Upload className="w-3 h-3" />
-								{upload.isPending
-									? "Uploading + extracting…"
-									: "Upload prescription photo"}
-							</Button>
-						</label>
-						{upload.error ? (
-							<p className="text-xs text-destructive">
-								{(upload.error as Error).message}
-							</p>
-						) : null}
-						{data.prescriptions.length > 0 ? (
-							<ul className="text-sm space-y-1">
-								{data.prescriptions.map((rx) => (
-									<li key={rx.id} className="flex items-center justify-between">
-										<span>
-											{rx.itemCount} item{rx.itemCount === 1 ? "" : "s"} •{" "}
-											{new Date(rx.createdAt).toLocaleString()}
-										</span>
-										<Badge
-											variant={
-												rx.status === "confirmed" ? "default" : "outline"
-											}
-										>
-											{rx.status}
-										</Badge>
-									</li>
-								))}
-							</ul>
-						) : null}
-					</CardContent>
-				</Card>
-			</section>
+			{/* NowStrip + Insights share a row at sm+ (1/3 + 2/3); stacks on
+			    mobile. NowStrip renders an idle "All caught up" tile when
+			    nothing's imminent so the column always has content. */}
+			<div className="grid gap-4 sm:grid-cols-3 items-stretch">
+				<div className="sm:col-span-1">
+					<NowStrip candidates={candidates} renderIdle />
+				</div>
+				<div className="sm:col-span-2">
+					<InsightsPanel episodeId={episodeId} />
+				</div>
+			</div>
+
+			<Section
+				title="Timetable"
+				eyebrow="Today"
+				action={<DoseHistoryButton doses={data.doses ?? []} />}
+			>
+				<Timetable
+					episodeId={episodeId}
+					entries={data.timetable}
+					doses={data.doses ?? []}
+				/>
+			</Section>
+
+			<Section title="Medicines & meals" eyebrow="Prescribed">
+				<Medicines prescriptions={data.prescriptions} />
+			</Section>
+
+			<Section title="Prescriptions" eyebrow="Documents">
+				<Prescriptions
+					episodeId={episodeId}
+					prescriptions={data.prescriptions}
+					onDraftCreated={setDraftRx}
+				/>
+			</Section>
 
 			{draftRx ? (
 				<PrescriptionReview
@@ -153,61 +92,13 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 				/>
 			) : null}
 
-			<section>
-				<h2 className="text-lg font-semibold mb-2">Recordings</h2>
+			<Section title="Recordings" eyebrow="Voice + AI">
 				<Recordings episodeId={episodeId} />
-			</section>
+			</Section>
 
-			<section>
-				<h2 className="text-lg font-semibold mb-2">Notes</h2>
-				<Card>
-					<CardContent className="p-4 space-y-3">
-						<Input
-							placeholder="Add a note or paste a chat log…"
-							value={noteContent}
-							onChange={(e) => setNoteContent(e.target.value)}
-						/>
-						<div className="flex gap-2">
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={!noteContent || addNote.isPending}
-								onClick={() =>
-									addNote
-										.mutateAsync({ kind: "text", content: noteContent })
-										.then(() => setNoteContent(""))
-								}
-							>
-								Add text note
-							</Button>
-							<Button
-								size="sm"
-								variant="outline"
-								disabled={!noteContent || addNote.isPending}
-								onClick={() =>
-									addNote
-										.mutateAsync({ kind: "chatlog", content: noteContent })
-										.then(() => setNoteContent(""))
-								}
-							>
-								Add chat log
-							</Button>
-						</div>
-						{data.notes.length > 0 ? (
-							<ul className="space-y-3">
-								{data.notes.map((n) => (
-									<li key={n.id} className="text-sm border-l-2 pl-3">
-										<div className="text-xs text-muted-foreground mb-1">
-											{n.kind} • {new Date(n.createdAt).toLocaleString()}
-										</div>
-										<p className="whitespace-pre-wrap">{n.content}</p>
-									</li>
-								))}
-							</ul>
-						) : null}
-					</CardContent>
-				</Card>
-			</section>
+			<Section title="Notes" eyebrow="History">
+				<NotesTimeline notes={data.notes} />
+			</Section>
 		</div>
 	);
 }

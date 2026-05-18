@@ -1,189 +1,174 @@
 import { describe, expect, it } from "bun:test";
-import type { Dose, Prescription } from "../db/schema.ts";
-import { deriveTimetable } from "./timetable.ts";
+import type { Dose } from "../db/schema.ts";
+import type { ScheduleState } from "./schedule-state.ts";
+import { deriveTimetable, wallClockToIso } from "./timetable.ts";
 
-function makeRx(
-	items: unknown[],
-	overrides: Partial<Prescription> = {},
-): Prescription {
+function makeState(overrides: Partial<ScheduleState>): ScheduleState {
 	return {
-		id: "rx_1",
+		id: "ss_1",
 		episodeId: "ep_1",
-		fileId: null,
-		status: "confirmed",
-		scheduleItemsJson: JSON.stringify(items),
-		rawAiText: null,
-		sourceNotes: null,
+		itemKey: "prelone",
+		displayName: "PRELONE",
+		kind: "medication",
+		dosage: null,
+		route: null,
+		notes: null,
+		intervalHours: 24,
+		anchorAt: "2026-05-16T18:00:00.000Z",
+		durationDays: null,
+		prescriptionId: "rx_1",
+		active: true,
 		createdAt: "2026-05-16T00:00:00.000Z",
+		updatedAt: "2026-05-16T00:00:00.000Z",
+		...overrides,
+	};
+}
+
+function makeDose(overrides: Partial<Dose>): Dose {
+	return {
+		id: "d_1",
+		episodeId: "ep_1",
+		itemName: "PRELONE",
+		kind: "medication",
+		plannedAt: null,
+		actualAt: "2026-05-16T18:00:00.000Z",
+		status: "given",
+		note: null,
+		adjustmentJson: null,
+		createdAt: "2026-05-16T18:00:00.000Z",
 		...overrides,
 	};
 }
 
 const dayStart = new Date("2026-05-16T00:00:00.000Z");
-const dayEnd = new Date("2026-05-16T23:59:00.000Z");
+const dayEnd2 = new Date("2026-05-17T23:59:00.000Z");
 
-describe("deriveTimetable", () => {
-	it("expands scheduled times into entries", () => {
-		const rx = makeRx([
-			{ name: "PRELONE", kind: "medication", times: ["18:00"] },
-			{ name: "PAPA", kind: "meal", times: ["08:00", "14:00", "20:00"] },
-		]);
-
+describe("deriveTimetable (anchor model)", () => {
+	it("walks anchor forward at interval to fill the window", () => {
+		const state = makeState({
+			intervalHours: 8,
+			anchorAt: "2026-05-16T06:00:00.000Z",
+		});
 		const entries = deriveTimetable({
-			prescriptions: [rx],
+			scheduleStates: [state],
 			doses: [],
 			from: dayStart,
-			to: dayEnd,
+			to: dayEnd2,
 		});
-
-		expect(entries).toHaveLength(4);
-		expect(entries.map((e) => e.itemName)).toEqual([
-			"PAPA",
-			"PAPA",
-			"PRELONE",
-			"PAPA",
-		]);
-		expect(entries[2].kind).toBe("medication");
-		expect(entries[0].kind).toBe("meal");
+		// Pending entries every 8h: 06, 14, 22 today + 06, 14, 22 tomorrow.
+		const times = entries.map((e) => e.scheduledAt);
+		expect(times).toContain("2026-05-16T06:00:00.000Z");
+		expect(times).toContain("2026-05-16T14:00:00.000Z");
+		expect(times).toContain("2026-05-16T22:00:00.000Z");
+		expect(times).toContain("2026-05-17T06:00:00.000Z");
+		expect(entries.every((e) => e.status === "pending")).toBe(true);
 	});
 
-	it("ignores draft prescriptions", () => {
-		const rx = makeRx([{ name: "X", kind: "medication", times: ["10:00"] }], {
-			status: "draft",
+	it("shows given doses as their own entries at actualAt", () => {
+		const state = makeState({
+			intervalHours: 24,
+			anchorAt: "2026-05-17T18:00:00.000Z", // anchor already advanced
+		});
+		const given = makeDose({
+			id: "d_g",
+			actualAt: "2026-05-16T18:13:00.000Z",
+			status: "given",
 		});
 		const entries = deriveTimetable({
-			prescriptions: [rx],
+			scheduleStates: [state],
+			doses: [given],
+			from: dayStart,
+			to: dayEnd2,
+		});
+		const givenEntry = entries.find((e) => e.doseId === "d_g");
+		expect(givenEntry).toBeDefined();
+		expect(givenEntry?.status).toBe("given");
+		expect(givenEntry?.scheduledAt).toBe("2026-05-16T18:13:00.000Z");
+		// Tomorrow's anchor is still pending.
+		const tomorrow = entries.find(
+			(e) => e.scheduledAt === "2026-05-17T18:00:00.000Z",
+		);
+		expect(tomorrow?.status).toBe("pending");
+	});
+
+	it("inactive items don't produce entries", () => {
+		const state = makeState({ active: false });
+		const entries = deriveTimetable({
+			scheduleStates: [state],
 			doses: [],
 			from: dayStart,
-			to: dayEnd,
+			to: dayEnd2,
 		});
 		expect(entries).toHaveLength(0);
 	});
 
-	it("marks entries as given when a dose matches plannedAt", () => {
-		const rx = makeRx([
-			{ name: "LUFTA", kind: "medication", times: ["17:00"] },
-		]);
-		const dose: Dose = {
-			id: "d1",
-			episodeId: "ep_1",
-			itemName: "LUFTA",
-			kind: "medication",
-			plannedAt: "2026-05-16T17:00:00.000Z",
-			actualAt: "2026-05-16T17:00:00.000Z",
-			status: "given",
-			note: null,
-			adjustmentJson: null,
-			createdAt: "2026-05-16T17:00:00.000Z",
-		};
-
-		const entries = deriveTimetable({
-			prescriptions: [rx],
-			doses: [dose],
-			from: dayStart,
-			to: dayEnd,
+	it("skips undone doses entirely", () => {
+		const state = makeState({ anchorAt: "2026-05-17T18:00:00.000Z" });
+		const undone = makeDose({
+			id: "d_u",
+			actualAt: "2026-05-16T18:00:00.000Z",
+			status: "undone",
 		});
-
-		expect(entries[0].status).toBe("given");
-		expect(entries[0].doseId).toBe("d1");
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [undone],
+			from: dayStart,
+			to: dayEnd2,
+		});
+		expect(entries.find((e) => e.doseId === "d_u")).toBeUndefined();
 	});
 
-	it("matches doses within ±90 minutes even without exact plannedAt", () => {
-		const rx = makeRx([
-			{ name: "SUCRA", kind: "medication", times: ["06:44"] },
-		]);
-		const dose: Dose = {
-			id: "d2",
-			episodeId: "ep_1",
-			itemName: "SUCRA",
-			kind: "medication",
-			plannedAt: null,
-			actualAt: "2026-05-16T07:30:00.000Z", // 46 min after scheduled
-			status: "given",
-			note: null,
-			adjustmentJson: null,
-			createdAt: "2026-05-16T07:30:00.000Z",
-		};
-		const entries = deriveTimetable({
-			prescriptions: [rx],
-			doses: [dose],
-			from: dayStart,
-			to: dayEnd,
+	it("very-stale anchors collapse to a single overdue entry, not a flood", () => {
+		// Anchor 5 days ago. Window is today (single-day for simplicity).
+		const state = makeState({
+			intervalHours: 24,
+			anchorAt: "2026-05-11T18:00:00.000Z",
 		});
-		expect(entries[0].status).toBe("given");
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [],
+			from: dayStart,
+			to: new Date("2026-05-16T23:59:00.000Z"),
+		});
+		expect(entries).toHaveLength(1);
+		// Fast-forwarded to the most-recent missed slot before the window.
+		expect(entries[0].scheduledAt).toBe("2026-05-16T18:00:00.000Z");
 	});
 
-	it("applies shift-next-by-h adjustment to the next pending entry of same item", () => {
-		const rx = makeRx([
-			{ name: "LUFTA", kind: "medication", times: ["17:00", "23:00"] },
-		]);
-		const earlyDose: Dose = {
-			id: "d3",
-			episodeId: "ep_1",
-			itemName: "LUFTA",
-			kind: "medication",
-			plannedAt: "2026-05-16T17:00:00.000Z",
-			actualAt: "2026-05-16T16:00:00.000Z", // 1h early
-			status: "given",
-			note: "fed early",
-			adjustmentJson: JSON.stringify({ kind: "shift-next-by-h", hours: -1 }),
-			createdAt: "2026-05-16T16:00:00.000Z",
-		};
-
-		const entries = deriveTimetable({
-			prescriptions: [rx],
-			doses: [earlyDose],
-			from: dayStart,
-			to: dayEnd,
+	it("snooze + give yields exactly one slot, marked given at the given time", () => {
+		// User snoozed +2h then gave the dose. The snooze had already shifted
+		// the anchor; the give-dose pushed it another interval forward.
+		const state = makeState({
+			intervalHours: 24,
+			anchorAt: "2026-05-17T18:00:00.000Z", // already advanced (next-day)
 		});
-
-		const second = entries.find(
-			(e) => e.itemName === "LUFTA" && e.status === "pending",
+		const given = makeDose({
+			id: "d_late",
+			actualAt: "2026-05-16T20:13:00.000Z",
+			status: "given",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [given],
+			from: dayStart,
+			to: new Date("2026-05-16T23:59:00.000Z"),
+		});
+		// Only one PRELONE on 5/16 — the given one at 20:13. No phantom.
+		const todays = entries.filter((e) =>
+			e.scheduledAt.startsWith("2026-05-16"),
 		);
-		expect(second).toBeDefined();
-		// Originally 23:00, shifted -1h → 22:00
-		expect(second?.scheduledAt).toContain("T22:00:00");
+		expect(todays).toHaveLength(1);
+		expect(todays[0].status).toBe("given");
+		expect(todays[0].doseId).toBe("d_late");
 	});
 
-	it("does not double-count adjustments — only the latest dose applies", () => {
-		const rx = makeRx([
-			{ name: "X", kind: "medication", times: ["10:00", "14:00", "18:00"] },
-		]);
-		const doses: Dose[] = [
-			{
-				id: "d1",
-				episodeId: "ep_1",
-				itemName: "X",
-				kind: "medication",
-				plannedAt: "2026-05-16T10:00:00.000Z",
-				actualAt: "2026-05-16T09:00:00.000Z",
-				status: "given",
-				note: null,
-				adjustmentJson: JSON.stringify({ kind: "shift-next-by-h", hours: -1 }),
-				createdAt: "2026-05-16T09:00:00.000Z",
-			},
-			{
-				id: "d2",
-				episodeId: "ep_1",
-				itemName: "X",
-				kind: "medication",
-				plannedAt: "2026-05-16T14:00:00.000Z",
-				actualAt: "2026-05-16T15:00:00.000Z",
-				status: "given",
-				note: null,
-				adjustmentJson: JSON.stringify({ kind: "shift-next-by-h", hours: 1 }),
-				createdAt: "2026-05-16T15:00:00.000Z",
-			},
-		];
-
-		const entries = deriveTimetable({
-			prescriptions: [rx],
-			doses,
-			from: dayStart,
-			to: dayEnd,
-		});
-		// First two doses given; third pending. Latest adjustment was +1h → 18:00 becomes 19:00.
-		const pending = entries.find((e) => e.status === "pending");
-		expect(pending?.scheduledAt).toContain("T19:00:00");
+	it("wallClockToIso resolves HH:mm in a timezone to UTC", () => {
+		const iso = wallClockToIso("12:00", "America/Sao_Paulo");
+		expect(iso).toMatch(/T15:00:00\.000Z$/);
+		const iso2 = wallClockToIso("2026-05-17 12:00", "America/Sao_Paulo");
+		expect(iso2).toBe("2026-05-17T15:00:00.000Z");
+		const iso3 = wallClockToIso("2026-05-17 12:00", "UTC");
+		expect(iso3).toBe("2026-05-17T12:00:00.000Z");
+		expect(() => wallClockToIso("garbage", "UTC")).toThrow();
 	});
 });

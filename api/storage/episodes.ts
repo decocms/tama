@@ -99,6 +99,56 @@ export async function listNotes(env: Env, episodeId: string): Promise<Note[]> {
 		.orderBy(desc(notes.createdAt));
 }
 
+export interface UpdateEpisodeInput {
+	title?: string;
+	summary?: string | null;
+	startedAt?: string;
+	status?: "open" | "closed";
+	endedAt?: string | null;
+}
+
+export async function updateEpisode(
+	env: Env,
+	id: string,
+	patch: UpdateEpisodeInput,
+): Promise<Episode | null> {
+	const writable: Partial<typeof episodes.$inferInsert> = {};
+	if (patch.title !== undefined) writable.title = patch.title;
+	if (patch.summary !== undefined) writable.summary = patch.summary;
+	if (patch.startedAt !== undefined) writable.startedAt = patch.startedAt;
+	if (patch.status !== undefined) writable.status = patch.status;
+	if (patch.endedAt !== undefined) writable.endedAt = patch.endedAt;
+	if (Object.keys(writable).length === 0) return getEpisode(env, id);
+	const [row] = await db(env)
+		.update(episodes)
+		.set(writable)
+		.where(eq(episodes.id, id))
+		.returning();
+	return row ?? null;
+}
+
+// The episode's "summary" field doubles as its live status — it's the line
+// shown under the title in the hero. AI insights overwrites it with the
+// latest status bullet so opening the episode always shows the current read.
+// We also stamp currentStatusAt as a freshness indicator (UI can show
+// "Updated 2h ago"); summary itself stays the single source of truth.
+export async function setEpisodeStatus(
+	env: Env,
+	id: string,
+	status: string | null,
+): Promise<Episode | null> {
+	const [row] = await db(env)
+		.update(episodes)
+		.set({
+			summary: status,
+			currentStatus: status,
+			currentStatusAt: status ? new Date().toISOString() : null,
+		})
+		.where(eq(episodes.id, id))
+		.returning();
+	return row ?? null;
+}
+
 export async function deleteEpisode(env: Env, id: string): Promise<boolean> {
 	const now = new Date().toISOString();
 	const result = await db(env)

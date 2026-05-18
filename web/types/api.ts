@@ -17,6 +17,7 @@ export interface Pet {
 	dob: string | null;
 	weightKg: number | null;
 	ownerNotes: string | null;
+	timezone: string | null;
 	enrichment: Enrichment | null;
 	createdAt: string;
 }
@@ -29,6 +30,9 @@ export interface Episode {
 	startedAt: string;
 	endedAt: string | null;
 	summary: string | null;
+	currentStatus: string | null;
+	currentStatusAt: string | null;
+	deletedAt: string | null;
 }
 
 export interface Note {
@@ -83,11 +87,25 @@ export interface TimetableEntry {
 	doseId?: string;
 }
 
+export interface Dose {
+	id: string;
+	episodeId: string;
+	itemName: string;
+	kind: "medication" | "meal";
+	plannedAt: string | null;
+	actualAt: string;
+	status: "given" | "skipped" | "undone";
+	note: string | null;
+	adjustmentJson: string | null;
+	createdAt: string;
+}
+
 export interface EpisodeDashboardResult {
 	episode: Episode | null;
 	timetable: TimetableEntry[];
-	prescriptions: PrescriptionSummary[];
+	prescriptions: Prescription[];
 	notes: Note[];
+	doses: Dose[];
 }
 
 export type RecordingStatus =
@@ -113,6 +131,21 @@ export interface Recording {
 	episodeNoteId: string | null;
 	error: string | null;
 	createdAt: string;
+}
+
+export type InsightTag = "status" | "watch-out" | "next-action";
+
+export interface InsightBullet {
+	tag: InsightTag;
+	text: string;
+	sourceKind: "note" | "recording" | "prescription" | "dose" | "schedule";
+	sourceId: string | null;
+}
+
+export interface EpisodeInsightsResult {
+	insights: InsightBullet[];
+	generatedAt: string;
+	cached: boolean;
 }
 
 export interface RecordingChunk {

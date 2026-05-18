@@ -22,6 +22,7 @@ const PetSchema = z.object({
 	dob: z.string().nullable(),
 	weightKg: z.number().nullable(),
 	ownerNotes: z.string().nullable(),
+	timezone: z.string().nullable(),
 	enrichment: EnrichmentSchema.nullable(),
 	createdAt: z.string(),
 });
@@ -35,6 +36,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getPet>>>) {
 		dob: p.dob,
 		weightKg: p.weightKg,
 		ownerNotes: p.ownerNotes,
+		timezone: p.timezone,
 		enrichment: parseEnrichment(p),
 		createdAt: p.createdAt,
 	};
@@ -61,6 +63,12 @@ export const petCreateTool = (_env: Env) =>
 				.string()
 				.optional()
 				.describe("Notable conditions, allergies, behaviors"),
+			timezone: z
+				.string()
+				.optional()
+				.describe(
+					"IANA tz used to interpret prescription HH:mm (e.g. 'America/Sao_Paulo'). Defaults to the dashboard browser tz on creation.",
+				),
 		}),
 		outputSchema: z.object({ pet: PetSchema }),
 		_meta: { ui: { resourceUri: URI.petCreate } },
@@ -136,6 +144,7 @@ export const petUpdateTool = (_env: Env) =>
 			dob: z.string().nullable().optional(),
 			weightKg: z.number().nullable().optional(),
 			ownerNotes: z.string().nullable().optional(),
+			timezone: z.string().nullable().optional(),
 		}),
 		outputSchema: z.object({ pet: PetSchema.nullable() }),
 		execute: async ({ context, runtimeContext }) => {

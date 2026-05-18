@@ -3,60 +3,98 @@
 @custom-variant dark (&:is([data-theme="dark"] *));
 
 :root {
-	/* Host variable fallbacks (light) */
-	--color-background-primary: hsl(0 0% 100%);
-	--color-background-secondary: hsl(240 4.8% 95.9%);
-	--color-background-tertiary: hsl(240 4.8% 95.9%);
-	--color-background-danger: hsl(0 84.2% 60.2%);
-	--color-text-primary: hsl(240 10% 3.9%);
-	--color-text-secondary: hsl(240 3.8% 46.1%);
-	--color-border-primary: hsl(240 5.9% 90%);
-	--color-border-secondary: hsl(240 5.9% 90%);
-	--color-ring-primary: hsl(240 5.9% 10%);
+	/* Warm paper palette */
+	--color-background-primary: #fbf7f0;
+	--color-background-secondary: #f4edde;
+	--color-background-tertiary: #ede4d0;
+	--color-background-danger: #b7561e;
+	--color-text-primary: #1f1a14;
+	--color-text-secondary: #6b6258;
+	--color-border-primary: #efe8d5;
+	--color-border-secondary: #e8e0cb;
+	--color-ring-primary: #2f6b5c;
 
-	/* Primary color (no host equivalent) */
-	--primary: hsl(240 5.9% 10%);
-	--primary-foreground: hsl(0 0% 98%);
+	/* Primary — sage / dependable */
+	--primary: #2f6b5c;
+	--primary-foreground: #fbf7f0;
 
-	/* Sidebar tokens (existing) */
-	--sidebar: hsl(0 0% 98%);
-	--sidebar-foreground: hsl(240 5.3% 26.1%);
-	--sidebar-primary: hsl(240 5.9% 10%);
-	--sidebar-primary-foreground: hsl(0 0% 98%);
-	--sidebar-accent: hsl(240 4.8% 95.9%);
-	--sidebar-accent-foreground: hsl(240 5.9% 10%);
-	--sidebar-border: hsl(220 13% 91%);
-	--sidebar-ring: hsl(217.2 91.2% 59.8%);
+	/* Domain accents */
+	--color-accent-pet: #c75d5d;       /* terracotta */
+	--color-accent-meal: #c77a2c;      /* warm amber */
+	--color-accent-med: #2b5ba1;       /* deep blue */
+	--color-status-given: #4a7c59;     /* moss */
+	--color-status-overdue: #b7561e;   /* rust */
+	--color-status-pending: #8a7e6a;   /* warm neutral */
+	--color-status-upcoming: #c08a1e;  /* warm saffron — "keep an eye on this" */
+
+	/* Tints (use as bg for soft fills) */
+	--color-tint-given: rgba(74, 124, 89, 0.08);
+	--color-tint-overdue: rgba(183, 86, 30, 0.1);
+	--color-tint-upcoming: rgba(192, 138, 30, 0.1);
+	--color-tint-pet: rgba(199, 93, 93, 0.08);
+	--color-tint-meal: rgba(199, 122, 44, 0.08);
+	--color-tint-med: rgba(43, 91, 161, 0.07);
+
+	/* Typography */
+	--font-display: "Plus Jakarta Sans", "Inter", system-ui, -apple-system,
+		"Segoe UI", sans-serif;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Sidebar (kept) */
+	--sidebar: var(--color-background-primary);
+	--sidebar-foreground: var(--color-text-primary);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--color-background-secondary);
+	--sidebar-accent-foreground: var(--color-text-primary);
+	--sidebar-border: var(--color-border-primary);
+	--sidebar-ring: var(--color-ring-primary);
 }
 
 [data-theme="dark"] {
-	/* Host variable fallbacks (dark) */
-	--color-background-primary: hsl(240 10% 3.9%);
-	--color-background-secondary: hsl(240 3.7% 15.9%);
-	--color-background-tertiary: hsl(240 3.7% 15.9%);
-	--color-background-danger: hsl(0 62.8% 30.6%);
-	--color-text-primary: hsl(0 0% 98%);
-	--color-text-secondary: hsl(240 5% 64.9%);
-	--color-border-primary: hsl(240 3.7% 15.9%);
-	--color-border-secondary: hsl(240 3.7% 15.9%);
-	--color-ring-primary: hsl(240 4.9% 83.9%);
+	--color-background-primary: #1a1612;
+	--color-background-secondary: #221d18;
+	--color-background-tertiary: #2a241e;
+	--color-background-danger: #c1693a;
+	--color-text-primary: #f4ecdc;
+	--color-text-secondary: #a89c8a;
+	--color-border-primary: #2e2820;
+	--color-border-secondary: #3a3327;
+	--color-ring-primary: #6ba89a;
 
-	/* Primary color (no host equivalent) */
-	--primary: hsl(0 0% 98%);
-	--primary-foreground: hsl(240 5.9% 10%);
+	--primary: #6ba89a;
+	--primary-foreground: #1a1612;
 
-	/* Sidebar tokens (existing) */
-	--sidebar: hsl(240 5.9% 10%);
-	--sidebar-foreground: hsl(240 4.8% 95.9%);
-	--sidebar-primary: hsl(224.3 76.3% 48%);
-	--sidebar-primary-foreground: hsl(0 0% 100%);
-	--sidebar-accent: hsl(240 3.7% 15.9%);
-	--sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-	--sidebar-border: hsl(240 3.7% 15.9%);
-	--sidebar-ring: hsl(217.2 91.2% 59.8%);
+	--color-accent-pet: #e08585;
+	--color-accent-meal: #e0a070;
+	--color-accent-med: #7daadd;
+	--color-status-given: #82b596;
+	--color-status-overdue: #d68a5a;
+	--color-status-pending: #a89c8a;
+	--color-status-upcoming: #e0b558;
+
+	--color-tint-given: rgba(130, 181, 150, 0.12);
+	--color-tint-overdue: rgba(214, 138, 90, 0.14);
+	--color-tint-upcoming: rgba(224, 181, 88, 0.14);
+	--color-tint-pet: rgba(224, 133, 133, 0.1);
+	--color-tint-meal: rgba(224, 160, 112, 0.1);
+	--color-tint-med: rgba(125, 170, 221, 0.1);
+
+	--sidebar: var(--color-background-primary);
+	--sidebar-foreground: var(--color-text-primary);
+	--sidebar-primary: var(--primary);
+	--sidebar-primary-foreground: var(--primary-foreground);
+	--sidebar-accent: var(--color-background-secondary);
+	--sidebar-accent-foreground: var(--color-text-primary);
+	--sidebar-border: var(--color-border-primary);
+	--sidebar-ring: var(--color-ring-primary);
 }
 
 @layer base {
+	html,
+	body {
+		font-feature-settings: "ss01", "ss02", "cv11";
+	}
 	button,
 	a,
 	select,
@@ -73,8 +111,28 @@
 	}
 }
 
+@layer utilities {
+	.font-display {
+		font-family: var(--font-display);
+		letter-spacing: -0.018em;
+	}
+	.font-time {
+		font-family: var(--font-mono);
+		font-variant-numeric: tabular-nums;
+		font-feature-settings: "tnum";
+		letter-spacing: -0.02em;
+	}
+	@keyframes overdue-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.55; }
+	}
+	.animate-overdue-pulse {
+		animation: overdue-pulse 1.6s ease-in-out infinite;
+	}
+}
+
 @theme inline {
-	/* Core colors — mapped from host variables */
+	/* Core */
 	--color-background: var(--color-background-primary);
 	--color-foreground: var(--color-text-primary);
 	--color-card: var(--color-background-primary);
@@ -94,10 +152,29 @@
 	--color-input: var(--color-border-secondary);
 	--color-ring: var(--color-ring-primary);
 
-	/* Layout */
-	--radius-DEFAULT: var(--border-radius-md, 0.375rem);
+	/* Domain accents — usable as bg-accent-pet, text-accent-meal, etc. */
+	--color-accent-pet: var(--color-accent-pet);
+	--color-accent-meal: var(--color-accent-meal);
+	--color-accent-med: var(--color-accent-med);
+	--color-status-given: var(--color-status-given);
+	--color-status-overdue: var(--color-status-overdue);
+	--color-status-pending: var(--color-status-pending);
+	--color-status-upcoming: var(--color-status-upcoming);
 
-	/* Sidebar (existing) */
+	--color-tint-given: var(--color-tint-given);
+	--color-tint-overdue: var(--color-tint-overdue);
+	--color-tint-upcoming: var(--color-tint-upcoming);
+	--color-tint-pet: var(--color-tint-pet);
+	--color-tint-meal: var(--color-tint-meal);
+	--color-tint-med: var(--color-tint-med);
+
+	/* Layout */
+	--radius-DEFAULT: 0.625rem;
+	--radius-lg: 0.875rem;
+	--radius-md: 0.625rem;
+	--radius-sm: 0.375rem;
+
+	/* Sidebar */
 	--color-sidebar: var(--sidebar);
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar-primary: var(--sidebar-primary);

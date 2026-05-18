@@ -1,94 +1,155 @@
-import { Mic, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Check, Mic, Sparkles, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
+import { cn } from "@/lib/utils.ts";
+import type { Recording } from "@/types/api.ts";
 import { decodeAndChunk, fileToBase64 } from "../lib/audio.ts";
 import {
 	useAddChunk,
-	useApplyRecording,
+	useApplyRecordingGroup,
 	useCreateRecording,
-	useRecording,
 	useRecordings,
-	useSummarizeRecording,
 	useTranscribeRecording,
 } from "../lib/queries.ts";
 
 export function Recordings({ episodeId }: { episodeId: string }) {
 	const { data: recordings } = useRecordings(episodeId);
-	const [activeId, setActiveId] = useState<string | null>(null);
 	const [progress, setProgress] = useState<string | null>(null);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const create = useCreateRecording();
 	const addChunk = useAddChunk();
 	const transcribe = useTranscribeRecording();
+	const applyGroup = useApplyRecordingGroup();
+
+	// Auto-select every freshly-transcribed recording so a typical flow is
+	// "drop files → wait → click Analyze" without manual ticking. Only flips
+	// the box from unchecked → checked; never un-checks user choices.
+	useEffect(() => {
+		if (!recordings) return;
+		setSelected((prev) => {
+			let changed = false;
+			const next = new Set(prev);
+			for (const r of recordings) {
+				if (r.status === "transcribed" && !next.has(r.id)) {
+					next.add(r.id);
+					changed = true;
+				}
+			}
+			return changed ? next : prev;
+		});
+	}, [recordings]);
 
 	const handleFile = async (file: File) => {
-		setProgress(`reading ${file.name}…`);
+		const label = file.name;
+		setProgress(`reading ${label}…`);
+		const original = await fileToBase64(file);
+		setProgress(`decoding ${label}…`);
+		const { durationS, chunks } = await decodeAndChunk(file, {
+			onProgress: (m) => setProgress(`${label} · ${m}`),
+		});
+
+		const rec = await create.mutateAsync({
+			episodeId,
+			mimeType: file.type || "audio/mpeg",
+			originalName: file.name,
+			durationS,
+			numChunks: chunks.length,
+			originalBase64: original,
+		});
+
+		for (const ch of chunks) {
+			setProgress(`${label} · uploading chunk ${ch.idx + 1}/${chunks.length}…`);
+			await addChunk.mutateAsync({
+				recordingId: rec.id,
+				idx: ch.idx,
+				startS: ch.startS,
+				endS: ch.endS,
+				audioBase64: ch.base64,
+			});
+		}
+
+		setProgress(`${label} · transcribing…`);
+		await transcribe.mutateAsync({ recordingId: rec.id });
+	};
+
+	const handleFiles = async (files: File[]) => {
 		try {
-			const original = await fileToBase64(file);
-			setProgress("decoding + chunking…");
-			const { durationS, chunks } = await decodeAndChunk(file, {
-				onProgress: (m) => setProgress(m),
-			});
-
-			setProgress("creating recording…");
-			const rec = await create.mutateAsync({
-				episodeId,
-				mimeType: file.type || "audio/mpeg",
-				originalName: file.name,
-				durationS,
-				numChunks: chunks.length,
-				originalBase64: original,
-			});
-			setActiveId(rec.id);
-
-			for (const ch of chunks) {
-				setProgress(`uploading chunk ${ch.idx + 1}/${chunks.length}…`);
-				await addChunk.mutateAsync({
-					recordingId: rec.id,
-					idx: ch.idx,
-					startS: ch.startS,
-					endS: ch.endS,
-					audioBase64: ch.base64,
-				});
+			for (const f of files) {
+				await handleFile(f);
 			}
-
-			setProgress("transcribing…");
-			await transcribe.mutateAsync({ recordingId: rec.id });
 			setProgress(null);
+			toast.success(
+				files.length === 1
+					? "Audio uploaded and transcribed"
+					: `${files.length} audios uploaded and transcribed`,
+			);
 		} catch (err) {
 			setProgress(`failed: ${(err as Error).message}`);
+			toast.error((err as Error).message);
 		}
 	};
 
+	const toggleSelect = (id: string) => {
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const selectableIds = (recordings ?? [])
+		.filter((r) => r.status === "transcribed" || r.status === "summarized")
+		.map((r) => r.id);
+
+	const handleAnalyze = () => {
+		const ids = Array.from(selected).filter((id) => selectableIds.includes(id));
+		if (ids.length === 0) return;
+		applyGroup.mutate(
+			{ episodeId, recordingIds: ids },
+			{
+				onSuccess: () => {
+					setSelected(new Set());
+					toast.success(
+						ids.length === 1
+							? "Analysis applied to notes"
+							: `Analysis from ${ids.length} recordings applied to notes`,
+					);
+				},
+				onError: (e) => toast.error((e as Error).message),
+			},
+		);
+	};
+
+	const eligibleSelectedCount = Array.from(selected).filter((id) =>
+		selectableIds.includes(id),
+	).length;
+
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle className="text-base flex items-center gap-2">
-					<Mic className="w-4 h-4" /> Recordings
-				</CardTitle>
-			</CardHeader>
-			<CardContent className="space-y-3">
-				<label className="inline-flex">
+		<div className="rounded-xl border bg-card overflow-hidden">
+			<header className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border/60">
+				<Mic className="w-4 h-4 text-muted-foreground" />
+				<span className="font-display font-semibold">Recordings</span>
+				<label className="ml-auto inline-flex">
 					<input
 						type="file"
 						accept="audio/*,video/mp4,video/quicktime"
+						multiple
 						className="sr-only"
 						onChange={(e) => {
-							const f = e.target.files?.[0];
-							if (f) handleFile(f);
+							const fs = Array.from(e.target.files ?? []);
+							if (fs.length > 0) handleFiles(fs);
 							e.target.value = "";
 						}}
 						disabled={!!progress}
 					/>
 					<Button
 						size="sm"
+						variant="outline"
 						type="button"
 						disabled={!!progress}
 						onClick={(e) => {
@@ -98,187 +159,128 @@ export function Recordings({ episodeId }: { episodeId: string }) {
 							input?.click();
 						}}
 					>
-						<Mic className="w-3 h-3" /> Upload audio
+						<Mic className="w-3.5 h-3.5" /> Upload audio
 					</Button>
 				</label>
-				{progress ? (
-					<p className="text-xs text-muted-foreground">{progress}</p>
+				{eligibleSelectedCount > 0 ? (
+					<Button
+						size="sm"
+						onClick={handleAnalyze}
+						disabled={applyGroup.isPending}
+					>
+						<Sparkles className="w-3.5 h-3.5" />
+						{applyGroup.isPending
+							? "Analyzing…"
+							: eligibleSelectedCount === 1
+								? "Analyze 1 recording"
+								: `Analyze ${eligibleSelectedCount} together`}
+					</Button>
 				) : null}
+			</header>
 
-				{recordings && recordings.length > 0 ? (
-					<ul className="space-y-2">
-						{recordings.map((r) => (
-							<li key={r.id}>
-								<RecordingRow
-									recordingId={r.id}
-									expanded={activeId === r.id}
-									onToggle={() => setActiveId(activeId === r.id ? null : r.id)}
-								/>
-							</li>
-						))}
-					</ul>
-				) : null}
-			</CardContent>
-		</Card>
+			{progress ? (
+				<div className="px-4 py-2 text-xs text-muted-foreground bg-secondary/40 border-b">
+					{progress}
+				</div>
+			) : null}
+
+			{recordings && recordings.length > 0 ? (
+				<ul className="divide-y">
+					{recordings.map((r) => (
+						<RecordingRow
+							key={r.id}
+							recording={r}
+							selected={selected.has(r.id)}
+							onToggle={() => toggleSelect(r.id)}
+						/>
+					))}
+				</ul>
+			) : (
+				<div className="px-4 py-6 text-sm text-muted-foreground">
+					No recordings yet. Drop one or more audio files above — they'll be
+					transcribed automatically. Then tick the ones you want analyzed
+					together and click Analyze.
+				</div>
+			)}
+		</div>
 	);
 }
 
 function RecordingRow({
-	recordingId,
-	expanded,
+	recording,
+	selected,
 	onToggle,
 }: {
-	recordingId: string;
-	expanded: boolean;
+	recording: Recording;
+	selected: boolean;
 	onToggle: () => void;
 }) {
-	const { data } = useRecording(recordingId);
-	const summarize = useSummarizeRecording();
-	const apply = useApplyRecording();
-	const [historyEdit, setHistoryEdit] = useState<string | null>(null);
-	const [noteEdit, setNoteEdit] = useState<string | null>(null);
-
-	if (!data?.recording) return null;
-	const rec = data.recording;
-	const chunks = data.chunks;
-	const transcribedChunks = chunks.filter((c) => c.transcript).length;
+	const canSelect =
+		recording.status === "transcribed" || recording.status === "summarized";
+	const isApplied = recording.status === "applied";
+	const inProgress =
+		recording.status === "uploading" || recording.status === "transcribing";
+	const isError = recording.status === "error";
 
 	return (
-		<div className="rounded-md border">
-			<button
-				type="button"
-				onClick={onToggle}
-				className="w-full flex items-center justify-between p-3 text-left hover:bg-accent"
-			>
-				<div className="text-sm">
-					<div className="font-medium truncate">
-						{rec.originalName ?? rec.id}
-					</div>
-					<div className="text-xs text-muted-foreground">
-						{rec.durationS ? `${Math.round(rec.durationS)}s • ` : ""}
-						{transcribedChunks}/{rec.numChunks} chunks
-					</div>
-				</div>
-				<StatusBadge status={rec.status} />
-			</button>
-			{expanded ? (
-				<div className="p-3 border-t space-y-3">
-					{rec.error ? (
-						<p className="text-xs text-destructive">{rec.error}</p>
-					) : null}
-
-					{rec.fullTranscript ? (
-						<details className="text-sm">
-							<summary className="cursor-pointer text-muted-foreground">
-								Full transcript ({rec.fullTranscript.length} chars)
-							</summary>
-							<pre className="whitespace-pre-wrap mt-2 text-xs">
-								{rec.fullTranscript}
-							</pre>
-						</details>
-					) : null}
-
-					{rec.status === "transcribed" && !rec.summary ? (
-						<Button
-							size="sm"
-							onClick={() => summarize.mutate(recordingId)}
-							disabled={summarize.isPending}
-						>
-							<Sparkles className="w-3 h-3" />
-							{summarize.isPending
-								? "Summarizing…"
-								: "Summarize + propose updates"}
-						</Button>
-					) : null}
-
-					{rec.summary || rec.historyUpdate ? (
-						<div className="space-y-3">
-							<EditablePane
-								title="Summary / episode note"
-								value={noteEdit ?? rec.summary ?? ""}
-								onChange={setNoteEdit}
-							/>
-							<EditablePane
-								title="Long-term history update (appended to pet notes)"
-								value={historyEdit ?? rec.historyUpdate ?? ""}
-								onChange={setHistoryEdit}
-							/>
-							{rec.status !== "applied" ? (
-								<div className="flex gap-2">
-									<Button
-										size="sm"
-										onClick={() =>
-											apply.mutate({
-												recordingId,
-												historyUpdate: historyEdit ?? rec.historyUpdate ?? "",
-												episodeNote: noteEdit ?? rec.summary ?? "",
-											})
-										}
-										disabled={apply.isPending}
-									>
-										{apply.isPending ? "Applying…" : "Apply to pet + episode"}
-									</Button>
-									<Button
-										size="sm"
-										variant="outline"
-										onClick={() =>
-											apply.mutate({
-												recordingId,
-												historyUpdate: "",
-												episodeNote: "",
-											})
-										}
-										disabled={apply.isPending}
-									>
-										Discard
-									</Button>
-								</div>
-							) : (
-								<p className="text-xs text-muted-foreground">
-									Applied. Pet notes and episode notes updated.
-								</p>
-							)}
-						</div>
-					) : null}
-				</div>
-			) : null}
-		</div>
-	);
-}
-
-function EditablePane({
-	title,
-	value,
-	onChange,
-}: {
-	title: string;
-	value: string;
-	onChange: (v: string) => void;
-}) {
-	return (
-		<div>
-			<div className="text-xs uppercase text-muted-foreground mb-1">
-				{title}
+		<li
+			className={cn(
+				"flex items-center gap-3 px-4 py-2.5",
+				canSelect && selected ? "bg-primary/5" : "",
+			)}
+		>
+			<div className="w-6 flex items-center justify-center">
+				{canSelect ? (
+					<Checkbox
+						checked={selected}
+						onCheckedChange={onToggle}
+						aria-label="Select for analysis"
+					/>
+				) : isApplied ? (
+					<Check className="w-4 h-4 text-[var(--color-status-given)]" />
+				) : isError ? (
+					<X className="w-4 h-4 text-[var(--color-status-overdue)]" />
+				) : (
+					<div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse" />
+				)}
 			</div>
-			<textarea
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
-				className="w-full text-sm rounded-md border bg-background p-2 min-h-[80px]"
-			/>
-		</div>
+			<div className="flex-1 min-w-0">
+				<div className="font-medium truncate text-sm">
+					{recording.originalName ?? recording.id}
+				</div>
+				<div className="text-xs text-muted-foreground">
+					{recording.durationS ? `${Math.round(recording.durationS)}s · ` : ""}
+					{recording.numChunks} chunk{recording.numChunks === 1 ? "" : "s"}
+					{recording.error ? ` · ${recording.error}` : ""}
+				</div>
+			</div>
+			<StatusBadge status={recording.status} />
+		</li>
 	);
 }
 
-function StatusBadge({ status }: { status: string }) {
-	const variant: "default" | "secondary" | "destructive" | "outline" =
-		status === "applied" || status === "summarized"
-			? "default"
-			: status === "error"
-				? "destructive"
-				: "outline";
+function StatusBadge({ status }: { status: Recording["status"] }) {
+	const map: Record<Recording["status"], { label: string; cls: string }> = {
+		uploading: { label: "uploading", cls: "" },
+		transcribing: { label: "transcribing", cls: "" },
+		transcribed: {
+			label: "transcribed",
+			cls: "border-primary/40 text-primary",
+		},
+		summarized: { label: "summarized", cls: "border-primary/40 text-primary" },
+		applied: {
+			label: "applied",
+			cls: "border-[var(--color-status-given)]/30 text-[var(--color-status-given)]",
+		},
+		error: {
+			label: "error",
+			cls: "border-[var(--color-status-overdue)]/30 text-[var(--color-status-overdue)]",
+		},
+	};
+	const m = map[status];
 	return (
-		<Badge variant={variant} className="text-xs">
-			{status}
+		<Badge variant="outline" className={cn("text-[10px] shrink-0", m.cls)}>
+			{m.label}
 		</Badge>
 	);
 }

@@ -3,6 +3,7 @@ import { useMcpApp } from "@/context.tsx";
 import type {
 	Episode,
 	EpisodeDashboardResult,
+	EpisodeInsightsResult,
 	Pet,
 	Prescription,
 	Recording,
@@ -18,6 +19,7 @@ export const keys = {
 	episode: (id: string) => ["episode", id] as const,
 	timetable: (id: string) => ["timetable", id] as const,
 	prescriptions: (epId: string) => ["prescriptions", epId] as const,
+	insights: (epId: string) => ["episode-insights", epId] as const,
 };
 
 export function usePets() {
@@ -56,12 +58,23 @@ export function useEpisodes(petId?: string) {
 	});
 }
 
+function browserTimeZone(): string {
+	try {
+		return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+	} catch {
+		return "UTC";
+	}
+}
+
 export function useEpisode(episodeId: string | undefined) {
 	const app = useMcpApp();
 	return useQuery({
 		queryKey: keys.episode(episodeId ?? ""),
 		queryFn: () =>
-			callTool<EpisodeDashboardResult>(app, "episode_get", { episodeId }),
+			callTool<EpisodeDashboardResult>(app, "episode_get", {
+				episodeId,
+				timeZone: browserTimeZone(),
+			}),
 		enabled: !!app && !!episodeId,
 		refetchInterval: 30_000,
 	});
@@ -78,6 +91,7 @@ export function useCreatePet() {
 			dob?: string;
 			weightKg?: number;
 			ownerNotes?: string;
+			timezone?: string;
 		}) => callTool<{ pet: Pet }>(app, "pet_create", input).then((r) => r.pet),
 		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pets }),
 	});
@@ -94,6 +108,7 @@ export function useUpdatePet() {
 			dob?: string | null;
 			weightKg?: number | null;
 			ownerNotes?: string | null;
+			timezone?: string | null;
 		}) =>
 			callTool<{ pet: Pet | null }>(app, "pet_update", input).then(
 				(r) => r.pet,
@@ -221,14 +236,53 @@ export function useLogDose(episodeId: string) {
 			actualAt?: string;
 			status?: "given" | "skipped" | "undone";
 			note?: string;
-			adjustment?: { kind: "shift-next-by-h"; hours: number };
 		}) => callTool(app, "dose_log", { episodeId, ...input }),
 		onSuccess: () =>
 			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
 	});
 }
 
+export function useSnoozeItem(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { itemName: string; hours: number }) =>
+			callTool(app, "timetable_snooze", { episodeId, ...input }),
+		onSuccess: () =>
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+	});
+}
+
 export type TimetableEntryUI = TimetableEntry;
+
+export function useEpisodeInsights(episodeId: string) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.insights(episodeId),
+		queryFn: () =>
+			callTool<EpisodeInsightsResult>(app, "episode_insights", { episodeId }),
+		enabled: !!app && !!episodeId,
+		staleTime: 60_000,
+	});
+}
+
+export function useRefreshInsights(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () =>
+			callTool<EpisodeInsightsResult>(app, "episode_insights", {
+				episodeId,
+				refresh: true,
+			}),
+		onSuccess: (data) => {
+			qc.setQueryData(keys.insights(episodeId), data);
+			// The tool also writes episodes.currentStatus, so refetch the
+			// episode dashboard to pick up the new status in the hero.
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) });
+		},
+	});
+}
 
 // ---------- Recordings ----------
 
@@ -326,6 +380,30 @@ export function useSummarizeRecording() {
 			}).then((r) => r.recording),
 		onSuccess: (rec) => {
 			qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
+		},
+	});
+}
+
+export function useApplyRecordingGroup() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { episodeId: string; recordingIds: string[] }) =>
+			callTool<{
+				noteId: string | null;
+				summary: string;
+				historyUpdate: string;
+				recordings: Recording[];
+			}>(app, "recording_apply_group", input),
+		onSuccess: (data, vars) => {
+			qc.invalidateQueries({
+				queryKey: recordingKeys.list(vars.episodeId),
+			});
+			qc.invalidateQueries({ queryKey: keys.episode(vars.episodeId) });
+			qc.invalidateQueries({ queryKey: keys.pets });
+			for (const rec of data.recordings) {
+				qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
+			}
 		},
 	});
 }

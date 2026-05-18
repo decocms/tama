@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { McpProvider, useMcpHostContext } from "./context.tsx";
 import EpisodeDashboardInline from "./inline/episode-dashboard.tsx";
+import EpisodeInsightsInline from "./inline/episode-insights.tsx";
 import EpisodeListInline from "./inline/episode-list.tsx";
 import EpisodeStartInline from "./inline/episode-start.tsx";
 import PetCardInline from "./inline/pet-card.tsx";
@@ -31,6 +32,8 @@ function Root() {
 			return <EpisodeStartInline />;
 		case "episode_get":
 			return <EpisodeDashboardInline />;
+		case "episode_insights":
+			return <EpisodeInsightsInline />;
 		case "episode_list":
 			return <EpisodeListInline />;
 		case "prescription_upload":

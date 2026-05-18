@@ -18,7 +18,7 @@ export default function TimetableInline() {
 	return (
 		<InlineShell label="Loading timetable">
 			<h2 className="text-base font-semibold mb-3">Timetable</h2>
-			<Timetable episodeId={episodeId} entries={entries} />
+			<Timetable episodeId={episodeId} entries={entries} doses={[]} />
 		</InlineShell>
 	);
 }

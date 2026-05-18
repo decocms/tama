@@ -12,13 +12,19 @@ AI_GATEWAY_NAME = "default"
 [[d1_databases]]
 binding = "DB"
 database_name = "myvet"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "0e2b493f-1f85-4327-bec3-5fa89df1c9e6"
 migrations_dir = "api/db/migrations"
 
 [[r2_buckets]]
 binding = "FILES"
 bucket_name = "myvet-files"
 preview_bucket_name = "myvet-files-dev"
+
+# Workers AI — Cloudflare-hosted models (Whisper transcription, etc.).
+# Billed against your Cloudflare account's unified billing, no provider key
+# required. The AI binding gives us env.AI.run("@cf/openai/whisper-...", …).
+[ai]
+binding = "AI"
 
 [assets]
 directory = "dist/client"

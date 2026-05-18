@@ -6,7 +6,9 @@ import {
 	episodeGetTool,
 	episodeListTool,
 	episodeStartTool,
+	episodeUpdateTool,
 } from "./episode.ts";
+import { episodeInsightsTool } from "./insights.ts";
 import {
 	petCreateTool,
 	petDeleteTool,
@@ -16,12 +18,14 @@ import {
 	petUpdateTool,
 } from "./pet.ts";
 import {
+	prescriptionCreateTool,
 	prescriptionListTool,
 	prescriptionUpdateTool,
 	prescriptionUploadTool,
 } from "./prescription.ts";
 import {
 	recordingAddChunkTool,
+	recordingApplyGroupTool,
 	recordingApplyTool,
 	recordingCreateTool,
 	recordingGetTool,
@@ -29,10 +33,12 @@ import {
 	recordingSummarizeTool,
 	recordingTranscribeTool,
 } from "./recording.ts";
+import { vetResearchTool } from "./research.ts";
 import {
 	doseLogTool,
-	timetableAdjustTool,
+	doseUpdateTool,
 	timetableGetTool,
+	timetableSnoozeTool,
 } from "./timetable.ts";
 
 export const tools = [
@@ -46,20 +52,26 @@ export const tools = [
 	episodeStartTool,
 	episodeGetTool,
 	episodeListTool,
+	episodeUpdateTool,
 	episodeEndTool,
 	episodeDeleteTool,
 	episodeAddNoteTool,
 	prescriptionUploadTool,
+	prescriptionCreateTool,
 	prescriptionUpdateTool,
 	prescriptionListTool,
 	timetableGetTool,
 	doseLogTool,
-	timetableAdjustTool,
+	doseUpdateTool,
+	timetableSnoozeTool,
 	recordingCreateTool,
 	recordingAddChunkTool,
 	recordingTranscribeTool,
 	recordingSummarizeTool,
 	recordingApplyTool,
+	recordingApplyGroupTool,
 	recordingGetTool,
 	recordingListTool,
+	episodeInsightsTool,
+	vetResearchTool,
 ];

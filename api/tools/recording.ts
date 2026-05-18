@@ -1,6 +1,9 @@
 import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
-import { summarizeRecording } from "../ai/summarize-recording.ts";
+import {
+	joinTranscripts,
+	summarizeRecording,
+} from "../ai/summarize-recording.ts";
 import { whisperTranscribe } from "../ai/whisper.ts";
 import type { Env } from "../env.ts";
 import { addNote, getEpisode, listNotes } from "../storage/episodes.ts";
@@ -325,6 +328,138 @@ export const recordingApplyTool = (_env: Env) =>
 				episodeNoteId,
 			});
 			return { recording: updated ?? rec };
+		},
+	});
+
+// ---------------------------------------------------------------------------
+// recording_apply_group — combine N transcripts into one summary + apply
+// ---------------------------------------------------------------------------
+
+export const recordingApplyGroupTool = (_env: Env) =>
+	createTool({
+		id: "recording_apply_group",
+		description:
+			"Combine the transcripts of one or more recordings into a SINGLE analysis, then auto-apply: appends the long-term history update to pet.ownerNotes and inserts one ai-summary note on the episode. All recordings in the group are marked status='applied' and linked to that note. No review step — the analysis is shown via the resulting note in the timeline.",
+		inputSchema: z.object({
+			episodeId: z.string(),
+			recordingIds: z
+				.array(z.string())
+				.min(1)
+				.describe("One or more recordings to analyze together as one context."),
+		}),
+		outputSchema: z.object({
+			noteId: z.string().nullable(),
+			summary: z.string(),
+			historyUpdate: z.string(),
+			recordings: z.array(RecordingSchema),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const ep = await getEpisode(env, context.episodeId);
+			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
+			const pet = await getPet(env, ep.petId);
+			if (!pet) throw new Error("Pet not found");
+
+			// Load each recording, validate it belongs to the episode and has a
+			// transcript. If any is missing, fail fast — better than silently
+			// merging an incomplete set.
+			const recs = await Promise.all(
+				context.recordingIds.map((id) => getRecording(env, id)),
+			);
+			const valid: NonNullable<Awaited<ReturnType<typeof getRecording>>>[] = [];
+			for (let i = 0; i < recs.length; i++) {
+				const rec = recs[i];
+				const id = context.recordingIds[i];
+				if (!rec) throw new Error(`Recording not found: ${id}`);
+				if (rec.episodeId !== ep.id) {
+					throw new Error(`Recording ${id} is not part of this episode.`);
+				}
+				if (!rec.fullTranscript) {
+					throw new Error(
+						`Recording ${id} has no transcript yet — call recording_transcribe first.`,
+					);
+				}
+				valid.push(rec);
+			}
+
+			// Stable order: oldest first, so the narrative reads chronologically.
+			valid.sort(
+				(a, b) =>
+					new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+			);
+
+			const combinedTranscript = joinTranscripts(
+				valid.map((r) => ({
+					label: [
+						r.originalName,
+						r.durationS ? `${Math.round(r.durationS)}s` : null,
+					]
+						.filter(Boolean)
+						.join(" · "),
+					transcript: r.fullTranscript ?? "",
+				})),
+			);
+
+			const notesRows = await listNotes(env, ep.id);
+			const out = await summarizeRecording(env, {
+				petContext: {
+					name: pet.name,
+					species: pet.species,
+					breed: pet.breed,
+					dob: pet.dob,
+					weightKg: pet.weightKg,
+					ownerNotes: pet.ownerNotes,
+				},
+				episodeContext: {
+					title: ep.title,
+					summary: ep.summary,
+					existingNotes: notesRows.map((n) => n.content),
+				},
+				transcript: combinedTranscript,
+			});
+
+			// Append history to ownerNotes (don't overwrite).
+			if (out.historyUpdate.trim()) {
+				const stamp = new Date().toISOString().slice(0, 10);
+				const tag =
+					valid.length === 1 ? "recording" : `${valid.length} recordings`;
+				const appended =
+					(pet.ownerNotes ? `${pet.ownerNotes}\n\n` : "") +
+					`[${stamp} from ${tag}]\n${out.historyUpdate.trim()}`;
+				await updatePet(env, pet.id, { ownerNotes: appended });
+			}
+
+			// Persist as a single ai-summary note on the episode.
+			let noteId: string | null = null;
+			const noteText = out.episodeNote.trim() || out.summary.trim();
+			if (noteText) {
+				const n = await addNote(env, {
+					episodeId: ep.id,
+					kind: "ai-summary",
+					content: noteText,
+				});
+				noteId = n.id;
+			}
+
+			// Mark each recording applied + linked to the same note.
+			const updated = await Promise.all(
+				valid.map((r) =>
+					updateRecording(env, r.id, {
+						status: "applied",
+						summary: out.summary,
+						historyUpdate: out.historyUpdate,
+						episodeNoteId: noteId,
+					}),
+				),
+			);
+			const result = updated.map((u, i) => u ?? valid[i]);
+
+			return {
+				noteId,
+				summary: out.summary,
+				historyUpdate: out.historyUpdate,
+				recordings: result,
+			};
 		},
 	});
 
