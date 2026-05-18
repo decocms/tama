@@ -142,8 +142,9 @@ describe("tracker", () => {
 		const t = createBpmTracker({ resetStreak: 4 });
 		for (let i = 0; i < 12; i++) t.update(30, 1);
 		expect(t.getState().bpm).toBeCloseTo(30, 0);
-		// 5 outliers in a row at 55 BPM — beyond resetStreak.
-		for (let i = 0; i < 5; i++) t.update(55, 1);
+		// Once locked, the tracker doubles its reset streak — need 8+
+		// outliers to trigger the snap. Send 10 to be safe.
+		for (let i = 0; i < 10; i++) t.update(55, 1);
 		const s = t.getState();
 		expect(s.bpm).toBeCloseTo(55, 0);
 		expect(s.isLocked).toBe(false);

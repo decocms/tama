@@ -58,6 +58,12 @@ const DEFAULTS: Required<TrackerOptions> = {
 	resetStreak: 8,
 	initialVariance: 36,
 };
+// Once locked, demand more disagreement before discarding measurements
+// and a much longer streak before snapping to a new value. Brief
+// environmental noise can't dislodge a real lock; only a sustained
+// genuine BPM change does.
+const LOCKED_OUTLIER_MULTIPLIER = 1.7;
+const LOCKED_RESET_MULTIPLIER = 2;
 
 export function createBpmTracker(options: TrackerOptions = {}): BpmTracker {
 	const opts = { ...DEFAULTS, ...options };
@@ -92,9 +98,15 @@ export function createBpmTracker(options: TrackerOptions = {}): BpmTracker {
 			const innovationStd = Math.sqrt(S);
 			state.innovationStd = innovationStd;
 
-			if (Math.abs(innovation) > opts.outlierZ * innovationStd) {
+			const outlierZThreshold = state.isLocked
+				? opts.outlierZ * LOCKED_OUTLIER_MULTIPLIER
+				: opts.outlierZ;
+			const effectiveResetStreak = state.isLocked
+				? Math.round(opts.resetStreak * LOCKED_RESET_MULTIPLIER)
+				: opts.resetStreak;
+			if (Math.abs(innovation) > outlierZThreshold * innovationStd) {
 				state.outlierStreak++;
-				if (state.outlierStreak >= opts.resetStreak) {
+				if (state.outlierStreak >= effectiveResetStreak) {
 					state.bpm = measuredBpm;
 					state.variance = Math.max(
 						measurementVariance,

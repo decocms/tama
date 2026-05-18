@@ -63,6 +63,18 @@ const NUM_SUB_REGIONS = SUB_REGION_COLS * SUB_REGION_ROWS;
 // Need at least this many sub-regions agreeing this frame for a valid
 // measurement. Below this the median is meaningless and we hold position.
 const MIN_VALID_SUB_REGIONS = 3;
+// 3-frame moving average on the per-frame median dy. Kills the high-
+// frequency jaggedness that doesn't represent breathing (which is
+// always <2 Hz). Smooths just over 100 ms — way below the fastest
+// plausible breathing period.
+const DY_SMOOTHING_WINDOW = 3;
+// Spectral peak and time-domain IBI must agree within this factor before
+// the tracker accepts a measurement. Prevents the algorithm from locking
+// onto a spurious low-frequency peak while the bandpassed signal has
+// dozens of noise-driven zero-crossings (the v5 "7 BPM with 75 cycles"
+// failure mode).
+const SPECTRAL_IBI_AGREEMENT_RATIO = 1.6;
+const SPECTRAL_IBI_MIN_CYCLES = 3;
 
 export type BreathingEstimate = {
 	bpm: number | null;
@@ -131,6 +143,9 @@ export function createBreathingEstimator(
 	let subRegionW = 0;
 	let subRegionH = 0;
 	let lastDy = 0;
+	const dySmoothing = new Float32Array(DY_SMOOTHING_WINDOW);
+	let dySmoothingFill = 0;
+	let dySmoothingIdx = 0;
 	let validSampleCount = 0;
 
 	const tracker: BpmTracker = createBpmTracker({
@@ -302,7 +317,13 @@ export function createBreathingEstimator(
 				// Inhale typically moves the imaged surface upward (smaller image
 				// y) → row-projection reports a negative dy. Flip the sign so
 				// positive position means chest expansion.
-				lastDy = -dy;
+				const flipped = -dy;
+				dySmoothing[dySmoothingIdx] = flipped;
+				dySmoothingIdx = (dySmoothingIdx + 1) % DY_SMOOTHING_WINDOW;
+				if (dySmoothingFill < DY_SMOOTHING_WINDOW) dySmoothingFill++;
+				let sum = 0;
+				for (let i = 0; i < dySmoothingFill; i++) sum += dySmoothing[i];
+				lastDy = sum / dySmoothingFill;
 				validSampleCount++;
 			}
 			// Always push so the buffer length tracks elapsed time — pushing
@@ -468,11 +489,25 @@ export function createBreathingEstimator(
 					? motionFlags.filter(Boolean).length / motionFlags.length
 					: 0;
 			const motionHolding = motionDropFraction >= MOTION_HOLD_FRACTION;
+			// Spectral peak says one BPM, time-domain IBI says another — when
+			// they disagree wildly, the buffer is too noisy to trust. Don't
+			// feed the tracker; let it stay where it was. Once spectrum and
+			// time-domain converge, updates resume.
+			const ibiBpm = ibi.meanBpm;
+			const spectralIbiDisagree =
+				measurementBpm != null &&
+				ibiBpm != null &&
+				ibi.cycleCount >= SPECTRAL_IBI_MIN_CYCLES &&
+				Math.max(measurementBpm, ibiBpm) /
+					Math.max(1e-6, Math.min(measurementBpm, ibiBpm)) >
+					SPECTRAL_IBI_AGREEMENT_RATIO;
 			const holding =
 				previouslyLocked &&
 				measurementBpm != null &&
-				(quality.total < HOLD_QUALITY_THRESHOLD || motionHolding);
-			if (measurementBpm != null && !holding) {
+				(quality.total < HOLD_QUALITY_THRESHOLD ||
+					motionHolding ||
+					spectralIbiDisagree);
+			if (measurementBpm != null && !holding && !spectralIbiDisagree) {
 				const measVar = bpmMeasurementVariance(snr, quality.total);
 				tracker.update(measurementBpm, measVar);
 			}

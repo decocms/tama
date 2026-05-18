@@ -43,10 +43,11 @@ export function detrend(samples: Float32Array): Float32Array {
 }
 
 /**
- * Cascade of 1st-order RC HP + LP, applied as IIR over the whole signal.
- * Cheap, stable, ~6 dB/octave on each side — enough to remove DC drift
- * and reject hand tremor / wobble above ~3 Hz while passing the
- * 0.08–1.5 Hz breathing band.
+ * 4th-order Butterworth bandpass implemented as a cascade of two
+ * RBJ-cookbook biquad sections. ~24 dB/octave rolloff on both sides —
+ * much sharper than a 1st-order RC cascade, so high-frequency noise
+ * doesn't leak through and pollute the time-domain zero-crossing
+ * counter.
  */
 export function bandpass(
 	samples: Float32Array,
@@ -54,22 +55,47 @@ export function bandpass(
 	lowHz: number,
 	highHz: number,
 ): Float32Array {
-	const dt = 1 / fs;
-	const rcHp = 1 / (2 * Math.PI * lowHz);
-	const aHp = rcHp / (rcHp + dt);
-	const rcLp = 1 / (2 * Math.PI * highHz);
-	const aLp = dt / (rcLp + dt);
-	const out = new Float32Array(samples.length);
-	let hpPrevIn = samples.length > 0 ? samples[0] : 0;
-	let hpPrevOut = 0;
-	let lpPrev = 0;
-	for (let i = 0; i < samples.length; i++) {
-		const x = samples[i];
-		const hp = aHp * (hpPrevOut + x - hpPrevIn);
-		hpPrevIn = x;
-		hpPrevOut = hp;
-		lpPrev = lpPrev + aLp * (hp - lpPrev);
-		out[i] = lpPrev;
+	if (samples.length === 0) return samples;
+	const f0 = Math.sqrt(Math.max(1e-6, lowHz * highHz));
+	const bw = Math.max(1e-6, highHz - lowHz);
+	const Q = Math.max(0.1, f0 / bw);
+	const omega = (2 * Math.PI * f0) / fs;
+	const alpha = Math.sin(omega) / (2 * Q);
+	const cosO = Math.cos(omega);
+	const a0 = 1 + alpha;
+	const b0n = alpha / a0;
+	const b2n = -alpha / a0;
+	const a1n = (-2 * cosO) / a0;
+	const a2n = (1 - alpha) / a0;
+	return applyBiquad(
+		applyBiquad(samples, b0n, b2n, a1n, a2n),
+		b0n,
+		b2n,
+		a1n,
+		a2n,
+	);
+}
+
+function applyBiquad(
+	input: Float32Array,
+	b0: number,
+	b2: number,
+	a1: number,
+	a2: number,
+): Float32Array {
+	const out = new Float32Array(input.length);
+	let x1 = 0;
+	let x2 = 0;
+	let y1 = 0;
+	let y2 = 0;
+	for (let i = 0; i < input.length; i++) {
+		const x0 = input[i];
+		const y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2;
+		out[i] = y0;
+		x2 = x1;
+		x1 = x0;
+		y2 = y1;
+		y1 = y0;
 	}
 	return out;
 }
