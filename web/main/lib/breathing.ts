@@ -42,7 +42,27 @@ const ROI_MAG_EMA_ALPHA = 0.05;
 const RECENT_LUMA_WINDOW = 8;
 const EXPOSURE_COOLDOWN_S = 2;
 const MIN_NCC_CONFIDENCE = 0.2;
-const MIN_MEASUREMENT_SNR = 3;
+const MIN_MEASUREMENT_SNR = 2;
+const HOLD_QUALITY_THRESHOLD = 50;
+const LOCK_VARIANCE = 9;
+const LOCK_FRAMES = 4;
+// Template-relative dy at typical phone framing stays within a few pixels
+// even for vigorous breathing. Anything beyond this is body motion: the
+// median across sub-regions already absorbs localized motion, so this
+// catches the case where the whole ROI moves at once.
+const MAX_FRAME_DY_PX = 4;
+const MOTION_WINDOW_S = 2;
+const MOTION_HOLD_FRACTION = 0.2;
+// 3 × 2 grid → 6 independent row-projection measurements per frame.
+// Median rejects regions affected by partial motion / shadows /
+// occlusion. Choosing 6 keeps a quorum of ≥4 working even with 2 bad
+// regions and stays cheap.
+const SUB_REGION_COLS = 3;
+const SUB_REGION_ROWS = 2;
+const NUM_SUB_REGIONS = SUB_REGION_COLS * SUB_REGION_ROWS;
+// Need at least this many sub-regions agreeing this frame for a valid
+// measurement. Below this the median is meaningless and we hold position.
+const MIN_VALID_SUB_REGIONS = 3;
 
 export type BreathingEstimate = {
 	bpm: number | null;
@@ -59,7 +79,12 @@ export type BreathingEstimate = {
 	isLocked: boolean;
 	lockAge: number;
 	trackerVariance: number;
-	displayState: "uninitialized" | "searching" | "tracking" | "locked";
+	displayState:
+		| "uninitialized"
+		| "searching"
+		| "tracking"
+		| "locked"
+		| "holding";
 };
 
 export type BreathingFrame = {
@@ -101,12 +126,20 @@ export function createBreathingEstimator(
 	let lumaBuf: Uint8Array | null = null;
 	let lumaPrev: Uint8Array | null = null;
 	let scratch: Uint8Array | null = null;
-	let projector: RowProjector | null = null;
-	let cumulativePosition = 0;
+	let projectors: RowProjector[] = [];
+	let subBuffers: Uint8Array[] = [];
+	let subRegionW = 0;
+	let subRegionH = 0;
+	let lastDy = 0;
 	let validSampleCount = 0;
 
-	const tracker: BpmTracker = createBpmTracker();
+	const tracker: BpmTracker = createBpmTracker({
+		lockVariance: LOCK_VARIANCE,
+		lockFrames: LOCK_FRAMES,
+	});
 	const shakeFlags: boolean[] = [];
+	const motionFlags: boolean[] = [];
+	const motionWindow = Math.round(fs * MOTION_WINDOW_S);
 	let roiMagEma = 0;
 	const recentMeanLuma: number[] = [];
 	let lastExposureFrame = -Infinity;
@@ -114,14 +147,29 @@ export function createBreathingEstimator(
 	let lastBreathOffsets: number[] = [];
 
 	function ensureBuffers(w: number, h: number) {
-		if (w === roiW && h === roiH && lumaBuf && scratch && projector) return;
+		if (
+			w === roiW &&
+			h === roiH &&
+			lumaBuf &&
+			scratch &&
+			projectors.length === NUM_SUB_REGIONS
+		) {
+			return;
+		}
 		roiW = w;
 		roiH = h;
 		lumaBuf = new Uint8Array(w * h);
 		lumaPrev = new Uint8Array(w * h);
 		scratch = new Uint8Array(w * h);
-		projector = createRowProjector(w, h);
-		cumulativePosition = 0;
+		subRegionW = Math.floor(w / SUB_REGION_COLS);
+		subRegionH = Math.floor(h / SUB_REGION_ROWS);
+		projectors = [];
+		subBuffers = [];
+		for (let i = 0; i < NUM_SUB_REGIONS; i++) {
+			projectors.push(createRowProjector(subRegionW, subRegionH));
+			subBuffers.push(new Uint8Array(subRegionW * subRegionH));
+		}
+		lastDy = 0;
 		validSampleCount = 0;
 	}
 
@@ -142,7 +190,14 @@ export function createBreathingEstimator(
 	return {
 		feed(frame: BreathingFrame) {
 			ensureBuffers(frame.roiWidth, frame.roiHeight);
-			if (!lumaBuf || !lumaPrev || !scratch || !projector) return;
+			if (
+				!lumaBuf ||
+				!lumaPrev ||
+				!scratch ||
+				projectors.length !== NUM_SUB_REGIONS
+			) {
+				return;
+			}
 			const N = roiW * roiH;
 
 			// Grayscale + denoise.
@@ -166,10 +221,43 @@ export function createBreathingEstimator(
 				roiDiff = sum / N;
 			}
 
-			// 1D row-projection cross-correlation → sub-pixel vertical shift.
-			const shift = projector.process(lumaBuf);
-			const dy = shift?.dy ?? 0;
-			const ncc = shift?.confidence ?? 0;
+			// Extract each sub-region into its own buffer and run row-projection
+			// against its drifting template. dy is the *absolute* template-
+			// relative shift, not a frame-to-frame delta — so the median across
+			// regions IS the breathing signal (no cumulative accumulation).
+			const dys: number[] = [];
+			let confSum = 0;
+			let confCount = 0;
+			for (let s = 0; s < NUM_SUB_REGIONS; s++) {
+				const col = s % SUB_REGION_COLS;
+				const rowR = Math.floor(s / SUB_REGION_COLS);
+				const startX = col * subRegionW;
+				const startY = rowR * subRegionH;
+				const sub = subBuffers[s];
+				for (let y = 0; y < subRegionH; y++) {
+					const srcRow = (startY + y) * roiW + startX;
+					const dstRow = y * subRegionW;
+					for (let x = 0; x < subRegionW; x++) {
+						sub[dstRow + x] = lumaBuf[srcRow + x];
+					}
+				}
+				const result = projectors[s].process(sub);
+				if (result && result.confidence >= MIN_NCC_CONFIDENCE) {
+					dys.push(result.dy);
+					confSum += result.confidence;
+					confCount++;
+				}
+			}
+			let dy = 0;
+			let ncc = 0;
+			let medianDyValid = false;
+			if (dys.length >= MIN_VALID_SUB_REGIONS) {
+				dys.sort((a, b) => a - b);
+				const mid = dys.length >> 1;
+				dy = dys.length % 2 === 1 ? dys[mid] : 0.5 * (dys[mid - 1] + dys[mid]);
+				ncc = confSum / confCount;
+				medianDyValid = true;
+			}
 
 			// Shake gate: global motion >> ROI's own activity → camera-led.
 			const isWarmup = frameIdx < shakeWarmup;
@@ -200,19 +288,28 @@ export function createBreathingEstimator(
 				roiMagEma = roiMagEma === 0 ? roiDiff : 0.7 * roiMagEma + 0.3 * roiDiff;
 			}
 
-			if (shift && ncc >= MIN_NCC_CONFIDENCE) {
+			// Motion outlier: median dy is so big it almost certainly isn't
+			// breathing. The median across 6 sub-regions already filtered local
+			// motion; this catches the case where the whole ROI moves at once
+			// (the template will catch up over a few seconds, but for now we
+			// hold the displayed value).
+			const isMotionOutlier = medianDyValid && Math.abs(dy) > MAX_FRAME_DY_PX;
+			motionFlags.push(isMotionOutlier);
+			if (motionFlags.length > motionWindow) motionFlags.shift();
+
+			if (medianDyValid && !isMotionOutlier) {
 				// Image-space y grows downward, but humans expect "inhale = up".
 				// Inhale typically moves the imaged surface upward (smaller image
-				// y) → row-projection reports a negative dy. Flip the sign here
-				// so positive cumulative position means chest expansion.
-				cumulativePosition -= dy;
+				// y) → row-projection reports a negative dy. Flip the sign so
+				// positive position means chest expansion.
+				lastDy = -dy;
 				validSampleCount++;
 			}
 			// Always push so the buffer length tracks elapsed time — pushing
-			// the unchanged position when we drop a low-confidence frame keeps
-			// the spectrum well-conditioned (flat segments don't add false
-			// energy in the breathing band).
-			pushPosition(cumulativePosition);
+			// the unchanged value when we drop a frame keeps the spectrum
+			// well-conditioned (flat segments don't add false energy in the
+			// breathing band).
+			pushPosition(lastDy);
 			lumaPrev.set(lumaBuf);
 			frameIdx++;
 		},
@@ -225,8 +322,11 @@ export function createBreathingEstimator(
 			lumaBuf = null;
 			lumaPrev = null;
 			scratch = null;
-			projector = null;
-			cumulativePosition = 0;
+			projectors = [];
+			subBuffers = [];
+			subRegionW = 0;
+			subRegionH = 0;
+			lastDy = 0;
 			validSampleCount = 0;
 			frameIdx = 0;
 			roiMagEma = 0;
@@ -234,6 +334,7 @@ export function createBreathingEstimator(
 			recentMeanLuma.length = 0;
 			lastExposureFrame = -Infinity;
 			lastBreathOffsets = [];
+			motionFlags.length = 0;
 			tracker.reset();
 		},
 
@@ -242,7 +343,10 @@ export function createBreathingEstimator(
 		},
 
 		getRowProfile() {
-			return projector?.getCurrentProfile() ?? new Float32Array(0);
+			// Return the center-region profile as a representative sample for
+			// the debug visualization.
+			const centerIdx = Math.floor(NUM_SUB_REGIONS / 2);
+			return projectors[centerIdx]?.getCurrentProfile() ?? new Float32Array(0);
 		},
 
 		getDebugCorners(maxCount = 24) {
@@ -353,8 +457,22 @@ export function createBreathingEstimator(
 				cycleCount: ibi.cycleCount,
 			});
 
-			// Feed the spectral measurement to the temporal tracker.
-			if (measurementBpm != null) {
+			// Feed the spectral measurement to the temporal tracker — but only
+			// when we trust it. Once locked, low-quality measurements (e.g.,
+			// subject body motion that briefly degrades the breathing signal)
+			// are dropped entirely so the locked value persists. The state
+			// becomes "holding" until quality recovers.
+			const previouslyLocked = trackerState.isLocked;
+			const motionDropFraction =
+				motionFlags.length > 0
+					? motionFlags.filter(Boolean).length / motionFlags.length
+					: 0;
+			const motionHolding = motionDropFraction >= MOTION_HOLD_FRACTION;
+			const holding =
+				previouslyLocked &&
+				measurementBpm != null &&
+				(quality.total < HOLD_QUALITY_THRESHOLD || motionHolding);
+			if (measurementBpm != null && !holding) {
 				const measVar = bpmMeasurementVariance(snr, quality.total);
 				tracker.update(measurementBpm, measVar);
 			}
@@ -364,9 +482,11 @@ export function createBreathingEstimator(
 			const displayState: BreathingEstimate["displayState"] =
 				!updatedState.initialized
 					? "searching"
-					: updatedState.isLocked
-						? "locked"
-						: "tracking";
+					: holding
+						? "holding"
+						: updatedState.isLocked
+							? "locked"
+							: "tracking";
 
 			return {
 				bpm,

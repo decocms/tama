@@ -3,14 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
-	BPM_MAX,
-	BPM_MIN,
 	type BreathingEstimate,
 	createBreathingEstimator,
 } from "../lib/breathing.ts";
 
-const ROI_W = 80;
-const ROI_H = 60;
+const ROI_W = 240;
+const ROI_H = 180;
 const GLOBAL_W = 40;
 const GLOBAL_H = 30;
 const SAMPLE_RATE_HZ = 30;
@@ -323,7 +321,7 @@ export function BreathingCounter({
 				)}
 			</div>
 
-			<div className="bg-background border-t p-4 sm:p-5 space-y-3">
+			<div className="bg-background border-t p-4 sm:p-5 space-y-3 min-h-[224px]">
 				<div className="flex items-end justify-between gap-4">
 					<div>
 						<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
@@ -332,15 +330,15 @@ export function BreathingCounter({
 						<div className="flex items-baseline gap-2">
 							<BpmDisplay estimate={estimate} displayedBpm={displayedBpm} />
 							<div className="text-sm text-muted-foreground">BPM</div>
-							{estimate.bpmSd != null && estimate.cycleCount >= 3 ? (
-								<div className="text-xs text-muted-foreground tabular-nums">
-									± {estimate.bpmSd.toFixed(1)}
-								</div>
-							) : null}
+							<div className="text-xs text-muted-foreground tabular-nums min-w-[3.5rem]">
+								{estimate.bpmSd != null && estimate.cycleCount >= 3
+									? `± ${estimate.bpmSd.toFixed(1)}`
+									: ""}
+							</div>
 						</div>
 						<div
 							className={cn(
-								"mt-1.5 text-xs flex items-center gap-1.5",
+								"mt-1.5 text-xs flex items-center gap-1.5 min-h-[1.25rem]",
 								status.tone === "warn"
 									? "text-amber-600"
 									: status.tone === "error"
@@ -349,11 +347,11 @@ export function BreathingCounter({
 							)}
 						>
 							{status.tone !== "ok" ? (
-								<AlertCircle className="w-3 h-3" />
+								<AlertCircle className="w-3 h-3 shrink-0" />
 							) : (
-								<Activity className="w-3 h-3" />
+								<Activity className="w-3 h-3 shrink-0" />
 							)}
-							{status.message}
+							<span className="truncate">{status.message}</span>
 						</div>
 					</div>
 					<QualityChip estimate={estimate} />
@@ -391,15 +389,18 @@ function BpmDisplay({
 			</div>
 		);
 	}
+	const color = estimate.isLocked
+		? estimate.displayState === "holding"
+			? "text-amber-600"
+			: "text-emerald-600"
+		: estimate.displayState === "tracking"
+			? "text-foreground"
+			: "text-muted-foreground";
 	return (
 		<div
 			className={cn(
 				"font-display text-5xl font-semibold leading-none tabular-nums transition-colors duration-700",
-				estimate.isLocked
-					? "text-emerald-600"
-					: estimate.displayState === "tracking"
-						? "text-foreground"
-						: "text-muted-foreground",
+				color,
 			)}
 		>
 			{Math.round(displayedBpm)}
@@ -438,6 +439,12 @@ function describeStatus(
 			tone: "warn",
 		};
 	}
+	if (est.displayState === "holding") {
+		return {
+			message: "Locked · holding through motion",
+			tone: "warn",
+		};
+	}
 	// Locked.
 	const reg =
 		est.regularityCV != null && est.cycleCount >= 3
@@ -448,9 +455,7 @@ function describeStatus(
 					: "irregular"
 			: null;
 	return {
-		message: reg
-			? `Locked · ${reg} · range ${BPM_MIN}–${BPM_MAX} BPM`
-			: `Locked · range ${BPM_MIN}–${BPM_MAX} BPM`,
+		message: reg ? `Locked · ${reg}` : "Locked",
 		tone: "ok",
 	};
 }

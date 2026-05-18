@@ -1,34 +1,51 @@
 /**
  * Vertical-shift estimation via 1D row-projection normalized cross-
- * correlation. The ROI is collapsed each frame to a 1D vertical luminance
- * profile (mean per row), and consecutive profiles are compared via NCC
- * to recover the sub-pixel vertical translation between them.
+ * correlation against a drifting template.
  *
- * Integrating across the full ROI width gives the best per-frame SNR
- * achievable for vertical motion: every pixel contributes to the
- * measurement. The recovered per-frame dy is then accumulated by the
- * caller to produce the cumulative breathing position signal.
+ * Pipeline per frame:
+ *  1. Collapse the ROI luma to a 1D vertical profile (mean per row).
+ *  2. NCC against a held template profile → sub-pixel vertical shift.
+ *     The returned `dy` is the *absolute* position of the imaged
+ *     surface relative to the template, not a frame-to-frame delta.
+ *  3. Slowly EMA the template toward the current profile. The time
+ *     constant is much longer than a breathing cycle, so breathing
+ *     oscillations don't get absorbed, but a real DC drift (the
+ *     subject genuinely shifts) is tracked within seconds.
+ *
+ * Why a template instead of frame-to-frame: per-frame deltas accumulate
+ * into a random walk that the bandpass has to clean up. Worse, any
+ * single bad frame (twitch, occlusion) leaves a permanent step in the
+ * cumulative position. Absolute measurement against a stable template
+ * keeps the signal naturally centered around zero — body motion just
+ * shifts the working point, and the template catches up over a few
+ * seconds.
  */
 
-export const MAX_SHIFT = 3;
+export const MAX_SHIFT = 10;
+const DEFAULT_TEMPLATE_ALPHA = 0.005;
 
 export type RowProjector = {
 	process(luma: Uint8Array): { dy: number; confidence: number } | null;
 	reset(): void;
 	getCurrentProfile(): Float32Array;
+	getTemplate(): Float32Array;
 };
 
 export function createRowProjector(
 	width: number,
 	height: number,
+	options: { templateAlpha?: number; maxShift?: number } = {},
 ): RowProjector {
 	const W = width;
 	const H = height;
+	const alpha = options.templateAlpha ?? DEFAULT_TEMPLATE_ALPHA;
+	const maxShift = options.maxShift ?? MAX_SHIFT;
 	const currProfile = new Float32Array(H);
-	let prevProfile: Float32Array | null = null;
+	const template = new Float32Array(H);
+	let initialized = false;
 
 	return {
-		process(luma: Uint8Array) {
+		process(luma) {
 			if (luma.length !== W * H) return null;
 
 			for (let y = 0; y < H; y++) {
@@ -38,20 +55,31 @@ export function createRowProjector(
 				currProfile[y] = sum / W;
 			}
 
-			if (!prevProfile) {
-				prevProfile = new Float32Array(currProfile);
+			if (!initialized) {
+				template.set(currProfile);
+				initialized = true;
 				return null;
 			}
 
-			const result = measureVerticalShift(prevProfile, currProfile, MAX_SHIFT);
-			prevProfile.set(currProfile);
+			const result = measureVerticalShift(template, currProfile, maxShift);
+
+			// Slow EMA toward current profile. Tracks subject's slow positional
+			// drift but doesn't absorb breathing oscillations (the cycle period
+			// is much shorter than the EMA time constant).
+			for (let y = 0; y < H; y++) {
+				template[y] = (1 - alpha) * template[y] + alpha * currProfile[y];
+			}
+
 			return result;
 		},
 		reset() {
-			prevProfile = null;
+			initialized = false;
 		},
 		getCurrentProfile() {
 			return currProfile;
+		},
+		getTemplate() {
+			return template;
 		},
 	};
 }
@@ -135,7 +163,6 @@ function parabolicSubpixel(ncc: Float32Array, peakIdx: number): number {
 	const y0 = ncc[peakIdx];
 	const yp1 = ncc[peakIdx + 1];
 	const denom = ym1 - 2 * y0 + yp1;
-	// Concave-up (denom > 0) means we found a minimum, not a peak. Skip.
 	if (denom >= -1e-12) return 0;
 	let delta = (0.5 * (ym1 - yp1)) / denom;
 	if (delta < -0.5) delta = -0.5;
