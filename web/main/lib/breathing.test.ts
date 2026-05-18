@@ -8,7 +8,7 @@ import {
 import {
 	analyzeIBI,
 	bandpass,
-	findPeaks,
+	findCycles,
 	hampelFilter,
 	stddev,
 } from "./breathing/signal.ts";
@@ -179,14 +179,31 @@ describe("signal utilities", () => {
 		expect(stddev(tail)).toBeLessThan(1.0);
 	});
 
-	test("findPeaks locates expected peaks in clean sine", () => {
+	test("findCycles recovers expected cycle count from clean sine", () => {
 		const fs = 30;
 		const N = 600;
 		const sig = new Float32Array(N);
 		for (let i = 0; i < N; i++) sig[i] = Math.sin((2 * Math.PI * 0.5 * i) / fs);
-		const peaks = findPeaks(sig, 30, 0.5);
-		expect(peaks.length).toBeGreaterThanOrEqual(9);
-		expect(peaks.length).toBeLessThanOrEqual(11);
+		const { zeroCrossings, peakIndices } = findCycles(sig, 15, 0.1);
+		// 20 s at 0.5 Hz = 10 cycles → 10 positive-going crossings.
+		expect(zeroCrossings.length).toBeGreaterThanOrEqual(9);
+		expect(zeroCrossings.length).toBeLessThanOrEqual(11);
+		expect(peakIndices.length).toBe(zeroCrossings.length);
+	});
+
+	test("findCycles isn't fooled by noise flicker around zero", () => {
+		const fs = 30;
+		const N = 600;
+		const sig = new Float32Array(N);
+		for (let i = 0; i < N; i++) {
+			sig[i] =
+				Math.sin((2 * Math.PI * 0.5 * i) / fs) + (Math.random() - 0.5) * 0.4;
+		}
+		const sd = stddev(sig);
+		const { zeroCrossings } = findCycles(sig, 15, sd * 0.15);
+		// Still ~10 cycles even with substantial noise.
+		expect(zeroCrossings.length).toBeGreaterThanOrEqual(8);
+		expect(zeroCrossings.length).toBeLessThanOrEqual(12);
 	});
 
 	test("analyzeIBI yields correct BPM for evenly-spaced peaks", () => {

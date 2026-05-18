@@ -75,34 +75,56 @@ export function bandpass(
 }
 
 /**
- * Peak detection with minimum separation + prominence. Used to find
- * individual breath onsets in the filtered time series. Returns indices
- * into `signal`.
+ * Cycle detection via positive-going zero crossings of a zero-mean
+ * (typically bandpassed) signal. Each crossing defines a cycle boundary;
+ * the max value between consecutive crossings is the breath peak. Far
+ * more robust than threshold-based peak detection — works for any
+ * amplitude as long as the signal oscillates around zero, which is
+ * exactly what a bandpassed breathing trace does.
+ *
+ * Hysteresis: a crossing only counts when the signal has dipped at least
+ * `hysteresis` below zero since the last crossing. This rejects rapid
+ * sign-flicker around zero from residual noise without a fixed threshold.
  */
-export function findPeaks(
+export function findCycles(
 	signal: Float32Array,
 	minSeparation: number,
-	prominence: number,
-): number[] {
-	const peaks: number[] = [];
-	for (let i = 1; i < signal.length - 1; i++) {
-		if (!(signal[i] > signal[i - 1] && signal[i] >= signal[i + 1])) continue;
-		// Prominence check: must exceed the minimum value in a window
-		// behind by at least `prominence`.
-		const left = Math.max(0, i - minSeparation);
-		let leftMin = signal[i];
-		for (let j = left; j < i; j++) if (signal[j] < leftMin) leftMin = signal[j];
-		if (signal[i] - leftMin < prominence) continue;
+	hysteresis = 0,
+): { zeroCrossings: number[]; peakIndices: number[] } {
+	const zeroCrossings: number[] = [];
+	let lastCrossing = -Infinity;
+	let dippedBelowSince = true; // first crossing accepts any direction
 
-		if (peaks.length > 0 && i - peaks[peaks.length - 1] < minSeparation) {
-			if (signal[i] > signal[peaks[peaks.length - 1]]) {
-				peaks[peaks.length - 1] = i;
-			}
-			continue;
+	for (let i = 1; i < signal.length; i++) {
+		if (signal[i - 1] < -hysteresis) dippedBelowSince = true;
+		if (
+			dippedBelowSince &&
+			signal[i - 1] < 0 &&
+			signal[i] >= 0 &&
+			i - lastCrossing >= minSeparation
+		) {
+			zeroCrossings.push(i);
+			lastCrossing = i;
+			dippedBelowSince = false;
 		}
-		peaks.push(i);
 	}
-	return peaks;
+
+	const peakIndices: number[] = [];
+	for (let c = 0; c < zeroCrossings.length; c++) {
+		const start = zeroCrossings[c];
+		const end =
+			c + 1 < zeroCrossings.length ? zeroCrossings[c + 1] : signal.length;
+		let maxIdx = start;
+		let maxVal = signal[start];
+		for (let j = start + 1; j < end; j++) {
+			if (signal[j] > maxVal) {
+				maxVal = signal[j];
+				maxIdx = j;
+			}
+		}
+		peakIndices.push(maxIdx);
+	}
+	return { zeroCrossings, peakIndices };
 }
 
 /**

@@ -13,7 +13,7 @@ import {
 	analyzeIBI,
 	bandpass,
 	detrend,
-	findPeaks,
+	findCycles,
 	hampelFilter,
 	stddev,
 } from "./breathing/signal.ts";
@@ -33,8 +33,8 @@ const MIN_ESTIMATE_SECONDS = 6;
 const BANDPASS_LOW_HZ = 0.08;
 const BANDPASS_HIGH_HZ = 1.5;
 const ADAPTIVE_BANDPASS_HALF_WIDTH_HZ = 0.18;
-const PEAK_PROMINENCE_SD = 0.5;
 const MIN_BREATH_SEP_S = 0.5;
+const ZERO_CROSSING_HYSTERESIS_FRACTION = 0.15;
 const SHAKE_RATIO = 4;
 const SHAKE_WARN_FRACTION = 0.3;
 const SHAKE_WARMUP_S = 1;
@@ -201,7 +201,11 @@ export function createBreathingEstimator(
 			}
 
 			if (shift && ncc >= MIN_NCC_CONFIDENCE) {
-				cumulativePosition += dy;
+				// Image-space y grows downward, but humans expect "inhale = up".
+				// Inhale typically moves the imaged surface upward (smaller image
+				// y) → row-projection reports a negative dy. Flip the sign here
+				// so positive cumulative position means chest expansion.
+				cumulativePosition -= dy;
 				validSampleCount++;
 			}
 			// Always push so the buffer length tracks elapsed time — pushing
@@ -325,12 +329,16 @@ export function createBreathingEstimator(
 				}
 			}
 
-			// Peak detection in the (possibly adaptively bandpassed) time series.
+			// Cycle detection via zero crossings — robust to amplitude
+			// variation. Hysteresis scales with signal magnitude so noise
+			// flicker around zero doesn't double-count, but real cycles always
+			// pass.
 			const sd = stddev(bp);
 			const minSep = Math.round(MIN_BREATH_SEP_S * fs);
-			const peakIndices = findPeaks(bp, minSep, sd * PEAK_PROMINENCE_SD);
-			lastBreathOffsets = peakIndices;
-			const ibi = analyzeIBI(peakIndices, fs);
+			const hysteresis = sd * ZERO_CROSSING_HYSTERESIS_FRACTION;
+			const cycles = findCycles(bp, minSep, hysteresis);
+			lastBreathOffsets = cycles.peakIndices;
+			const ibi = analyzeIBI(cycles.zeroCrossings, fs);
 
 			// Quality calculated even when there's no peak (it'll be near-zero).
 			const quality = computeQuality({

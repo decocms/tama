@@ -356,17 +356,13 @@ export function BreathingCounter({
 							{status.message}
 						</div>
 					</div>
-					<div className="flex flex-col items-end gap-2">
-						<QualityChip estimate={estimate} />
-						<canvas
-							ref={waveformCanvasRef}
-							width={240}
-							height={56}
-							className="rounded-md bg-muted shrink-0"
-							style={{ width: 240, height: 56 }}
-						/>
-					</div>
+					<QualityChip estimate={estimate} />
 				</div>
+				<canvas
+					ref={waveformCanvasRef}
+					className="rounded-md bg-muted w-full"
+					style={{ height: 96 }}
+				/>
 				{debug ? (
 					<DebugPanel estimate={estimate} profileCanvasRef={profileCanvasRef} />
 				) : (
@@ -581,8 +577,21 @@ function drawWaveform(
 	if (!canvas) return;
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return;
-	const W = canvas.width;
-	const H = canvas.height;
+	// Match canvas internal resolution to its rendered size for crisp lines
+	// across screen widths. Device pixel ratio scaled to keep math simple.
+	const dpr = window.devicePixelRatio || 1;
+	const rect = canvas.getBoundingClientRect();
+	const cssW = Math.max(1, rect.width);
+	const cssH = Math.max(1, rect.height);
+	const targetW = Math.round(cssW * dpr);
+	const targetH = Math.round(cssH * dpr);
+	if (canvas.width !== targetW || canvas.height !== targetH) {
+		canvas.width = targetW;
+		canvas.height = targetH;
+	}
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+	const W = cssW;
+	const H = cssH;
 	ctx.clearRect(0, 0, W, H);
 	if (samples.length < 2) return;
 	const startIdx = Math.max(0, samples.length - WAVEFORM_SAMPLES);
