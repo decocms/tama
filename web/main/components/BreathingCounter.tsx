@@ -6,13 +6,15 @@ import {
 	BPM_MAX,
 	BPM_MIN,
 	type BreathingEstimate,
-	computeFrameDiff,
 	createBreathingEstimator,
+	extractSignals,
 	SAMPLE_RATE_HZ,
 } from "../lib/breathing.ts";
 
 const ROI_W = 80;
 const ROI_H = 60;
+const GLOBAL_W = 40;
+const GLOBAL_H = 30;
 const WAVEFORM_SAMPLES = SAMPLE_RATE_HZ * 12;
 
 type RoiFrac = { x: number; y: number; w: number; h: number };
@@ -27,11 +29,17 @@ export function BreathingCounter({
 }) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const captureCanvasRef = useRef<HTMLCanvasElement>(null);
+	const globalCanvasRef = useRef<HTMLCanvasElement>(null);
 	const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
 	const overlayRef = useRef<HTMLDivElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
 	const rafRef = useRef<number | null>(null);
-	const prevFrameRef = useRef<Uint8ClampedArray | null>(null);
+	const roiLumaARef = useRef<Uint8Array | null>(null);
+	const roiLumaBRef = useRef<Uint8Array | null>(null);
+	const roiScratchRef = useRef<Uint8Array | null>(null);
+	const globalLumaARef = useRef<Uint8Array | null>(null);
+	const globalLumaBRef = useRef<Uint8Array | null>(null);
+	const frameCountRef = useRef(0);
 	const lastSampleAtRef = useRef(0);
 
 	const estimator = useMemo(() => createBreathingEstimator(), []);
@@ -41,6 +49,8 @@ export function BreathingCounter({
 		confidence: 0,
 		samplesReady: 0,
 		bufferSeconds: 0,
+		shakeRecent: false,
+		activeSignal: null,
 	});
 	const [error, setError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
@@ -51,7 +61,12 @@ export function BreathingCounter({
 		setError(null);
 		setReady(false);
 		estimator.reset();
-		prevFrameRef.current = null;
+		roiLumaARef.current = new Uint8Array(ROI_W * ROI_H);
+		roiLumaBRef.current = new Uint8Array(ROI_W * ROI_H);
+		roiScratchRef.current = new Uint8Array(ROI_W * ROI_H);
+		globalLumaARef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
+		globalLumaBRef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
+		frameCountRef.current = 0;
 
 		(async () => {
 			try {
@@ -98,11 +113,15 @@ export function BreathingCounter({
 		if (!open || !ready) return;
 		const video = videoRef.current;
 		const canvas = captureCanvasRef.current;
-		if (!video || !canvas) return;
+		const globalCanvas = globalCanvasRef.current;
+		if (!video || !canvas || !globalCanvas) return;
 		const ctx = canvas.getContext("2d", { willReadFrequently: true });
-		if (!ctx) return;
+		const gctx = globalCanvas.getContext("2d", { willReadFrequently: true });
+		if (!ctx || !gctx) return;
 		canvas.width = ROI_W;
 		canvas.height = ROI_H;
+		globalCanvas.width = GLOBAL_W;
+		globalCanvas.height = GLOBAL_H;
 
 		const frameIntervalMs = 1000 / SAMPLE_RATE_HZ;
 		let active = true;
@@ -124,15 +143,39 @@ export function BreathingCounter({
 			const sw = roi.w * vw;
 			const sh = roi.h * vh;
 			ctx.drawImage(video, sx, sy, sw, sh, 0, 0, ROI_W, ROI_H);
-			const img = ctx.getImageData(0, 0, ROI_W, ROI_H).data;
+			gctx.drawImage(video, 0, 0, vw, vh, 0, 0, GLOBAL_W, GLOBAL_H);
+			const roiRgba = ctx.getImageData(0, 0, ROI_W, ROI_H).data;
+			const globalRgba = gctx.getImageData(0, 0, GLOBAL_W, GLOBAL_H).data;
 
-			const prev = prevFrameRef.current;
-			if (prev && prev.length === img.length) {
-				const diff = computeFrameDiff(img, prev);
-				estimator.feed(diff);
-			}
-			// Persist a copy — getImageData buffers can be reused by the canvas
-			prevFrameRef.current = new Uint8ClampedArray(img);
+			const frame = frameCountRef.current;
+			const roiCurr =
+				frame % 2 === 0 ? roiLumaARef.current : roiLumaBRef.current;
+			const roiPrev =
+				frame % 2 === 0 ? roiLumaBRef.current : roiLumaARef.current;
+			const gCurr =
+				frame % 2 === 0 ? globalLumaARef.current : globalLumaBRef.current;
+			const gPrev =
+				frame % 2 === 0 ? globalLumaBRef.current : globalLumaARef.current;
+			const scratch = roiScratchRef.current;
+			if (!roiCurr || !gCurr || !scratch) return;
+
+			const { edge, diff } = extractSignals(
+				roiRgba,
+				ROI_W,
+				ROI_H,
+				roiCurr,
+				frame === 0 ? null : roiPrev,
+				scratch,
+			);
+			const globalDiff = extractGlobalDiff(
+				globalRgba,
+				GLOBAL_W,
+				GLOBAL_H,
+				gCurr,
+				frame === 0 ? null : gPrev,
+			);
+			estimator.feed({ edge, diff, globalDiff });
+			frameCountRef.current = frame + 1;
 		};
 		rafRef.current = requestAnimationFrame(tick);
 
@@ -181,6 +224,7 @@ export function BreathingCounter({
 					className="absolute inset-0 w-full h-full object-cover"
 				/>
 				<canvas ref={captureCanvasRef} className="hidden" />
+				<canvas ref={globalCanvasRef} className="hidden" />
 				{ready ? (
 					<RoiOverlay value={roi} onChange={setRoi} />
 				) : error ? (
@@ -255,6 +299,12 @@ function describeStatus(
 ): { message: string; tone: "ok" | "warn" | "error" } {
 	if (error) return { message: error, tone: "error" };
 	if (!ready) return { message: "Starting camera…", tone: "warn" };
+	if (est.shakeRecent) {
+		return {
+			message: "Camera shake — hold steadier",
+			tone: "warn",
+		};
+	}
 	if (est.bpm == null) {
 		return {
 			message: `Sampling… (${est.bufferSeconds.toFixed(1)}s collected)`,
@@ -267,7 +317,8 @@ function describeStatus(
 			tone: "warn",
 		};
 	}
-	const range = `Normal range ${BPM_MIN}–${BPM_MAX} BPM · confidence ${(est.confidence * 100).toFixed(0)}%`;
+	const via = est.activeSignal === "edge" ? "edge" : "motion";
+	const range = `Range ${BPM_MIN}–${BPM_MAX} BPM · ${via} signal · ${(est.confidence * 100).toFixed(0)}%`;
 	return { message: range, tone: "ok" };
 }
 
@@ -412,4 +463,21 @@ function CameraError({
 
 function clamp(v: number, lo: number, hi: number) {
 	return Math.max(lo, Math.min(hi, v));
+}
+
+function extractGlobalDiff(
+	rgba: Uint8ClampedArray,
+	width: number,
+	height: number,
+	curr: Uint8Array,
+	prev: Uint8Array | null,
+): number {
+	const N = width * height;
+	for (let i = 0, j = 0; j < N; i += 4, j++) {
+		curr[j] = (rgba[i] * 76 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+	}
+	if (!prev) return 0;
+	let sum = 0;
+	for (let i = 0; i < N; i++) sum += Math.abs(curr[i] - prev[i]);
+	return sum / N;
 }

@@ -2,32 +2,104 @@ export const SAMPLE_RATE_HZ = 30;
 export const BUFFER_SECONDS = 20;
 export const BPM_MIN = 5;
 export const BPM_MAX = 80;
+
 const MIN_ESTIMATE_SECONDS = 8;
 const SMOOTHING_WINDOW = 5;
+const BANDPASS_LOW_HZ = 0.08;
+const BANDPASS_HIGH_HZ = 1.5;
+const SHAKE_RATIO = 4;
+const SHAKE_WARN_FRACTION = 0.3;
+const ROI_MAG_EMA_ALPHA = 0.05;
+
+export type ActiveSignal = "edge" | "diff" | null;
 
 export type BreathingEstimate = {
 	bpm: number | null;
 	confidence: number;
 	samplesReady: number;
 	bufferSeconds: number;
+	shakeRecent: boolean;
+	activeSignal: ActiveSignal;
 };
 
-export function computeFrameDiff(
-	curr: Uint8ClampedArray,
-	prev: Uint8ClampedArray,
-): number {
-	if (curr.length !== prev.length) return 0;
-	let sum = 0;
-	for (let i = 0; i < curr.length; i += 4) {
-		const lc = curr[i] * 76 + curr[i + 1] * 150 + curr[i + 2] * 29;
-		const lp = prev[i] * 76 + prev[i + 1] * 150 + prev[i + 2] * 29;
-		sum += Math.abs(lc - lp);
+export type FrameSignals = {
+	edge: number;
+	diff: number;
+	globalDiff: number;
+};
+
+/**
+ * Per-frame signal extraction. Caller supplies a Uint8 luminance output buffer
+ * (`curr`), the previous frame's luminance buffer (or null for the first
+ * frame), and a `scratch` buffer of the same size. Writes the post-blur
+ * grayscale into `curr` so the caller can swap buffers for the next frame.
+ */
+export function extractSignals(
+	rgba: Uint8ClampedArray,
+	width: number,
+	height: number,
+	curr: Uint8Array,
+	prev: Uint8Array | null,
+	scratch: Uint8Array,
+): { edge: number; diff: number } {
+	const N = width * height;
+	for (let i = 0, j = 0; j < N; i += 4, j++) {
+		curr[j] = (rgba[i] * 76 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
 	}
-	return sum / 256;
+	boxBlur3x3(curr, width, height, scratch);
+
+	const halfH = height >> 1;
+	let topSum = 0;
+	let botSum = 0;
+	for (let y = 0; y < halfH; y++) {
+		const row = y * width;
+		for (let x = 0; x < width; x++) topSum += curr[row + x];
+	}
+	for (let y = halfH; y < height; y++) {
+		const row = y * width;
+		for (let x = 0; x < width; x++) botSum += curr[row + x];
+	}
+	const edge = (topSum - botSum) / (width * halfH);
+
+	let diff = 0;
+	if (prev && prev.length === curr.length) {
+		for (let i = 0; i < N; i++) diff += Math.abs(curr[i] - prev[i]);
+		diff /= N;
+	}
+
+	return { edge, diff };
+}
+
+function boxBlur3x3(
+	buf: Uint8Array,
+	w: number,
+	h: number,
+	scratch: Uint8Array,
+) {
+	for (let y = 0; y < h; y++) {
+		const yU = y === 0 ? 0 : y - 1;
+		const yD = y === h - 1 ? h - 1 : y + 1;
+		for (let x = 0; x < w; x++) {
+			const xL = x === 0 ? 0 : x - 1;
+			const xR = x === w - 1 ? w - 1 : x + 1;
+			const sum =
+				buf[yU * w + xL] +
+				buf[yU * w + x] +
+				buf[yU * w + xR] +
+				buf[y * w + xL] +
+				buf[y * w + x] +
+				buf[y * w + xR] +
+				buf[yD * w + xL] +
+				buf[yD * w + x] +
+				buf[yD * w + xR];
+			scratch[y * w + x] = (sum / 9) | 0;
+		}
+	}
+	buf.set(scratch);
 }
 
 export type BreathingEstimator = {
-	feed(value: number): void;
+	feed(signals: FrameSignals): void;
 	estimate(): BreathingEstimate;
 	reset(): void;
 	getWaveform(): Float32Array;
@@ -39,12 +111,18 @@ export function createBreathingEstimator(
 	const fs = options.sampleRateHz ?? SAMPLE_RATE_HZ;
 	const seconds = options.bufferSeconds ?? BUFFER_SECONDS;
 	const capacity = Math.round(fs * seconds);
-	const buf = new Float32Array(capacity);
-	let count = 0;
+	const edgeBuf = new Float32Array(capacity);
+	const diffBuf = new Float32Array(capacity);
+	const shakeWindow = Math.round(fs * 2);
+	const shakeWarmup = fs;
+	const shakeFlags: boolean[] = [];
 	let writeIdx = 0;
+	let count = 0;
+	let roiMagEma = 0;
+	let lastActive: ActiveSignal = null;
 	const recentBpm: number[] = [];
 
-	function snapshot(): Float32Array {
+	function snapshot(buf: Float32Array): Float32Array {
 		const n = Math.min(count, capacity);
 		const out = new Float32Array(n);
 		const start = count < capacity ? 0 : writeIdx;
@@ -52,49 +130,114 @@ export function createBreathingEstimator(
 		return out;
 	}
 
+	function estimateFromBuffer(samples: Float32Array): {
+		bpm: number | null;
+		confidence: number;
+	} {
+		if (samples.length < fs * MIN_ESTIMATE_SECONDS) {
+			return { bpm: null, confidence: 0 };
+		}
+		const filtered = bandpass(samples, fs, BANDPASS_LOW_HZ, BANDPASS_HIGH_HZ);
+		const x = detrend(filtered);
+		const lagMin = Math.max(2, Math.floor((fs * 60) / BPM_MAX));
+		const lagMax = Math.min(x.length - 2, Math.ceil((fs * 60) / BPM_MIN));
+		const { lag, value, r0, r } = autocorrelate(x, lagMin, lagMax);
+		if (lag < 0 || r0 <= 0) return { bpm: null, confidence: 0 };
+		const refinedLag = parabolicInterp(r, lag, lagMin, lagMax);
+		const bpm = (60 * fs) / refinedLag;
+		const confidence = clamp01(value / r0);
+		return { bpm, confidence };
+	}
+
 	return {
-		feed(value: number) {
-			buf[writeIdx] = value;
+		feed(signals: FrameSignals) {
+			const roiMag = Math.abs(signals.edge) + Math.abs(signals.diff);
+
+			// Warm-up: accept first second unconditionally to seed roiMagEma.
+			if (count < shakeWarmup) {
+				roiMagEma =
+					roiMagEma === 0
+						? roiMag
+						: (1 - ROI_MAG_EMA_ALPHA) * roiMagEma + ROI_MAG_EMA_ALPHA * roiMag;
+				edgeBuf[writeIdx] = signals.edge;
+				diffBuf[writeIdx] = signals.diff;
+				writeIdx = (writeIdx + 1) % capacity;
+				count++;
+				return;
+			}
+
+			const baseline = Math.max(roiMagEma, 1e-6);
+			const isShake = signals.globalDiff > SHAKE_RATIO * baseline;
+			shakeFlags.push(isShake);
+			if (shakeFlags.length > shakeWindow) shakeFlags.shift();
+			if (isShake) return;
+
+			roiMagEma =
+				(1 - ROI_MAG_EMA_ALPHA) * roiMagEma + ROI_MAG_EMA_ALPHA * roiMag;
+			edgeBuf[writeIdx] = signals.edge;
+			diffBuf[writeIdx] = signals.diff;
 			writeIdx = (writeIdx + 1) % capacity;
 			count++;
 		},
 		reset() {
 			writeIdx = 0;
 			count = 0;
+			roiMagEma = 0;
+			lastActive = null;
+			shakeFlags.length = 0;
 			recentBpm.length = 0;
 		},
 		getWaveform() {
-			return snapshot();
+			return snapshot(lastActive === "edge" ? edgeBuf : diffBuf);
 		},
 		estimate() {
-			const samples = snapshot();
-			const samplesReady = samples.length;
+			const samplesReady = Math.min(count, capacity);
 			const bufferSeconds = samplesReady / fs;
+			const dropCount = shakeFlags.filter(Boolean).length;
+			const shakeRecent =
+				shakeFlags.length >= fs &&
+				dropCount / shakeFlags.length >= SHAKE_WARN_FRACTION;
+
 			if (bufferSeconds < MIN_ESTIMATE_SECONDS) {
-				return { bpm: null, confidence: 0, samplesReady, bufferSeconds };
+				return {
+					bpm: null,
+					confidence: 0,
+					samplesReady,
+					bufferSeconds,
+					shakeRecent,
+					activeSignal: null,
+				};
 			}
 
-			const x = detrend(samples);
-			const lagMin = Math.max(2, Math.floor((fs * 60) / BPM_MAX));
-			const lagMax = Math.min(x.length - 2, Math.ceil((fs * 60) / BPM_MIN));
-			const { lag, value, r0, r } = autocorrelate(x, lagMin, lagMax);
-			if (lag < 0 || r0 <= 0) {
-				return { bpm: null, confidence: 0, samplesReady, bufferSeconds };
+			const edgeRes = estimateFromBuffer(snapshot(edgeBuf));
+			const diffRes = estimateFromBuffer(snapshot(diffBuf));
+			const winner: ActiveSignal =
+				edgeRes.confidence >= diffRes.confidence ? "edge" : "diff";
+			const r = winner === "edge" ? edgeRes : diffRes;
+			lastActive = winner;
+
+			if (r.bpm == null) {
+				return {
+					bpm: null,
+					confidence: r.confidence,
+					samplesReady,
+					bufferSeconds,
+					shakeRecent,
+					activeSignal: winner,
+				};
 			}
 
-			const refinedLag = parabolicInterp(r, lag, lagMin, lagMax);
-			const rawBpm = (60 * fs) / refinedLag;
-			const confidence = clamp01(value / r0);
-
-			recentBpm.push(rawBpm);
+			recentBpm.push(r.bpm);
 			if (recentBpm.length > SMOOTHING_WINDOW) recentBpm.shift();
 			const smoothed = recentBpm.reduce((a, b) => a + b, 0) / recentBpm.length;
 
 			return {
 				bpm: smoothed,
-				confidence,
+				confidence: r.confidence,
 				samplesReady,
 				bufferSeconds,
+				shakeRecent,
+				activeSignal: winner,
 			};
 		},
 	};
@@ -106,6 +249,34 @@ function detrend(samples: Float32Array): Float32Array {
 	mean /= samples.length;
 	const out = new Float32Array(samples.length);
 	for (let i = 0; i < samples.length; i++) out[i] = samples[i] - mean;
+	return out;
+}
+
+// Cascade of 1st-order RC highpass + lowpass. Cheap, stable, ~6 dB/octave
+// rolloff on each side — enough to reject hand tremor (>4 Hz) without ringing.
+function bandpass(
+	samples: Float32Array,
+	fs: number,
+	lowHz: number,
+	highHz: number,
+): Float32Array {
+	const dt = 1 / fs;
+	const rcHp = 1 / (2 * Math.PI * lowHz);
+	const aHp = rcHp / (rcHp + dt);
+	const rcLp = 1 / (2 * Math.PI * highHz);
+	const aLp = dt / (rcLp + dt);
+	const out = new Float32Array(samples.length);
+	let hpPrevIn = samples[0];
+	let hpPrevOut = 0;
+	let lpPrev = 0;
+	for (let i = 0; i < samples.length; i++) {
+		const x = samples[i];
+		const hp = aHp * (hpPrevOut + x - hpPrevIn);
+		hpPrevIn = x;
+		hpPrevOut = hp;
+		lpPrev = lpPrev + aLp * (hp - lpPrev);
+		out[i] = lpPrev;
+	}
 	return out;
 }
 
@@ -127,8 +298,6 @@ function autocorrelate(
 		r[k] = s / end;
 	}
 
-	// Prefer the FIRST local maximum above threshold — that's the fundamental
-	// period. Global max can land on a harmonic when the signal is near-sinusoidal.
 	const threshold = 0.5 * r0;
 	for (let k = lagMin + 1; k < lagMax; k++) {
 		if (r[k] > r[k - 1] && r[k] >= r[k + 1] && r[k] > threshold) {
