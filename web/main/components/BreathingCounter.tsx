@@ -5,12 +5,11 @@ import { cn } from "@/lib/utils.ts";
 import {
 	type BreathingEstimate,
 	createBreathingEstimator,
+	type SubRegionDebug,
 } from "../lib/breathing.ts";
 
 const ROI_W = 240;
 const ROI_H = 180;
-const GLOBAL_W = 40;
-const GLOBAL_H = 30;
 const SAMPLE_RATE_HZ = 30;
 const WAVEFORM_SAMPLES = SAMPLE_RATE_HZ * 12;
 const DISPLAY_BPM_SMOOTHING = 0.35;
@@ -55,14 +54,11 @@ export function BreathingCounter({
 }) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const captureCanvasRef = useRef<HTMLCanvasElement>(null);
-	const globalCanvasRef = useRef<HTMLCanvasElement>(null);
 	const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
 	const profileCanvasRef = useRef<HTMLCanvasElement>(null);
-	const cornersLayerRef = useRef<HTMLCanvasElement>(null);
+	const subRegionLayerRef = useRef<HTMLCanvasElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
 	const rafRef = useRef<number | null>(null);
-	const globalLumaARef = useRef<Uint8Array | null>(null);
-	const globalLumaBRef = useRef<Uint8Array | null>(null);
 	const frameCountRef = useRef(0);
 	const lastSampleAtRef = useRef(0);
 	const lastBreathCountRef = useRef(0);
@@ -86,8 +82,6 @@ export function BreathingCounter({
 		setDisplayedBpm(null);
 		displayedBpmRef.current = null;
 		estimator.reset();
-		globalLumaARef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
-		globalLumaBRef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
 		frameCountRef.current = 0;
 		lastBreathCountRef.current = 0;
 
@@ -136,15 +130,11 @@ export function BreathingCounter({
 		if (!open || !ready) return;
 		const video = videoRef.current;
 		const canvas = captureCanvasRef.current;
-		const globalCanvas = globalCanvasRef.current;
-		if (!video || !canvas || !globalCanvas) return;
+		if (!video || !canvas) return;
 		const ctx = canvas.getContext("2d", { willReadFrequently: true });
-		const gctx = globalCanvas.getContext("2d", { willReadFrequently: true });
-		if (!ctx || !gctx) return;
+		if (!ctx) return;
 		canvas.width = ROI_W;
 		canvas.height = ROI_H;
-		globalCanvas.width = GLOBAL_W;
-		globalCanvas.height = GLOBAL_H;
 
 		const frameIntervalMs = 1000 / SAMPLE_RATE_HZ;
 		let active = true;
@@ -161,50 +151,21 @@ export function BreathingCounter({
 			const vh = video.videoHeight;
 			if (!vw || !vh) return;
 
+			// Only sample what's inside the box. Nothing outside contributes
+			// to the algorithm — that's the user's contract for the ROI.
 			const sx = roi.x * vw;
 			const sy = roi.y * vh;
 			const sw = roi.w * vw;
 			const sh = roi.h * vh;
 			ctx.drawImage(video, sx, sy, sw, sh, 0, 0, ROI_W, ROI_H);
-			gctx.drawImage(video, 0, 0, vw, vh, 0, 0, GLOBAL_W, GLOBAL_H);
 			const roiRgba = ctx.getImageData(0, 0, ROI_W, ROI_H).data;
-			const globalRgba = gctx.getImageData(0, 0, GLOBAL_W, GLOBAL_H).data;
-
-			const frame = frameCountRef.current;
-			const gCurr =
-				frame % 2 === 0 ? globalLumaARef.current : globalLumaBRef.current;
-			const gPrev =
-				frame % 2 === 0 ? globalLumaBRef.current : globalLumaARef.current;
-			if (!gCurr) return;
-
-			let meanLuma = 0;
-			const Ng = GLOBAL_W * GLOBAL_H;
-			for (let i = 0, j = 0; j < Ng; i += 4, j++) {
-				const v =
-					(globalRgba[i] * 76 +
-						globalRgba[i + 1] * 150 +
-						globalRgba[i + 2] * 29) >>
-					8;
-				gCurr[j] = v;
-				meanLuma += v;
-			}
-			meanLuma /= Ng;
-
-			let globalDiff = 0;
-			if (frame > 0 && gPrev) {
-				let sum = 0;
-				for (let i = 0; i < Ng; i++) sum += Math.abs(gCurr[i] - gPrev[i]);
-				globalDiff = sum / Ng;
-			}
 
 			estimator.feed({
 				roiRgba,
 				roiWidth: ROI_W,
 				roiHeight: ROI_H,
-				globalDiff,
-				globalMeanLuma: meanLuma,
 			});
-			frameCountRef.current = frame + 1;
+			frameCountRef.current += 1;
 		};
 		rafRef.current = requestAnimationFrame(tick);
 
@@ -214,7 +175,11 @@ export function BreathingCounter({
 			drawWaveform(waveformCanvasRef.current, estimator.getWaveform(), est);
 			drawRowProfile(profileCanvasRef.current, estimator.getRowProfile());
 			if (debug) {
-				drawCorners(cornersLayerRef.current, estimator.getDebugCorners(), roi);
+				drawSubRegionGrid(
+					subRegionLayerRef.current,
+					estimator.getDebugSubRegions(),
+					roi,
+				);
 			}
 
 			// Smooth the displayed BPM toward the tracker estimate so the
@@ -293,13 +258,12 @@ export function BreathingCounter({
 					className="absolute inset-0 w-full h-full object-cover"
 				/>
 				<canvas ref={captureCanvasRef} className="hidden" />
-				<canvas ref={globalCanvasRef} className="hidden" />
 				{ready ? (
 					<>
 						<RoiOverlay value={roi} onChange={setRoi} />
 						{debug ? (
 							<canvas
-								ref={cornersLayerRef}
+								ref={subRegionLayerRef}
 								className="absolute inset-0 w-full h-full pointer-events-none"
 							/>
 						) : null}
@@ -505,6 +469,13 @@ function DebugPanel({
 	const b = estimate.quality.breakdown;
 	return (
 		<div className="space-y-2">
+			<div className="text-[10px] text-muted-foreground leading-snug">
+				Grid overlay: each cell is one of 6 sub-regions the algorithm measures
+				independently. Brighter green = more periodic motion (reposition the box
+				so more cells are bright); red = body motion outlier; outlined cells
+				contributed to the latest median. The chart below is the row-projection
+				profile of the center cell.
+			</div>
 			<canvas
 				ref={profileCanvasRef}
 				width={ROI_H * 3}
@@ -633,9 +604,15 @@ function drawWaveform(
 	}
 }
 
-function drawCorners(
+// Render the 3×2 sub-region grid that the algorithm actually uses. Each
+// cell is tinted by its recent dy amplitude — bright green = strong
+// periodic motion the median can trust, dim = no signal, red = body
+// motion outlier. A bright outline marks cells currently contributing
+// to the median. The user can see at a glance which parts of the ROI
+// are productive and reposition the box to keep more cells "lit up".
+function drawSubRegionGrid(
 	canvas: HTMLCanvasElement | null,
-	corners: Array<{ xFrac: number; yFrac: number }>,
+	regions: SubRegionDebug[],
 	roi: RoiFrac,
 ) {
 	if (!canvas) return;
@@ -650,20 +627,48 @@ function drawCorners(
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return;
 	ctx.clearRect(0, 0, W, H);
-	const left = roi.x * W;
-	const top = roi.y * H;
-	const width = roi.w * W;
-	const height = roi.h * H;
-	ctx.fillStyle = "rgba(52, 211, 153, 0.85)";
-	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
-	for (const c of corners) {
-		const sx = left + c.xFrac * width;
-		const sy = top + c.yFrac * height;
-		ctx.beginPath();
-		ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
-		ctx.fill();
-		ctx.stroke();
+	const roiLeft = roi.x * W;
+	const roiTop = roi.y * H;
+	const roiWidth = roi.w * W;
+	const roiHeight = roi.h * H;
+
+	for (const region of regions) {
+		const sx = roiLeft + region.xFrac * roiWidth;
+		const sy = roiTop + region.yFrac * roiHeight;
+		const sw = region.wFrac * roiWidth;
+		const sh = region.hFrac * roiHeight;
+
+		const fill = amplitudeFill(region.amplitude);
+		ctx.fillStyle = fill;
+		ctx.fillRect(sx, sy, sw, sh);
+
+		ctx.strokeStyle = region.contributed
+			? "rgba(255, 255, 255, 0.7)"
+			: "rgba(255, 255, 255, 0.18)";
+		ctx.lineWidth = region.contributed ? 2 : 1;
+		ctx.strokeRect(sx + 1, sy + 1, sw - 2, sh - 2);
+
+		// Tiny amplitude readout in the corner of each cell so the user can
+		// read absolute values, not just colors.
+		if (region.historyFill > 5) {
+			ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+			ctx.font = "10px ui-monospace, monospace";
+			ctx.textBaseline = "top";
+			ctx.fillText(region.amplitude.toFixed(2), sx + 4, sy + 4);
+		}
 	}
+}
+
+function amplitudeFill(amplitude: number): string {
+	// > 3 px: body motion / outlier territory — tint red.
+	if (amplitude > 3) return "rgba(220, 38, 38, 0.32)";
+	// Map [0.05, 0.6] px to emerald opacity 0.05 → 0.45. Below 0.05 is
+	// effectively no signal; above 0.6 is strong breathing.
+	const lo = 0.05;
+	const hi = 0.6;
+	const t = Math.max(0, Math.min(1, (amplitude - lo) / (hi - lo)));
+	const opacity = 0.05 + t * 0.4;
+	return `rgba(52, 211, 153, ${opacity.toFixed(3)})`;
 }
 
 function drawRowProfile(

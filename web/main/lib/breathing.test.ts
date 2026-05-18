@@ -272,8 +272,6 @@ describe("integrated estimator", () => {
 				roiRgba: rgba,
 				roiWidth: W,
 				roiHeight: H,
-				globalDiff: 0.01,
-				globalMeanLuma: 128,
 			});
 			if (i > 0 && i % estimateEvery === 0) out = est.estimate();
 		}
@@ -303,8 +301,6 @@ describe("integrated estimator", () => {
 				roiRgba: rgba,
 				roiWidth: W,
 				roiHeight: H,
-				globalDiff: 0.01,
-				globalMeanLuma: 128,
 			});
 		}
 		const out = est.estimate();
@@ -332,8 +328,6 @@ describe("integrated estimator", () => {
 				roiRgba: rgba,
 				roiWidth: W,
 				roiHeight: H,
-				globalDiff: 0.01,
-				globalMeanLuma: 128,
 			});
 		}
 		const out = est.estimate();
@@ -365,8 +359,6 @@ describe("integrated estimator", () => {
 				roiRgba: rgba,
 				roiWidth: W,
 				roiHeight: H,
-				globalDiff: 0.01,
-				globalMeanLuma: 128,
 			});
 			if (i > 0 && i % estimateEvery === 0) est.estimate();
 		}
@@ -374,15 +366,17 @@ describe("integrated estimator", () => {
 		expect(locked.isLocked).toBe(true);
 		const lockedBpm = locked.bpm ?? 0;
 
-		// Inject 1.5s shake. The shake gate should drop most frames; what
-		// gets through shouldn't dislodge the lock.
+		// Inject 1.5s of frames with sudden big shifts (≥5 px) — the
+		// motion-outlier rejection should treat them as body motion and
+		// drop them, so the locked BPM persists.
 		for (let i = 0; i < Math.round(fs * 1.5); i++) {
+			const yShift = 6 * (i % 2 === 0 ? 1 : -1);
+			translateSubpixel(base, W, H, yShift, tmp);
+			lumaToRgba(tmp, rgba);
 			est.feed({
 				roiRgba: rgba,
 				roiWidth: W,
 				roiHeight: H,
-				globalDiff: 200,
-				globalMeanLuma: 128,
 			});
 			if (i % estimateEvery === 0) est.estimate();
 		}

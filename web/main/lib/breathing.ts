@@ -1,4 +1,3 @@
-import { type Corner, detectCorners } from "./breathing/corners.ts";
 import { findPSDPeak, welchPSD } from "./breathing/fft.ts";
 import {
 	computeQuality,
@@ -25,21 +24,24 @@ import {
 
 export const SAMPLE_RATE_HZ = 30;
 export const BUFFER_SECONDS = 20;
-export const BPM_MIN = 5;
-export const BPM_MAX = 80;
+// 12 BPM is below the at-rest range for healthy dogs of any size, so the
+// lower bound here also defines the bandpass cutoff that excludes the
+// 5-10 BPM band where slow template-drift artifacts live.
+export const BPM_MIN = 12;
+export const BPM_MAX = 90;
 
 const HAMPEL_WINDOW = 7;
 const MIN_ESTIMATE_SECONDS = 6;
-const BANDPASS_LOW_HZ = 0.08;
-const BANDPASS_HIGH_HZ = 1.5;
+// Wide bandpass applied to the position signal before BOTH spectral
+// analysis and cycle counting. The low cutoff is set well above the
+// drifting-template's time constant so 1/f-style template noise gets
+// filtered out before it can bias the Welch peak picker downward.
+const BANDPASS_LOW_HZ = 0.2;
+const BANDPASS_HIGH_HZ = 1.6;
 const ADAPTIVE_BANDPASS_HALF_WIDTH_HZ = 0.18;
 const MIN_BREATH_SEP_S = 0.5;
 const ZERO_CROSSING_HYSTERESIS_FRACTION = 0.15;
-const SHAKE_RATIO = 4;
-const SHAKE_WARN_FRACTION = 0.3;
-const SHAKE_WARMUP_S = 1;
-const ROI_MAG_EMA_ALPHA = 0.05;
-const RECENT_LUMA_WINDOW = 8;
+const RECENT_LUMA_WINDOW = 12;
 const EXPOSURE_COOLDOWN_S = 2;
 const MIN_NCC_CONFIDENCE = 0.2;
 const MIN_MEASUREMENT_SNR = 2;
@@ -63,6 +65,9 @@ const NUM_SUB_REGIONS = SUB_REGION_COLS * SUB_REGION_ROWS;
 // Need at least this many sub-regions agreeing this frame for a valid
 // measurement. Below this the median is meaningless and we hold position.
 const MIN_VALID_SUB_REGIONS = 3;
+// History of per-region dy used by the debug overlay to render
+// per-cell motion amplitude. ~2 s window at 30 Hz.
+const SUB_REGION_DEBUG_HISTORY = 60;
 // 3-frame moving average on the per-frame median dy. Kills the high-
 // frequency jaggedness that doesn't represent breathing (which is
 // always <2 Hz). Smooths just over 100 ms — way below the fastest
@@ -103,8 +108,16 @@ export type BreathingFrame = {
 	roiRgba: Uint8ClampedArray;
 	roiWidth: number;
 	roiHeight: number;
-	globalDiff: number;
-	globalMeanLuma: number;
+};
+
+export type SubRegionDebug = {
+	xFrac: number;
+	yFrac: number;
+	wFrac: number;
+	hFrac: number;
+	amplitude: number; // recent dy std dev in pixels
+	contributed: boolean; // whether this region's dy fed into the latest median
+	historyFill: number; // number of valid history samples (0..SUB_REGION_DEBUG_HISTORY)
 };
 
 export type BreathingEstimator = {
@@ -113,10 +126,7 @@ export type BreathingEstimator = {
 	reset(): void;
 	getWaveform(): Float32Array;
 	getRowProfile(): Float32Array;
-	getDebugCorners(maxCount?: number): Array<{
-		xFrac: number;
-		yFrac: number;
-	}>;
+	getDebugSubRegions(): SubRegionDebug[];
 };
 
 export function createBreathingEstimator(
@@ -125,8 +135,6 @@ export function createBreathingEstimator(
 	const fs = options.sampleRateHz ?? SAMPLE_RATE_HZ;
 	const seconds = options.bufferSeconds ?? BUFFER_SECONDS;
 	const capacity = Math.round(fs * seconds);
-	const shakeWindow = Math.round(fs * 2);
-	const shakeWarmup = Math.round(fs * SHAKE_WARMUP_S);
 	const exposureCooldown = Math.round(fs * EXPOSURE_COOLDOWN_S);
 
 	const positionBuf = new Float32Array(capacity);
@@ -143,6 +151,12 @@ export function createBreathingEstimator(
 	let subRegionW = 0;
 	let subRegionH = 0;
 	let lastDy = 0;
+	let subRegionHistories: Float32Array[] = [];
+	let subRegionHistoryFills: number[] = [];
+	const subRegionContributed: boolean[] = new Array(NUM_SUB_REGIONS).fill(
+		false,
+	);
+	let subRegionHistoryIdx = 0;
 	const dySmoothing = new Float32Array(DY_SMOOTHING_WINDOW);
 	let dySmoothingFill = 0;
 	let dySmoothingIdx = 0;
@@ -152,11 +166,9 @@ export function createBreathingEstimator(
 		lockVariance: LOCK_VARIANCE,
 		lockFrames: LOCK_FRAMES,
 	});
-	const shakeFlags: boolean[] = [];
 	const motionFlags: boolean[] = [];
 	const motionWindow = Math.round(fs * MOTION_WINDOW_S);
-	let roiMagEma = 0;
-	const recentMeanLuma: number[] = [];
+	const recentRoiMeanLuma: number[] = [];
 	let lastExposureFrame = -Infinity;
 	let frameIdx = 0;
 	let lastBreathOffsets: number[] = [];
@@ -180,10 +192,16 @@ export function createBreathingEstimator(
 		subRegionH = Math.floor(h / SUB_REGION_ROWS);
 		projectors = [];
 		subBuffers = [];
+		subRegionHistories = [];
+		subRegionHistoryFills = [];
 		for (let i = 0; i < NUM_SUB_REGIONS; i++) {
 			projectors.push(createRowProjector(subRegionW, subRegionH));
 			subBuffers.push(new Uint8Array(subRegionW * subRegionH));
+			subRegionHistories.push(new Float32Array(SUB_REGION_DEBUG_HISTORY));
+			subRegionHistoryFills.push(0);
+			subRegionContributed[i] = false;
 		}
+		subRegionHistoryIdx = 0;
 		lastDy = 0;
 		validSampleCount = 0;
 	}
@@ -225,16 +243,12 @@ export function createBreathingEstimator(
 			}
 			boxBlur3x3(lumaBuf, roiW, roiH, scratch);
 
-			// ROI luma frame-difference — same units as `frame.globalDiff`, so
-			// the shake gate can compare them apples-to-apples. This is the
-			// natural baseline for "how much is happening inside the ROI?"
-			// regardless of where the breathing signal comes from.
-			let roiDiff = 0;
-			if (frameIdx > 0) {
-				let sum = 0;
-				for (let i = 0; i < N; i++) sum += Math.abs(lumaBuf[i] - lumaPrev[i]);
-				roiDiff = sum / N;
-			}
+			// ROI mean luminance — used to detect autoexposure / lighting jumps
+			// that actually affect the box (rather than the global frame, which
+			// might change for reasons unrelated to what we're measuring).
+			let roiMeanLuma = 0;
+			for (let i = 0; i < N; i++) roiMeanLuma += lumaBuf[i];
+			roiMeanLuma /= N;
 
 			// Extract each sub-region into its own buffer and run row-projection
 			// against its drifting template. dy is the *absolute* template-
@@ -257,50 +271,55 @@ export function createBreathingEstimator(
 					}
 				}
 				const result = projectors[s].process(sub);
-				if (result && result.confidence >= MIN_NCC_CONFIDENCE) {
+				const ok = !!result && result.confidence >= MIN_NCC_CONFIDENCE;
+				subRegionContributed[s] = ok;
+				if (ok && result) {
 					dys.push(result.dy);
 					confSum += result.confidence;
 					confCount++;
+					subRegionHistories[s][subRegionHistoryIdx] = result.dy;
+					if (subRegionHistoryFills[s] < SUB_REGION_DEBUG_HISTORY) {
+						subRegionHistoryFills[s]++;
+					}
+				} else {
+					// Pad with last value (or 0 if none yet) to keep amplitudes
+					// representative when occasional frames fail confidence check.
+					const prev =
+						subRegionHistoryFills[s] > 0
+							? subRegionHistories[s][
+									(subRegionHistoryIdx - 1 + SUB_REGION_DEBUG_HISTORY) %
+										SUB_REGION_DEBUG_HISTORY
+								]
+							: 0;
+					subRegionHistories[s][subRegionHistoryIdx] = prev;
 				}
 			}
+			subRegionHistoryIdx =
+				(subRegionHistoryIdx + 1) % SUB_REGION_DEBUG_HISTORY;
 			let dy = 0;
-			let ncc = 0;
 			let medianDyValid = false;
 			if (dys.length >= MIN_VALID_SUB_REGIONS) {
 				dys.sort((a, b) => a - b);
 				const mid = dys.length >> 1;
 				dy = dys.length % 2 === 1 ? dys[mid] : 0.5 * (dys[mid - 1] + dys[mid]);
-				ncc = confSum / confCount;
+				// confSum / confCount is the mean NCC across contributing
+				// sub-regions; unused in the current pipeline but kept as a
+				// natural place to wire confidence weighting later.
+				void confSum;
+				void confCount;
 				medianDyValid = true;
 			}
 
-			// Shake gate: global motion >> ROI's own activity → camera-led.
-			const isWarmup = frameIdx < shakeWarmup;
-			if (!isWarmup) {
-				const baseline = Math.max(roiMagEma, 0.5);
-				const isShake = frame.globalDiff > SHAKE_RATIO * baseline;
-				shakeFlags.push(isShake);
-				if (shakeFlags.length > shakeWindow) shakeFlags.shift();
-				if (isShake) {
-					lumaPrev.set(lumaBuf);
-					frameIdx++;
-					return;
-				}
-			}
-
-			if (detectExposureJump(recentMeanLuma, frame.globalMeanLuma)) {
+			// Autoexposure / lighting-change detection — but driven by the
+			// ROI's own mean luma, not the global frame. A change outside the
+			// box (a person walking past, a phone notification flash) doesn't
+			// affect the measurement, so we ignore it.
+			if (detectExposureJump(recentRoiMeanLuma, roiMeanLuma)) {
 				lastExposureFrame = frameIdx;
 			}
-			recentMeanLuma.push(frame.globalMeanLuma);
-			if (recentMeanLuma.length > RECENT_LUMA_WINDOW) recentMeanLuma.shift();
-
-			// Track the ROI's luma-domain motion baseline. EMA is robust to
-			// occasional zero frames at session start.
-			if (frameIdx >= shakeWarmup) {
-				roiMagEma =
-					(1 - ROI_MAG_EMA_ALPHA) * roiMagEma + ROI_MAG_EMA_ALPHA * roiDiff;
-			} else {
-				roiMagEma = roiMagEma === 0 ? roiDiff : 0.7 * roiMagEma + 0.3 * roiDiff;
+			recentRoiMeanLuma.push(roiMeanLuma);
+			if (recentRoiMeanLuma.length > RECENT_LUMA_WINDOW) {
+				recentRoiMeanLuma.shift();
 			}
 
 			// Motion outlier: median dy is so big it almost certainly isn't
@@ -345,14 +364,16 @@ export function createBreathingEstimator(
 			scratch = null;
 			projectors = [];
 			subBuffers = [];
+			subRegionHistories = [];
+			subRegionHistoryFills = [];
+			subRegionHistoryIdx = 0;
+			for (let i = 0; i < NUM_SUB_REGIONS; i++) subRegionContributed[i] = false;
 			subRegionW = 0;
 			subRegionH = 0;
 			lastDy = 0;
 			validSampleCount = 0;
 			frameIdx = 0;
-			roiMagEma = 0;
-			shakeFlags.length = 0;
-			recentMeanLuma.length = 0;
+			recentRoiMeanLuma.length = 0;
 			lastExposureFrame = -Infinity;
 			lastBreathOffsets = [];
 			motionFlags.length = 0;
@@ -370,22 +391,48 @@ export function createBreathingEstimator(
 			return projectors[centerIdx]?.getCurrentProfile() ?? new Float32Array(0);
 		},
 
-		getDebugCorners(maxCount = 24) {
-			if (!lumaBuf || roiW === 0 || roiH === 0) return [];
-			const corners: Corner[] = detectCorners(lumaBuf, roiW, roiH, maxCount);
-			return corners.map((c) => ({
-				xFrac: c.x / roiW,
-				yFrac: c.y / roiH,
-			}));
+		getDebugSubRegions(): SubRegionDebug[] {
+			if (projectors.length !== NUM_SUB_REGIONS || roiW === 0 || roiH === 0) {
+				return [];
+			}
+			const out: SubRegionDebug[] = [];
+			for (let s = 0; s < NUM_SUB_REGIONS; s++) {
+				const col = s % SUB_REGION_COLS;
+				const rowR = Math.floor(s / SUB_REGION_COLS);
+				const startX = col * subRegionW;
+				const startY = rowR * subRegionH;
+				const fill = subRegionHistoryFills[s];
+				let mean = 0;
+				for (let i = 0; i < fill; i++) mean += subRegionHistories[s][i];
+				mean = fill > 0 ? mean / fill : 0;
+				let variance = 0;
+				for (let i = 0; i < fill; i++) {
+					const d = subRegionHistories[s][i] - mean;
+					variance += d * d;
+				}
+				const amplitude = fill > 1 ? Math.sqrt(variance / fill) : 0;
+				out.push({
+					xFrac: startX / roiW,
+					yFrac: startY / roiH,
+					wFrac: subRegionW / roiW,
+					hFrac: subRegionH / roiH,
+					amplitude,
+					contributed: subRegionContributed[s],
+					historyFill: fill,
+				});
+			}
+			return out;
 		},
 
 		estimate() {
 			const samplesReady = Math.min(count, capacity);
 			const bufferSeconds = samplesReady / fs;
-			const dropCount = shakeFlags.filter(Boolean).length;
+			// "shakeRecent" now means "the ROI itself has been seeing too
+			// much motion to trust" — derived from the per-frame motion-
+			// outlier rate. We no longer look at anything outside the box.
+			const motionDropCount = motionFlags.filter(Boolean).length;
 			const shakeRecent =
-				shakeFlags.length >= fs &&
-				dropCount / shakeFlags.length >= SHAKE_WARN_FRACTION;
+				motionFlags.length >= fs && motionDropCount / motionFlags.length >= 0.3;
 			const exposureJumpRecent =
 				frameIdx - lastExposureFrame < exposureCooldown;
 			const trackerState = tracker.getState();
@@ -419,24 +466,29 @@ export function createBreathingEstimator(
 			const cleaned = hampelFilter(samples, HAMPEL_WINDOW, 3);
 			const detrended = detrend(cleaned);
 
-			// Use a narrow tracking bandpass once locked — much cleaner
-			// time-domain signal for peak detection and IBI analysis.
+			// Apply the wide bandpass BEFORE spectral analysis. This is the
+			// critical fix: the low cutoff (0.2 Hz / 12 BPM) excludes the
+			// band where slow template-drift artifacts live, so the Welch
+			// peak picker can't fixate on them. For cycle detection, narrow
+			// further around the locked frequency once we have a lock.
+			const wideBp = bandpass(detrended, fs, BANDPASS_LOW_HZ, BANDPASS_HIGH_HZ);
 			const lockedFreqHz = trackerState.isLocked ? trackerState.bpm / 60 : null;
-			const bpLow = lockedFreqHz
-				? Math.max(
-						BANDPASS_LOW_HZ,
-						lockedFreqHz - ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
+			const bp = lockedFreqHz
+				? bandpass(
+						wideBp,
+						fs,
+						Math.max(
+							BANDPASS_LOW_HZ,
+							lockedFreqHz - ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
+						),
+						Math.min(
+							BANDPASS_HIGH_HZ,
+							lockedFreqHz + ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
+						),
 					)
-				: BANDPASS_LOW_HZ;
-			const bpHigh = lockedFreqHz
-				? Math.min(
-						BANDPASS_HIGH_HZ,
-						lockedFreqHz + ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
-					)
-				: BANDPASS_HIGH_HZ;
-			const bp = bandpass(detrended, fs, bpLow, bpHigh);
+				: wideBp;
 
-			const { freq, psd } = welchPSD(detrended, fs, {
+			const { freq, psd } = welchPSD(wideBp, fs, {
 				segmentLength: 256,
 				overlap: 0.5,
 			});
@@ -473,7 +525,7 @@ export function createBreathingEstimator(
 				aliveFeatures: validSampleCount,
 				targetFeatures: capacity,
 				shakeFraction:
-					shakeFlags.length > 0 ? dropCount / shakeFlags.length : 0,
+					motionFlags.length > 0 ? motionDropCount / motionFlags.length : 0,
 				exposureJumpRecent,
 				cycleCount: ibi.cycleCount,
 			});
