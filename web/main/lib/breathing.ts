@@ -1,16 +1,14 @@
+import { type Corner, detectCorners } from "./breathing/corners.ts";
 import { findPSDPeak, welchPSD } from "./breathing/fft.ts";
-import {
-	buildPyramid,
-	detectShiTomasi,
-	type Feature,
-	type PyramidLevel,
-	updateFeatures,
-} from "./breathing/lk.ts";
 import {
 	computeQuality,
 	detectExposureJump,
 	type QualityScore,
 } from "./breathing/quality.ts";
+import {
+	createRowProjector,
+	type RowProjector,
+} from "./breathing/row-projection.ts";
 import {
 	analyzeIBI,
 	bandpass,
@@ -19,19 +17,22 @@ import {
 	hampelFilter,
 	stddev,
 } from "./breathing/signal.ts";
+import {
+	type BpmTracker,
+	bpmMeasurementVariance,
+	createBpmTracker,
+} from "./breathing/tracker.ts";
 
 export const SAMPLE_RATE_HZ = 30;
 export const BUFFER_SECONDS = 20;
 export const BPM_MIN = 5;
 export const BPM_MAX = 80;
 
-const PYRAMID_LEVELS = 2;
-const TARGET_FEATURES = 30;
-const REDETECT_MIN_FEATURES = 12;
 const HAMPEL_WINDOW = 7;
 const MIN_ESTIMATE_SECONDS = 6;
 const BANDPASS_LOW_HZ = 0.08;
 const BANDPASS_HIGH_HZ = 1.5;
+const ADAPTIVE_BANDPASS_HALF_WIDTH_HZ = 0.18;
 const PEAK_PROMINENCE_SD = 0.5;
 const MIN_BREATH_SEP_S = 0.5;
 const SHAKE_RATIO = 4;
@@ -40,8 +41,8 @@ const SHAKE_WARMUP_S = 1;
 const ROI_MAG_EMA_ALPHA = 0.05;
 const RECENT_LUMA_WINDOW = 8;
 const EXPOSURE_COOLDOWN_S = 2;
-
-export type SignalChannel = "lk" | "edge" | "diff";
+const MIN_NCC_CONFIDENCE = 0.2;
+const MIN_MEASUREMENT_SNR = 3;
 
 export type BreathingEstimate = {
 	bpm: number | null;
@@ -53,9 +54,12 @@ export type BreathingEstimate = {
 	bufferSeconds: number;
 	shakeRecent: boolean;
 	exposureJumpRecent: boolean;
-	activeSignal: SignalChannel | null;
-	aliveFeatures: number;
+	aliveFeatures: number; // alias retained for compatibility — now reports "valid row-projection samples"
 	breathOffsets: number[];
+	isLocked: boolean;
+	lockAge: number;
+	trackerVariance: number;
+	displayState: "uninitialized" | "searching" | "tracking" | "locked";
 };
 
 export type BreathingFrame = {
@@ -71,7 +75,11 @@ export type BreathingEstimator = {
 	estimate(): BreathingEstimate;
 	reset(): void;
 	getWaveform(): Float32Array;
-	getFeatures(): Feature[];
+	getRowProfile(): Float32Array;
+	getDebugCorners(maxCount?: number): Array<{
+		xFrac: number;
+		yFrac: number;
+	}>;
 };
 
 export function createBreathingEstimator(
@@ -84,41 +92,37 @@ export function createBreathingEstimator(
 	const shakeWarmup = Math.round(fs * SHAKE_WARMUP_S);
 	const exposureCooldown = Math.round(fs * EXPOSURE_COOLDOWN_S);
 
-	const lkBuf = new Float32Array(capacity);
-	const edgeBuf = new Float32Array(capacity);
-	const diffBuf = new Float32Array(capacity);
+	const positionBuf = new Float32Array(capacity);
 	let writeIdx = 0;
 	let count = 0;
 
 	let roiW = 0;
 	let roiH = 0;
-	let lumaA: Uint8Array | null = null;
-	let lumaB: Uint8Array | null = null;
+	let lumaBuf: Uint8Array | null = null;
+	let lumaPrev: Uint8Array | null = null;
 	let scratch: Uint8Array | null = null;
-	let prevPyramid: PyramidLevel[] | null = null;
-	let features: Feature[] = [];
-	let frameIdx = 0;
-	let lkCumulative = 0;
+	let projector: RowProjector | null = null;
+	let cumulativePosition = 0;
+	let validSampleCount = 0;
 
+	const tracker: BpmTracker = createBpmTracker();
 	const shakeFlags: boolean[] = [];
 	let roiMagEma = 0;
 	const recentMeanLuma: number[] = [];
 	let lastExposureFrame = -Infinity;
-
-	let lastActive: SignalChannel | null = null;
+	let frameIdx = 0;
 	let lastBreathOffsets: number[] = [];
 
 	function ensureBuffers(w: number, h: number) {
-		if (w === roiW && h === roiH && lumaA && lumaB && scratch) return;
+		if (w === roiW && h === roiH && lumaBuf && scratch && projector) return;
 		roiW = w;
 		roiH = h;
-		lumaA = new Uint8Array(w * h);
-		lumaB = new Uint8Array(w * h);
+		lumaBuf = new Uint8Array(w * h);
+		lumaPrev = new Uint8Array(w * h);
 		scratch = new Uint8Array(w * h);
-		prevPyramid = null;
-		features = [];
-		frameIdx = 0;
-		lkCumulative = 0;
+		projector = createRowProjector(w, h);
+		cumulativePosition = 0;
+		validSampleCount = 0;
 	}
 
 	function snapshot(buf: Float32Array): Float32Array {
@@ -129,137 +133,83 @@ export function createBreathingEstimator(
 		return out;
 	}
 
-	function pushSample(lkSig: number, edgeSig: number, diffSig: number) {
-		lkBuf[writeIdx] = lkSig;
-		edgeBuf[writeIdx] = edgeSig;
-		diffBuf[writeIdx] = diffSig;
+	function pushPosition(p: number) {
+		positionBuf[writeIdx] = p;
 		writeIdx = (writeIdx + 1) % capacity;
 		count++;
-	}
-
-	function estimateChannel(buf: Float32Array): {
-		bpmSpec: number | null;
-		snr: number;
-		peakNormalized: number;
-		filteredForPeaks: Float32Array | null;
-	} {
-		if (buf.length < fs * MIN_ESTIMATE_SECONDS) {
-			return {
-				bpmSpec: null,
-				snr: 0,
-				peakNormalized: 0,
-				filteredForPeaks: null,
-			};
-		}
-		const cleaned = hampelFilter(buf, HAMPEL_WINDOW, 3);
-		const detrended = detrend(cleaned);
-		const bp = bandpass(detrended, fs, BANDPASS_LOW_HZ, BANDPASS_HIGH_HZ);
-		const { freq, psd } = welchPSD(bp, fs, {
-			segmentLength: 256,
-			overlap: 0.5,
-		});
-		const peak = findPSDPeak(freq, psd, BPM_MIN / 60, BPM_MAX / 60);
-		if (!peak) {
-			return { bpmSpec: null, snr: 0, peakNormalized: 0, filteredForPeaks: bp };
-		}
-		const bpmSpec = peak.freq * 60;
-		const peakNorm = peak.bandPower > 0 ? peak.power / peak.bandPower : 0;
-		return {
-			bpmSpec,
-			snr: peak.snr,
-			peakNormalized: peakNorm,
-			filteredForPeaks: bp,
-		};
 	}
 
 	return {
 		feed(frame: BreathingFrame) {
 			ensureBuffers(frame.roiWidth, frame.roiHeight);
-			if (!lumaA || !lumaB || !scratch) return;
-
-			const currBuf = frameIdx % 2 === 0 ? lumaA : lumaB;
-			const prevBuf = frameIdx % 2 === 0 ? lumaB : lumaA;
+			if (!lumaBuf || !lumaPrev || !scratch || !projector) return;
 			const N = roiW * roiH;
 
-			// Grayscale conversion.
+			// Grayscale + denoise.
 			for (let i = 0, j = 0; j < N; i += 4, j++) {
-				currBuf[j] =
+				lumaBuf[j] =
 					(frame.roiRgba[i] * 76 +
 						frame.roiRgba[i + 1] * 150 +
 						frame.roiRgba[i + 2] * 29) >>
 					8;
 			}
-			// 3x3 box blur to denoise sensor grain.
-			boxBlur3x3(currBuf, roiW, roiH, scratch);
+			boxBlur3x3(lumaBuf, roiW, roiH, scratch);
 
-			// Haar vertical-difference signal.
-			let topSum = 0;
-			let botSum = 0;
-			const halfH = roiH >> 1;
-			for (let y = 0; y < halfH; y++) {
-				const row = y * roiW;
-				for (let x = 0; x < roiW; x++) topSum += currBuf[row + x];
-			}
-			for (let y = halfH; y < roiH; y++) {
-				const row = y * roiW;
-				for (let x = 0; x < roiW; x++) botSum += currBuf[row + x];
-			}
-			const edgeSig = (topSum - botSum) / (roiW * halfH);
-
-			// Frame-diff signal (vs previous luma).
-			let diffSig = 0;
+			// ROI luma frame-difference — same units as `frame.globalDiff`, so
+			// the shake gate can compare them apples-to-apples. This is the
+			// natural baseline for "how much is happening inside the ROI?"
+			// regardless of where the breathing signal comes from.
+			let roiDiff = 0;
 			if (frameIdx > 0) {
 				let sum = 0;
-				for (let i = 0; i < N; i++) sum += Math.abs(currBuf[i] - prevBuf[i]);
-				diffSig = sum / N;
+				for (let i = 0; i < N; i++) sum += Math.abs(lumaBuf[i] - lumaPrev[i]);
+				roiDiff = sum / N;
 			}
 
-			// Pyramidal Lucas–Kanade for sub-pixel feature tracking.
-			const currPyramid = buildPyramid(currBuf, roiW, roiH, PYRAMID_LEVELS);
-			let lkDy = 0;
-			let aliveCount = 0;
-			if (prevPyramid && features.length > 0) {
-				const upd = updateFeatures(features, prevPyramid, currPyramid);
-				lkDy = upd.medianDy;
-				aliveCount = upd.aliveCount;
-				if (aliveCount < REDETECT_MIN_FEATURES) {
-					features = detectShiTomasi(currBuf, roiW, roiH, TARGET_FEATURES);
-				}
-			} else {
-				features = detectShiTomasi(currBuf, roiW, roiH, TARGET_FEATURES);
-			}
-			prevPyramid = currPyramid;
-			lkCumulative += lkDy;
+			// 1D row-projection cross-correlation → sub-pixel vertical shift.
+			const shift = projector.process(lumaBuf);
+			const dy = shift?.dy ?? 0;
+			const ncc = shift?.confidence ?? 0;
 
-			// Shake gate based on global frame motion vs ROI baseline.
-			const roiMag = Math.abs(edgeSig) + Math.abs(diffSig) + Math.abs(lkDy);
+			// Shake gate: global motion >> ROI's own activity → camera-led.
 			const isWarmup = frameIdx < shakeWarmup;
 			if (!isWarmup) {
-				const baseline = Math.max(roiMagEma, 1e-6);
+				const baseline = Math.max(roiMagEma, 0.5);
 				const isShake = frame.globalDiff > SHAKE_RATIO * baseline;
 				shakeFlags.push(isShake);
 				if (shakeFlags.length > shakeWindow) shakeFlags.shift();
 				if (isShake) {
+					lumaPrev.set(lumaBuf);
 					frameIdx++;
 					return;
 				}
 			}
 
-			// Exposure-jump detection.
 			if (detectExposureJump(recentMeanLuma, frame.globalMeanLuma)) {
 				lastExposureFrame = frameIdx;
 			}
 			recentMeanLuma.push(frame.globalMeanLuma);
 			if (recentMeanLuma.length > RECENT_LUMA_WINDOW) recentMeanLuma.shift();
 
+			// Track the ROI's luma-domain motion baseline. EMA is robust to
+			// occasional zero frames at session start.
 			if (frameIdx >= shakeWarmup) {
 				roiMagEma =
-					(1 - ROI_MAG_EMA_ALPHA) * roiMagEma + ROI_MAG_EMA_ALPHA * roiMag;
+					(1 - ROI_MAG_EMA_ALPHA) * roiMagEma + ROI_MAG_EMA_ALPHA * roiDiff;
 			} else {
-				roiMagEma = roiMagEma === 0 ? roiMag : 0.7 * roiMagEma + 0.3 * roiMag;
+				roiMagEma = roiMagEma === 0 ? roiDiff : 0.7 * roiMagEma + 0.3 * roiDiff;
 			}
 
-			pushSample(lkCumulative, edgeSig, diffSig);
+			if (shift && ncc >= MIN_NCC_CONFIDENCE) {
+				cumulativePosition += dy;
+				validSampleCount++;
+			}
+			// Always push so the buffer length tracks elapsed time — pushing
+			// the unchanged position when we drop a low-confidence frame keeps
+			// the spectrum well-conditioned (flat segments don't add false
+			// energy in the breathing band).
+			pushPosition(cumulativePosition);
+			lumaPrev.set(lumaBuf);
 			frameIdx++;
 		},
 
@@ -268,31 +218,36 @@ export function createBreathingEstimator(
 			count = 0;
 			roiW = 0;
 			roiH = 0;
-			lumaA = null;
-			lumaB = null;
+			lumaBuf = null;
+			lumaPrev = null;
 			scratch = null;
-			prevPyramid = null;
-			features = [];
+			projector = null;
+			cumulativePosition = 0;
+			validSampleCount = 0;
 			frameIdx = 0;
-			lkCumulative = 0;
-			shakeFlags.length = 0;
 			roiMagEma = 0;
+			shakeFlags.length = 0;
 			recentMeanLuma.length = 0;
 			lastExposureFrame = -Infinity;
-			lastActive = null;
 			lastBreathOffsets = [];
+			tracker.reset();
 		},
 
 		getWaveform() {
-			if (lastActive === "lk") return snapshot(lkBuf);
-			if (lastActive === "edge") return snapshot(edgeBuf);
-			if (lastActive === "diff") return snapshot(diffBuf);
-			// No estimate yet — default to LK if any features tracked, else diff.
-			return snapshot(features.length > 0 ? lkBuf : diffBuf);
+			return snapshot(positionBuf);
 		},
 
-		getFeatures() {
-			return features;
+		getRowProfile() {
+			return projector?.getCurrentProfile() ?? new Float32Array(0);
+		},
+
+		getDebugCorners(maxCount = 24) {
+			if (!lumaBuf || roiW === 0 || roiH === 0) return [];
+			const corners: Corner[] = detectCorners(lumaBuf, roiW, roiH, maxCount);
+			return corners.map((c) => ({
+				xFrac: c.x / roiW,
+				yFrac: c.y / roiH,
+			}));
 		},
 
 		estimate() {
@@ -304,139 +259,110 @@ export function createBreathingEstimator(
 				dropCount / shakeFlags.length >= SHAKE_WARN_FRACTION;
 			const exposureJumpRecent =
 				frameIdx - lastExposureFrame < exposureCooldown;
+			const trackerState = tracker.getState();
 
-			const emptyQuality: QualityScore = {
-				total: 0,
-				breakdown: {
-					spectral: 0,
-					peakSharpness: 0,
-					regularity: 0,
-					featureHealth: 0,
-					shakePenalty: 0,
-					exposurePenalty: 0,
-				},
+			const baseEmpty: BreathingEstimate = {
+				bpm: null,
+				bpmSd: null,
+				regularityCV: null,
+				cycleCount: 0,
+				quality: zeroQuality(),
+				samplesReady,
+				bufferSeconds,
+				shakeRecent,
+				exposureJumpRecent,
+				aliveFeatures: validSampleCount,
+				breathOffsets: [],
+				isLocked: false,
+				lockAge: 0,
+				trackerVariance: trackerState.variance,
+				displayState: "searching",
 			};
 
 			if (bufferSeconds < MIN_ESTIMATE_SECONDS) {
 				return {
-					bpm: null,
-					bpmSd: null,
-					regularityCV: null,
-					cycleCount: 0,
-					quality: emptyQuality,
-					samplesReady,
-					bufferSeconds,
-					shakeRecent,
-					exposureJumpRecent,
-					activeSignal: null,
-					aliveFeatures: features.filter((f) => f.alive).length,
-					breathOffsets: [],
+					...baseEmpty,
+					displayState: validSampleCount === 0 ? "uninitialized" : "searching",
 				};
 			}
 
-			const channels: Array<{
-				name: SignalChannel;
-				buf: Float32Array;
-			}> = [
-				{ name: "lk", buf: snapshot(lkBuf) },
-				{ name: "edge", buf: snapshot(edgeBuf) },
-				{ name: "diff", buf: snapshot(diffBuf) },
-			];
+			const samples = snapshot(positionBuf);
+			const cleaned = hampelFilter(samples, HAMPEL_WINDOW, 3);
+			const detrended = detrend(cleaned);
 
-			let best: {
-				name: SignalChannel;
-				bpmSpec: number;
-				snr: number;
-				peakNormalized: number;
-				filteredForPeaks: Float32Array;
-			} | null = null;
+			// Use a narrow tracking bandpass once locked — much cleaner
+			// time-domain signal for peak detection and IBI analysis.
+			const lockedFreqHz = trackerState.isLocked ? trackerState.bpm / 60 : null;
+			const bpLow = lockedFreqHz
+				? Math.max(
+						BANDPASS_LOW_HZ,
+						lockedFreqHz - ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
+					)
+				: BANDPASS_LOW_HZ;
+			const bpHigh = lockedFreqHz
+				? Math.min(
+						BANDPASS_HIGH_HZ,
+						lockedFreqHz + ADAPTIVE_BANDPASS_HALF_WIDTH_HZ,
+					)
+				: BANDPASS_HIGH_HZ;
+			const bp = bandpass(detrended, fs, bpLow, bpHigh);
 
-			for (const ch of channels) {
-				const res = estimateChannel(ch.buf);
-				if (res.bpmSpec == null || !res.filteredForPeaks) continue;
-				if (!best || res.snr > best.snr) {
-					best = {
-						name: ch.name,
-						bpmSpec: res.bpmSpec,
-						snr: res.snr,
-						peakNormalized: res.peakNormalized,
-						filteredForPeaks: res.filteredForPeaks,
-					};
+			const { freq, psd } = welchPSD(detrended, fs, {
+				segmentLength: 256,
+				overlap: 0.5,
+			});
+			const peak = findPSDPeak(freq, psd, BPM_MIN / 60, BPM_MAX / 60);
+
+			let measurementBpm: number | null = null;
+			let snr = 0;
+			let peakNormalized = 0;
+			if (peak && peak.snr >= MIN_MEASUREMENT_SNR) {
+				const candidateBpm = peak.freq * 60;
+				if (candidateBpm >= BPM_MIN && candidateBpm <= BPM_MAX) {
+					measurementBpm = candidateBpm;
+					snr = peak.snr;
+					peakNormalized = peak.bandPower > 0 ? peak.power / peak.bandPower : 0;
 				}
 			}
 
-			if (!best) {
-				lastActive = null;
-				lastBreathOffsets = [];
-				const quality = computeQuality({
-					spectralSnr: 0,
-					spectralPeakNormalized: 0,
-					regularityCV: null,
-					aliveFeatures: features.filter((f) => f.alive).length,
-					targetFeatures: TARGET_FEATURES,
-					shakeFraction:
-						shakeFlags.length > 0 ? dropCount / shakeFlags.length : 0,
-					exposureJumpRecent,
-					cycleCount: 0,
-				});
-				return {
-					bpm: null,
-					bpmSd: null,
-					regularityCV: null,
-					cycleCount: 0,
-					quality,
-					samplesReady,
-					bufferSeconds,
-					shakeRecent,
-					exposureJumpRecent,
-					activeSignal: null,
-					aliveFeatures: features.filter((f) => f.alive).length,
-					breathOffsets: [],
-				};
-			}
-
-			lastActive = best.name;
-
-			// Peak detection on the chosen filtered signal.
-			const sd = stddev(best.filteredForPeaks);
+			// Peak detection in the (possibly adaptively bandpassed) time series.
+			const sd = stddev(bp);
 			const minSep = Math.round(MIN_BREATH_SEP_S * fs);
-			const peakIndices = findPeaks(
-				best.filteredForPeaks,
-				minSep,
-				sd * PEAK_PROMINENCE_SD,
-			);
+			const peakIndices = findPeaks(bp, minSep, sd * PEAK_PROMINENCE_SD);
 			lastBreathOffsets = peakIndices;
 			const ibi = analyzeIBI(peakIndices, fs);
 
-			// Blend spectral and IBI BPM. Prefer IBI when we have ≥3 cycles AND
-			// the two agree within 6 BPM (otherwise the spectral estimate is the
-			// more reliable baseline).
-			let bpm = best.bpmSpec;
-			const bpmSd = ibi.sdBpm;
-			if (
-				ibi.meanBpm != null &&
-				ibi.cycleCount >= 3 &&
-				Math.abs(ibi.meanBpm - best.bpmSpec) < 6
-			) {
-				bpm = 0.5 * ibi.meanBpm + 0.5 * best.bpmSpec;
-			}
-
-			const aliveFeatures = features.filter((f) => f.alive).length;
+			// Quality calculated even when there's no peak (it'll be near-zero).
 			const quality = computeQuality({
-				spectralSnr: best.snr,
-				spectralPeakNormalized: best.peakNormalized,
+				spectralSnr: snr,
+				spectralPeakNormalized: peakNormalized,
 				regularityCV: ibi.regularityCV,
-				aliveFeatures,
-				targetFeatures: TARGET_FEATURES,
+				aliveFeatures: validSampleCount,
+				targetFeatures: capacity,
 				shakeFraction:
 					shakeFlags.length > 0 ? dropCount / shakeFlags.length : 0,
 				exposureJumpRecent,
 				cycleCount: ibi.cycleCount,
 			});
 
+			// Feed the spectral measurement to the temporal tracker.
+			if (measurementBpm != null) {
+				const measVar = bpmMeasurementVariance(snr, quality.total);
+				tracker.update(measurementBpm, measVar);
+			}
+			const updatedState = tracker.getState();
+
+			const bpm = updatedState.initialized ? updatedState.bpm : null;
+			const displayState: BreathingEstimate["displayState"] =
+				!updatedState.initialized
+					? "searching"
+					: updatedState.isLocked
+						? "locked"
+						: "tracking";
+
 			return {
 				bpm,
-				bpmSd,
+				bpmSd: ibi.sdBpm,
 				regularityCV: ibi.regularityCV,
 				cycleCount: ibi.cycleCount,
 				quality,
@@ -444,9 +370,12 @@ export function createBreathingEstimator(
 				bufferSeconds,
 				shakeRecent,
 				exposureJumpRecent,
-				activeSignal: best.name,
-				aliveFeatures,
+				aliveFeatures: validSampleCount,
 				breathOffsets: lastBreathOffsets.slice(),
+				isLocked: updatedState.isLocked,
+				lockAge: updatedState.lockAge,
+				trackerVariance: updatedState.variance,
+				displayState,
 			};
 		},
 	};
@@ -478,4 +407,18 @@ function boxBlur3x3(
 		}
 	}
 	buf.set(scratch);
+}
+
+function zeroQuality(): QualityScore {
+	return {
+		total: 0,
+		breakdown: {
+			spectral: 0,
+			peakSharpness: 0,
+			regularity: 0,
+			featureHealth: 0,
+			shakePenalty: 0,
+			exposurePenalty: 0,
+		},
+	};
 }

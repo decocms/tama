@@ -1,14 +1,12 @@
-import { Activity, AlertCircle, Sparkles, Wind, X } from "lucide-react";
+import { Activity, AlertCircle, Lock, Sparkles, Wind, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
-import type { Feature } from "../lib/breathing/lk.ts";
 import {
 	BPM_MAX,
 	BPM_MIN,
 	type BreathingEstimate,
 	createBreathingEstimator,
-	type SignalChannel,
 } from "../lib/breathing.ts";
 
 const ROI_W = 80;
@@ -17,6 +15,7 @@ const GLOBAL_W = 40;
 const GLOBAL_H = 30;
 const SAMPLE_RATE_HZ = 30;
 const WAVEFORM_SAMPLES = SAMPLE_RATE_HZ * 12;
+const DISPLAY_BPM_SMOOTHING = 0.35;
 
 type RoiFrac = { x: number; y: number; w: number; h: number };
 const DEFAULT_ROI: RoiFrac = { x: 0.3, y: 0.35, w: 0.4, h: 0.3 };
@@ -41,9 +40,12 @@ const emptyEstimate: BreathingEstimate = {
 	bufferSeconds: 0,
 	shakeRecent: false,
 	exposureJumpRecent: false,
-	activeSignal: null,
 	aliveFeatures: 0,
 	breathOffsets: [],
+	isLocked: false,
+	lockAge: 0,
+	trackerVariance: 0,
+	displayState: "uninitialized",
 };
 
 export function BreathingCounter({
@@ -57,20 +59,21 @@ export function BreathingCounter({
 	const captureCanvasRef = useRef<HTMLCanvasElement>(null);
 	const globalCanvasRef = useRef<HTMLCanvasElement>(null);
 	const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
-	const featuresLayerRef = useRef<HTMLCanvasElement>(null);
+	const profileCanvasRef = useRef<HTMLCanvasElement>(null);
+	const cornersLayerRef = useRef<HTMLCanvasElement>(null);
 	const streamRef = useRef<MediaStream | null>(null);
 	const rafRef = useRef<number | null>(null);
 	const globalLumaARef = useRef<Uint8Array | null>(null);
 	const globalLumaBRef = useRef<Uint8Array | null>(null);
 	const frameCountRef = useRef(0);
 	const lastSampleAtRef = useRef(0);
-	const featuresSnapshotRef = useRef<Feature[]>([]);
-	const lastBreathTimeRef = useRef(0);
 	const lastBreathCountRef = useRef(0);
+	const displayedBpmRef = useRef<number | null>(null);
 
 	const estimator = useMemo(() => createBreathingEstimator(), []);
 	const [roi, setRoi] = useState<RoiFrac>(DEFAULT_ROI);
 	const [estimate, setEstimate] = useState<BreathingEstimate>(emptyEstimate);
+	const [displayedBpm, setDisplayedBpm] = useState<number | null>(null);
 	const [breathPulse, setBreathPulse] = useState(0);
 	const [error, setError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
@@ -82,13 +85,13 @@ export function BreathingCounter({
 		setError(null);
 		setReady(false);
 		setEstimate(emptyEstimate);
+		setDisplayedBpm(null);
+		displayedBpmRef.current = null;
 		estimator.reset();
 		globalLumaARef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
 		globalLumaBRef.current = new Uint8Array(GLOBAL_W * GLOBAL_H);
 		frameCountRef.current = 0;
-		featuresSnapshotRef.current = [];
 		lastBreathCountRef.current = 0;
-		lastBreathTimeRef.current = 0;
 
 		(async () => {
 			try {
@@ -203,7 +206,6 @@ export function BreathingCounter({
 				globalDiff,
 				globalMeanLuma: meanLuma,
 			});
-			featuresSnapshotRef.current = estimator.getFeatures();
 			frameCountRef.current = frame + 1;
 		};
 		rafRef.current = requestAnimationFrame(tick);
@@ -212,12 +214,35 @@ export function BreathingCounter({
 			const est = estimator.estimate();
 			setEstimate(est);
 			drawWaveform(waveformCanvasRef.current, estimator.getWaveform(), est);
-			drawFeatures(featuresLayerRef.current, featuresSnapshotRef.current, roi);
-			// Pulse on new breath onsets.
+			drawRowProfile(profileCanvasRef.current, estimator.getRowProfile());
+			if (debug) {
+				drawCorners(cornersLayerRef.current, estimator.getDebugCorners(), roi);
+			}
+
+			// Smooth the displayed BPM toward the tracker estimate so the
+			// number doesn't jump on every UI tick.
+			if (est.bpm != null) {
+				const prev = displayedBpmRef.current;
+				const target = est.bpm;
+				const next =
+					prev == null
+						? target
+						: prev + DISPLAY_BPM_SMOOTHING * (target - prev);
+				displayedBpmRef.current = next;
+				setDisplayedBpm(next);
+			} else {
+				displayedBpmRef.current = null;
+				setDisplayedBpm(null);
+			}
+
+			// Pulse on new breath onsets (visible cue that the algorithm sees
+			// the same breaths you see).
 			if (est.cycleCount > lastBreathCountRef.current) {
 				lastBreathCountRef.current = est.cycleCount;
-				lastBreathTimeRef.current = performance.now();
 				setBreathPulse((p) => p + 1);
+			} else if (est.cycleCount < lastBreathCountRef.current) {
+				// Buffer rolled over — resync.
+				lastBreathCountRef.current = est.cycleCount;
 			}
 		}, 250);
 
@@ -227,7 +252,7 @@ export function BreathingCounter({
 			rafRef.current = null;
 			window.clearInterval(uiInterval);
 		};
-	}, [open, ready, roi, estimator]);
+	}, [open, ready, roi, estimator, debug]);
 
 	if (!open) return null;
 
@@ -276,7 +301,7 @@ export function BreathingCounter({
 						<RoiOverlay value={roi} onChange={setRoi} />
 						{debug ? (
 							<canvas
-								ref={featuresLayerRef}
+								ref={cornersLayerRef}
 								className="absolute inset-0 w-full h-full pointer-events-none"
 							/>
 						) : null}
@@ -305,9 +330,7 @@ export function BreathingCounter({
 							Respiratory rate
 						</div>
 						<div className="flex items-baseline gap-2">
-							<div className="font-display text-5xl font-semibold leading-none tabular-nums">
-								{estimate.bpm != null ? Math.round(estimate.bpm) : "—"}
-							</div>
+							<BpmDisplay estimate={estimate} displayedBpm={displayedBpm} />
 							<div className="text-sm text-muted-foreground">BPM</div>
 							{estimate.bpmSd != null && estimate.cycleCount >= 3 ? (
 								<div className="text-xs text-muted-foreground tabular-nums">
@@ -334,11 +357,7 @@ export function BreathingCounter({
 						</div>
 					</div>
 					<div className="flex flex-col items-end gap-2">
-						<QualityChip
-							total={estimate.quality.total}
-							activeSignal={estimate.activeSignal}
-							cycleCount={estimate.cycleCount}
-						/>
+						<QualityChip estimate={estimate} />
 						<canvas
 							ref={waveformCanvasRef}
 							width={240}
@@ -349,15 +368,45 @@ export function BreathingCounter({
 					</div>
 				</div>
 				{debug ? (
-					<DebugBreakdown estimate={estimate} />
+					<DebugPanel estimate={estimate} profileCanvasRef={profileCanvasRef} />
 				) : (
 					<div className="text-[11px] text-muted-foreground leading-snug">
-						Point at Beto's chest or flank, or place the box across the
-						back–background line. The dot pulses with each detected breath — if
-						it matches what you see, the reading is trustworthy.
+						Point at Beto's chest or flank, or across the back–background line.
+						The dot pulses with each detected breath — once a pattern holds for
+						a few seconds the reading locks and resists camera wobble.
 					</div>
 				)}
 			</div>
+		</div>
+	);
+}
+
+function BpmDisplay({
+	estimate,
+	displayedBpm,
+}: {
+	estimate: BreathingEstimate;
+	displayedBpm: number | null;
+}) {
+	if (estimate.displayState === "uninitialized" || displayedBpm == null) {
+		return (
+			<div className="font-display text-5xl font-semibold leading-none tabular-nums text-muted-foreground/50">
+				—
+			</div>
+		);
+	}
+	return (
+		<div
+			className={cn(
+				"font-display text-5xl font-semibold leading-none tabular-nums transition-colors duration-700",
+				estimate.isLocked
+					? "text-emerald-600"
+					: estimate.displayState === "tracking"
+						? "text-foreground"
+						: "text-muted-foreground",
+			)}
+		>
+			{Math.round(displayedBpm)}
 		</div>
 	);
 }
@@ -375,98 +424,130 @@ function describeStatus(
 	if (est.exposureJumpRecent) {
 		return { message: "Camera refocusing — pausing…", tone: "warn" };
 	}
-	if (est.bpm == null) {
+	if (est.displayState === "uninitialized") {
 		return {
-			message: `Sampling… (${est.bufferSeconds.toFixed(1)}s · ${est.aliveFeatures} features)`,
+			message: `Searching… (${est.bufferSeconds.toFixed(1)}s)`,
 			tone: "warn",
 		};
 	}
-	if (est.quality.total < 40) {
-		return { message: "Low signal — reposition the box", tone: "warn" };
+	if (est.displayState === "searching") {
+		return {
+			message: `Sampling… (${est.bufferSeconds.toFixed(1)}s)`,
+			tone: "warn",
+		};
 	}
-	const sig =
-		est.activeSignal === "lk"
-			? "tracking"
-			: est.activeSignal === "edge"
-				? "edge"
-				: "motion";
+	if (est.displayState === "tracking") {
+		return {
+			message: `Tracking · σ ${Math.sqrt(est.trackerVariance).toFixed(1)} BPM`,
+			tone: "warn",
+		};
+	}
+	// Locked.
 	const reg =
 		est.regularityCV != null && est.cycleCount >= 3
 			? est.regularityCV < 0.15
-				? " · steady"
+				? "steady"
 				: est.regularityCV < 0.3
-					? " · slightly irregular"
-					: " · irregular"
-			: "";
+					? "slightly irregular"
+					: "irregular"
+			: null;
 	return {
-		message: `${sig} signal · range ${BPM_MIN}–${BPM_MAX} BPM${reg}`,
+		message: reg
+			? `Locked · ${reg} · range ${BPM_MIN}–${BPM_MAX} BPM`
+			: `Locked · range ${BPM_MIN}–${BPM_MAX} BPM`,
 		tone: "ok",
 	};
 }
 
-function QualityChip({
-	total,
-	activeSignal,
-	cycleCount,
-}: {
-	total: number;
-	activeSignal: SignalChannel | null;
-	cycleCount: number;
-}) {
-	const tone = total >= 75 ? "ok" : total >= 50 ? "warn" : "low";
-	const label = activeSignal === null ? "warming up" : `${cycleCount} breaths`;
+function QualityChip({ estimate }: { estimate: BreathingEstimate }) {
+	const { quality, displayState, cycleCount, isLocked } = estimate;
+	const tone = isLocked
+		? "lock"
+		: quality.total >= 60
+			? "ok"
+			: quality.total >= 35
+				? "warn"
+				: "low";
+	const label =
+		displayState === "uninitialized"
+			? "warming up"
+			: displayState === "searching"
+				? "searching"
+				: `${cycleCount} breaths`;
+	const Icon = isLocked ? Lock : Wind;
 	return (
 		<div
 			className={cn(
-				"text-[10px] uppercase tracking-[0.14em] font-semibold rounded-full px-2.5 py-1 flex items-center gap-1.5",
-				tone === "ok"
-					? "bg-emerald-500/15 text-emerald-700"
-					: tone === "warn"
-						? "bg-amber-500/15 text-amber-700"
-						: "bg-muted text-muted-foreground",
+				"text-[10px] uppercase tracking-[0.14em] font-semibold rounded-full px-2.5 py-1 flex items-center gap-1.5 border",
+				tone === "lock"
+					? "bg-emerald-500/15 text-emerald-700 border-emerald-500/30"
+					: tone === "ok"
+						? "bg-emerald-500/10 text-emerald-700 border-transparent"
+						: tone === "warn"
+							? "bg-amber-500/15 text-amber-700 border-transparent"
+							: "bg-muted text-muted-foreground border-transparent",
 			)}
 		>
-			<Wind className="w-3 h-3" />
-			{total}% · {label}
+			<Icon className="w-3 h-3" />
+			{quality.total}% · {label}
 		</div>
 	);
 }
 
-function DebugBreakdown({ estimate }: { estimate: BreathingEstimate }) {
+function DebugPanel({
+	estimate,
+	profileCanvasRef,
+}: {
+	estimate: BreathingEstimate;
+	profileCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+}) {
 	const b = estimate.quality.breakdown;
-	const row = (label: string, value: number, suffix = "") => (
-		<div className="flex justify-between tabular-nums">
-			<span className="text-muted-foreground">{label}</span>
-			<span>
-				{value}
-				{suffix}
-			</span>
+	return (
+		<div className="space-y-2">
+			<canvas
+				ref={profileCanvasRef}
+				width={ROI_H * 3}
+				height={36}
+				className="rounded-md bg-muted/50 w-full"
+				style={{ height: 36 }}
+			/>
+			<div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono leading-relaxed">
+				<DebugRow label="spectral" value={b.spectral} />
+				<DebugRow label="peak sharpness" value={b.peakSharpness} />
+				<DebugRow label="regularity" value={b.regularity} />
+				<DebugRow label="feature health" value={b.featureHealth} />
+				<DebugRow label="shake penalty" value={b.shakePenalty} />
+				<DebugRow label="exposure penalty" value={b.exposurePenalty} />
+				<DebugRow label="display state" value={estimate.displayState} span />
+				<DebugRow label="lock age" value={estimate.lockAge} />
+				<DebugRow
+					label="tracker σ (BPM)"
+					value={Math.sqrt(estimate.trackerVariance).toFixed(2)}
+				/>
+				<DebugRow label="cycles" value={estimate.cycleCount} />
+				<DebugRow
+					label="regularity CV"
+					value={estimate.regularityCV?.toFixed(3) ?? "—"}
+				/>
+				<DebugRow label="valid samples" value={estimate.aliveFeatures} />
+			</div>
 		</div>
 	);
+}
+
+function DebugRow({
+	label,
+	value,
+	span,
+}: {
+	label: string;
+	value: number | string;
+	span?: boolean;
+}) {
 	return (
-		<div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono leading-relaxed">
-			{row("spectral", b.spectral)}
-			{row("peak sharpness", b.peakSharpness)}
-			{row("regularity", b.regularity)}
-			{row("feature health", b.featureHealth)}
-			{row("shake penalty", b.shakePenalty)}
-			{row("exposure penalty", b.exposurePenalty)}
-			<div className="flex justify-between col-span-2 pt-1 border-t border-border/50 mt-1">
-				<span className="text-muted-foreground">signal</span>
-				<span>{estimate.activeSignal ?? "—"}</span>
-			</div>
-			<div className="flex justify-between col-span-2">
-				<span className="text-muted-foreground">cycles</span>
-				<span>{estimate.cycleCount}</span>
-			</div>
-			<div className="flex justify-between col-span-2">
-				<span className="text-muted-foreground">regularity CV</span>
-				<span>{estimate.regularityCV?.toFixed(3) ?? "—"}</span>
-			</div>
-			<div className="flex justify-between col-span-2">
-				<span className="text-muted-foreground">alive features</span>
-				<span>{estimate.aliveFeatures}</span>
-			</div>
+		<div className={cn("flex justify-between", span ? "col-span-2" : "")}>
+			<span className="text-muted-foreground">{label}</span>
+			<span>{value}</span>
 		</div>
 	);
 }
@@ -513,7 +594,7 @@ function drawWaveform(
 		if (s > max) max = s;
 	}
 	const range = max - min || 1;
-	ctx.strokeStyle = "rgb(100 116 139)";
+	ctx.strokeStyle = estimate.isLocked ? "rgb(16 185 129)" : "rgb(100 116 139)";
 	ctx.lineWidth = 1.5;
 	ctx.beginPath();
 	for (let i = 0; i < slice.length; i++) {
@@ -524,7 +605,6 @@ function drawWaveform(
 	}
 	ctx.stroke();
 
-	// Mark detected breath onsets relative to the start of the visible slice.
 	if (estimate.breathOffsets.length > 0) {
 		ctx.fillStyle = "rgb(16 185 129)";
 		for (const idx of estimate.breathOffsets) {
@@ -539,9 +619,9 @@ function drawWaveform(
 	}
 }
 
-function drawFeatures(
+function drawCorners(
 	canvas: HTMLCanvasElement | null,
-	features: Feature[],
+	corners: Array<{ xFrac: number; yFrac: number }>,
 	roi: RoiFrac,
 ) {
 	if (!canvas) return;
@@ -556,22 +636,50 @@ function drawFeatures(
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return;
 	ctx.clearRect(0, 0, W, H);
-	// Map feature coords (in ROI luma space, 0..ROI_W × 0..ROI_H) to screen.
 	const left = roi.x * W;
 	const top = roi.y * H;
 	const width = roi.w * W;
 	const height = roi.h * H;
 	ctx.fillStyle = "rgba(52, 211, 153, 0.85)";
 	ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
-	for (const f of features) {
-		if (!f.alive) continue;
-		const sx = left + (f.x / ROI_W) * width;
-		const sy = top + (f.y / ROI_H) * height;
+	for (const c of corners) {
+		const sx = left + c.xFrac * width;
+		const sy = top + c.yFrac * height;
 		ctx.beginPath();
 		ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
 		ctx.fill();
 		ctx.stroke();
 	}
+}
+
+function drawRowProfile(
+	canvas: HTMLCanvasElement | null,
+	profile: Float32Array,
+) {
+	if (!canvas) return;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) return;
+	const W = canvas.width;
+	const H = canvas.height;
+	ctx.clearRect(0, 0, W, H);
+	if (profile.length < 2) return;
+	let min = Infinity;
+	let max = -Infinity;
+	for (const v of profile) {
+		if (v < min) min = v;
+		if (v > max) max = v;
+	}
+	const range = max - min || 1;
+	ctx.strokeStyle = "rgb(52 211 153)";
+	ctx.lineWidth = 1.5;
+	ctx.beginPath();
+	for (let i = 0; i < profile.length; i++) {
+		const x = (i / (profile.length - 1)) * W;
+		const y = H - ((profile[i] - min) / range) * (H - 4) - 2;
+		if (i === 0) ctx.moveTo(x, y);
+		else ctx.lineTo(x, y);
+	}
+	ctx.stroke();
 }
 
 function RoiOverlay({

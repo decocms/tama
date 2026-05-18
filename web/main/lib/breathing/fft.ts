@@ -137,8 +137,13 @@ export function refinePeakFrequency(
 	const y0 = Math.log(Math.max(psd[peakIdx], 1e-20));
 	const yp1 = Math.log(Math.max(psd[peakIdx + 1], 1e-20));
 	const denom = ym1 - 2 * y0 + yp1;
-	if (denom === 0) return freq[peakIdx];
-	const delta = (0.5 * (ym1 - yp1)) / denom;
+	// Concave-up (denom >= 0) means this isn't a true maximum — typically
+	// happens when DC or another out-of-band bin leaks past the search
+	// bound. Skip refinement rather than extrapolating off a saddle.
+	if (denom >= 0) return freq[peakIdx];
+	let delta = (0.5 * (ym1 - yp1)) / denom;
+	if (delta < -0.5) delta = -0.5;
+	else if (delta > 0.5) delta = 0.5;
 	const binWidth = freq[1] - freq[0];
 	return freq[peakIdx] + delta * binWidth;
 }
