@@ -2,13 +2,7 @@ import { formatTime } from "@/lib/format.ts";
 import { cn } from "@/lib/utils.ts";
 
 type Size = "sm" | "md" | "lg" | "xl";
-type Tone =
-	| "default"
-	| "given"
-	| "overdue"
-	| "muted"
-	| "primary"
-	| "upcoming";
+type Tone = "default" | "given" | "overdue" | "muted" | "primary" | "upcoming";
 
 const sizeClass: Record<Size, string> = {
 	sm: "text-xs",

@@ -54,7 +54,7 @@ export function Prescriptions({
 
 	return (
 		<div className="space-y-3">
-			<div className="rounded-xl border bg-card p-4 space-y-3">
+			<div className="rounded-2xl bg-card surface p-4 space-y-3">
 				<Input
 					placeholder="Optional context (vet instructions, first-dose time…)"
 					value={sourceNotes}
@@ -117,7 +117,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
 	const fileUrl = rx.fileId ? `/api/files/${rx.fileId}` : null;
 
 	return (
-		<article className="rounded-xl border bg-card overflow-hidden">
+		<article className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="flex items-start gap-3 p-4 border-b border-border/60">
 				{isImage && fileUrl ? (
 					<a

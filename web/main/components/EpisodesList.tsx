@@ -58,7 +58,7 @@ export function EpisodesList({
 					<li key={ep.id}>
 						<div
 							className={cn(
-								"rounded-xl border bg-card transition-colors",
+								"rounded-2xl bg-card surface surface-hover transition-shadow",
 								linkable ? "hover:border-primary/40" : "",
 							)}
 						>

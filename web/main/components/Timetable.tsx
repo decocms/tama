@@ -15,7 +15,6 @@ import { formatTime, relativeTime } from "@/lib/format.ts";
 import { cn } from "@/lib/utils.ts";
 import type { Dose, TimetableEntry } from "@/types/api.ts";
 import { useLogDose } from "../lib/queries.ts";
-import { TimeColumn } from "./TimeColumn.tsx";
 
 type GroupKey = "overdue" | "later" | "earlier" | "tomorrow";
 
@@ -146,8 +145,10 @@ function buildGroups(
 	overdue.sort(byScheduled);
 	later.sort(byScheduled);
 	tomorrow.sort(byScheduled);
+	// Ascending across every group — same direction throughout the page so
+	// the eye reads morning → evening regardless of which bucket you're in.
 	earlier.sort(
-		(a, b) => new Date(b.actualAt).getTime() - new Date(a.actualAt).getTime(),
+		(a, b) => new Date(a.actualAt).getTime() - new Date(b.actualAt).getTime(),
 	);
 
 	if (later[0]) later[0].isNext = true;
@@ -338,13 +339,7 @@ function Group({
 				</span>
 			</button>
 			{open ? (
-				<ul
-					className={cn(
-						"rounded-lg border divide-y overflow-hidden",
-						groupKey === "overdue" ? "bg-[var(--color-tint-overdue)]" : "",
-						groupKey === "earlier" ? "bg-[var(--color-tint-given)]" : "",
-					)}
-				>
+				<ul className="grid gap-2.5">
 					{rows.map((r) =>
 						r.kind === "pending" ? (
 							<PendingRowView
@@ -386,25 +381,29 @@ function PendingRowView({
 	return (
 		<li
 			className={cn(
-				// 3px colored left stripe replaces the previous round pill icon —
-				// gives the same med vs meal signal in almost no horizontal space.
-				"relative flex items-center gap-2.5 pl-3 pr-2.5 py-2.5",
-				"border-l-[3px]",
+				// Flat physical card: tinted background + 4px colored left edge.
+				// No shadow — multiple shadows stacked tightly read as horizontal
+				// lines and ruin the clean look.
+				"relative rounded-xl border-l-4 flex items-center gap-3.5 pl-3.5 pr-3 py-3.5",
 				isMeal
-					? "border-l-[var(--color-accent-meal)]/70"
-					: "border-l-[var(--color-accent-med)]/70",
-				isNext ? "bg-[var(--color-tint-upcoming)]" : "",
+					? "border-l-[var(--color-accent-meal)]/80"
+					: "border-l-[var(--color-accent-med)]/80",
+				overdue
+					? "bg-[var(--color-tint-overdue)]"
+					: isNext
+						? "bg-[var(--color-tint-upcoming)]"
+						: "bg-secondary/45",
 			)}
 		>
-			<TimeColumn
+			<TimeTile
 				iso={entry.scheduledAt}
-				size="md"
 				tone={overdue ? "overdue" : isNext ? "upcoming" : "default"}
-				className="w-11 shrink-0 font-semibold"
 			/>
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-1.5">
-					<span className="font-semibold truncate">{entry.itemName}</span>
+					<span className="font-display font-semibold truncate text-base">
+						{entry.itemName}
+					</span>
 					{isNext ? (
 						<Badge
 							variant="outline"
@@ -414,7 +413,7 @@ function PendingRowView({
 						</Badge>
 					) : null}
 				</div>
-				<div className="text-[11px] text-muted-foreground flex items-center gap-1 flex-wrap mt-0.5">
+				<div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap mt-0.5">
 					<span>{relativeTime(entry.scheduledAt, now)}</span>
 					{entry.dosage ? (
 						<>
@@ -437,12 +436,46 @@ function PendingRowView({
 				size="sm"
 				onClick={onGive}
 				disabled={pending}
-				className="shrink-0 h-8 px-3"
+				className="shrink-0 h-9 px-3.5 font-semibold"
 			>
 				<Check className="w-3.5 h-3.5" />
 				Give
 			</Button>
 		</li>
+	);
+}
+
+/**
+ * Chunky time tile — replaces the inline TimeColumn for timetable rows so
+ * each entry feels like a physical scheduling card. The time is the
+ * anchor; everything else hangs off it.
+ */
+function TimeTile({
+	iso,
+	tone,
+}: {
+	iso: string;
+	tone: "default" | "overdue" | "upcoming" | "given" | "muted";
+}) {
+	const toneStyle =
+		tone === "overdue"
+			? "bg-[var(--color-status-overdue)]/10 text-[var(--color-status-overdue)]"
+			: tone === "upcoming"
+				? "bg-[var(--color-status-upcoming)]/10 text-[var(--color-status-upcoming)]"
+				: tone === "given"
+					? "bg-[var(--color-status-given)]/10 text-[var(--color-status-given)]"
+					: tone === "muted"
+						? "bg-muted/40 text-muted-foreground"
+						: "bg-muted/40 text-foreground";
+	return (
+		<div
+			className={cn(
+				"shrink-0 w-14 h-14 rounded-lg flex items-center justify-center font-time text-base font-semibold",
+				toneStyle,
+			)}
+		>
+			{formatTime(iso)}
+		</div>
 	);
 }
 
@@ -459,23 +492,20 @@ function GivenRowView({ row }: { row: GivenRow }) {
 	return (
 		<li
 			className={cn(
-				"relative flex items-center gap-2.5 pl-3 pr-2.5 py-2.5 opacity-80",
-				"border-l-[3px]",
+				"relative rounded-xl border-l-4 flex items-center gap-3.5 pl-3.5 pr-3 py-3.5 opacity-90",
 				isMeal
-					? "border-l-[var(--color-accent-meal)]/40"
-					: "border-l-[var(--color-accent-med)]/40",
+					? "border-l-[var(--color-accent-meal)]/45"
+					: "border-l-[var(--color-accent-med)]/45",
+				"bg-[var(--color-tint-given)]",
 			)}
 		>
-			<TimeColumn
-				iso={row.actualAt}
-				size="md"
-				tone={isSkipped ? "muted" : "given"}
-				className="w-11 shrink-0 font-semibold"
-			/>
+			<TimeTile iso={row.actualAt} tone={isSkipped ? "muted" : "given"} />
 			<div className="flex-1 min-w-0">
-				<div className="font-semibold truncate">{row.itemName}</div>
+				<div className="font-display font-semibold truncate text-base">
+					{row.itemName}
+				</div>
 				{showDelta ? (
-					<div className="text-[11px] text-muted-foreground truncate mt-0.5">
+					<div className="text-xs text-muted-foreground truncate mt-0.5">
 						Planned {formatTime(row.plannedAt as string)} ·{" "}
 						{delta > 0 ? "late" : "early"} {formatDelta(Math.abs(delta))}
 					</div>

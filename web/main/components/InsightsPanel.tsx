@@ -53,7 +53,7 @@ export function InsightsPanel({ episodeId }: { episodeId: string }) {
 	const bullets = (data?.insights ?? []).filter((b) => b.tag !== "status");
 
 	return (
-		<div className="rounded-2xl border bg-[color-mix(in_oklab,var(--primary)_4%,var(--color-background-primary))] overflow-hidden">
+		<div className="rounded-2xl surface bg-[color-mix(in_oklab,var(--primary)_4%,var(--color-background-primary))] overflow-hidden">
 			<div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border/60">
 				<div className="flex items-center gap-2">
 					<div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">

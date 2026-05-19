@@ -130,7 +130,7 @@ export function Recordings({ episodeId }: { episodeId: string }) {
 	).length;
 
 	return (
-		<div className="rounded-xl border bg-card overflow-hidden">
+		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<header className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border/60">
 				<Mic className="w-4 h-4 text-muted-foreground" />
 				<span className="font-display font-semibold">Recordings</span>

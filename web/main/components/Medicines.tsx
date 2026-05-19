@@ -99,7 +99,7 @@ function MedicineCardView({ card }: { card: MedicineCard }) {
 	return (
 		<article
 			className={cn(
-				"rounded-xl border bg-card border-l-4 overflow-hidden",
+				"rounded-2xl bg-card surface border-l-4 overflow-hidden",
 				accent.border,
 			)}
 		>

@@ -129,6 +129,37 @@
 	.animate-overdue-pulse {
 		animation: overdue-pulse 1.6s ease-in-out infinite;
 	}
+
+	/* Soft "lifted card" shadow — replaces the harsh 1px borders that
+	   used to delineate every surface. A near-invisible hairline ring
+	   (inset-equivalent via spread) plus a tight tucked drop shadow that
+	   sits within ~6 px of the card. Stacked cards with normal section
+	   gaps (≥16 px) don't bleed into each other. Pair with `bg-card` (or
+	   any other surface tint) and a rounded radius. */
+	.surface {
+		box-shadow:
+			0 0 0 1px rgba(31, 26, 20, 0.04),
+			0 1px 2px rgba(31, 26, 20, 0.04),
+			0 4px 10px -6px rgba(31, 26, 20, 0.08);
+	}
+	.surface-hover:hover {
+		box-shadow:
+			0 0 0 1px rgba(31, 26, 20, 0.05),
+			0 2px 4px rgba(31, 26, 20, 0.05),
+			0 10px 24px -10px rgba(31, 26, 20, 0.14);
+	}
+	[data-theme="dark"] .surface {
+		box-shadow:
+			0 0 0 1px rgba(255, 255, 255, 0.04),
+			0 1px 2px rgba(0, 0, 0, 0.3),
+			0 4px 10px -6px rgba(0, 0, 0, 0.45);
+	}
+	[data-theme="dark"] .surface-hover:hover {
+		box-shadow:
+			0 0 0 1px rgba(255, 255, 255, 0.06),
+			0 2px 4px rgba(0, 0, 0, 0.4),
+			0 10px 24px -10px rgba(0, 0, 0, 0.55);
+	}
 }
 
 @theme inline {

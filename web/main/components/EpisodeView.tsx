@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import type { Prescription } from "@/types/api.ts";
 import { useEpisode, usePet } from "../lib/queries.ts";
+import { AccordionSection } from "./AccordionSection.tsx";
 import { DoseHistoryButton } from "./DoseHistoryButton.tsx";
 import { EpisodeHero } from "./EpisodeHero.tsx";
 import { InsightsPanel } from "./InsightsPanel.tsx";
@@ -73,17 +74,28 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 				/>
 			</Section>
 
-			<Section title="Medicines & meals" eyebrow="Prescribed">
+			{/* Sections below Timetable collapse by default so the page is
+			    scannable. Counts in each header show what's inside without
+			    needing to expand. */}
+			<AccordionSection
+				title="Medicines & meals"
+				eyebrow="Prescribed"
+				count={data.prescriptions.length}
+			>
 				<Medicines prescriptions={data.prescriptions} />
-			</Section>
+			</AccordionSection>
 
-			<Section title="Prescriptions" eyebrow="Documents">
+			<AccordionSection
+				title="Prescriptions"
+				eyebrow="Documents"
+				count={data.prescriptions.length}
+			>
 				<Prescriptions
 					episodeId={episodeId}
 					prescriptions={data.prescriptions}
 					onDraftCreated={setDraftRx}
 				/>
-			</Section>
+			</AccordionSection>
 
 			{draftRx ? (
 				<PrescriptionReview
@@ -92,13 +104,17 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 				/>
 			) : null}
 
-			<Section title="Recordings" eyebrow="Voice + AI">
+			<AccordionSection title="Recordings" eyebrow="Voice + AI">
 				<Recordings episodeId={episodeId} />
-			</Section>
+			</AccordionSection>
 
-			<Section title="Notes" eyebrow="History">
+			<AccordionSection
+				title="Notes"
+				eyebrow="History"
+				count={data.notes.length}
+			>
 				<NotesTimeline notes={data.notes} />
-			</Section>
+			</AccordionSection>
 		</div>
 	);
 }

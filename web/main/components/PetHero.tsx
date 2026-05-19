@@ -27,7 +27,7 @@ export function PetHero({
 		: notes;
 
 	return (
-		<div className="rounded-2xl border bg-card overflow-hidden">
+		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
 				<Avatar name={pet.name} size="xl" />
 				<div className="flex-1 min-w-0">

@@ -1,84 +1,91 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
+import type { Episode } from "@/types/api.ts";
 import { Layout } from "../components/Layout.tsx";
-import { OpenEpisodes } from "../components/OpenEpisodes.tsx";
-import { PetsList } from "../components/PetsList.tsx";
-import { Section } from "../components/Section.tsx";
-import { useCreatePet, useDeletePet, usePets } from "../lib/queries.ts";
+import { PetSummaryCard } from "../components/PetSummaryCard.tsx";
+import { useCreatePet, useEpisodes, usePets } from "../lib/queries.ts";
 
 export function HomePage() {
-	const { data: pets, isLoading, error } = usePets();
+	const { data: pets, isLoading: petsLoading, error } = usePets();
+	const { data: episodes, isLoading: episodesLoading } = useEpisodes();
 	const create = useCreatePet();
-	const del = useDeletePet();
 	const [showForm, setShowForm] = useState(false);
 
-	const handleDelete = (petId: string, name: string) => {
-		if (
-			!window.confirm(
-				`Hide ${name} from the dashboard? Its episodes will be hidden too; data stays in the database.`,
-			)
-		) {
-			return;
+	const activeByPet = useMemo(() => {
+		const m = new Map<string, Episode>();
+		for (const e of episodes ?? []) {
+			if (e.status !== "open") continue;
+			const existing = m.get(e.petId);
+			if (
+				!existing ||
+				new Date(e.startedAt).getTime() > new Date(existing.startedAt).getTime()
+			) {
+				m.set(e.petId, e);
+			}
 		}
-		del.mutate(petId, {
-			onSuccess: () => toast(`${name} hidden`),
-			onError: (e) => toast.error((e as Error).message),
-		});
-	};
+		return m;
+	}, [episodes]);
+
+	const isLoading = petsLoading || episodesLoading;
 
 	return (
 		<Layout>
-			<div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-8">
-				<OpenEpisodes />
+			<div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-5">
+				{error ? (
+					<p className="text-sm text-destructive">{(error as Error).message}</p>
+				) : null}
 
-				<Section
-					title="Pets"
-					eyebrow="Roster"
-					action={
-						<Button size="sm" onClick={() => setShowForm((v) => !v)}>
-							<Plus className="w-3.5 h-3.5" /> Add pet
+				{isLoading ? (
+					<div className="space-y-4">
+						<Skeleton className="h-44 rounded-2xl" />
+						<Skeleton className="h-44 rounded-2xl" />
+					</div>
+				) : pets && pets.length > 0 ? (
+					<div className="space-y-4">
+						{pets.map((pet) => (
+							<PetSummaryCard
+								key={pet.id}
+								pet={pet}
+								activeEpisode={activeByPet.get(pet.id) ?? null}
+							/>
+						))}
+					</div>
+				) : (
+					<div className="rounded-2xl bg-card surface p-8 text-sm text-muted-foreground text-center">
+						No pets yet. Add your first one below.
+					</div>
+				)}
+
+				{showForm ? (
+					<AddPetForm
+						onCancel={() => setShowForm(false)}
+						pending={create.isPending}
+						onSubmit={(input) =>
+							create
+								.mutateAsync(input)
+								.then(() => {
+									setShowForm(false);
+									toast.success(`${input.name} added`);
+								})
+								.catch((e) => toast.error((e as Error).message))
+						}
+					/>
+				) : (
+					<div className="flex justify-end">
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => setShowForm(true)}
+						>
+							<Plus className="w-3.5 h-3.5" />
+							Add pet
 						</Button>
-					}
-				>
-					{showForm ? (
-						<AddPetForm
-							onCancel={() => setShowForm(false)}
-							pending={create.isPending}
-							onSubmit={(input) =>
-								create
-									.mutateAsync(input)
-									.then(() => {
-										setShowForm(false);
-										toast.success(`${input.name} added`);
-									})
-									.catch((e) => toast.error((e as Error).message))
-							}
-						/>
-					) : null}
-
-					{error ? (
-						<p className="text-sm text-destructive">
-							{(error as Error).message}
-						</p>
-					) : null}
-
-					{isLoading ? (
-						<div className="grid gap-2.5 sm:grid-cols-2">
-							<Skeleton className="h-16 rounded-xl" />
-							<Skeleton className="h-16 rounded-xl" />
-						</div>
-					) : pets ? (
-						<PetsList
-							pets={pets}
-							onDelete={handleDelete}
-							deletingId={del.isPending ? (del.variables ?? null) : null}
-						/>
-					) : null}
-				</Section>
+					</div>
+				)}
 			</div>
 		</Layout>
 	);
@@ -108,7 +115,7 @@ function AddPetForm({
 	const [notes, setNotes] = useState("");
 
 	return (
-		<div className="rounded-xl border bg-card p-4 space-y-2">
+		<div className="rounded-2xl bg-card surface p-4 space-y-2">
 			<h3 className="font-display text-base font-semibold mb-1">New pet</h3>
 			<Input
 				placeholder="Name (required)"

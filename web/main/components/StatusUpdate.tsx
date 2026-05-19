@@ -37,7 +37,7 @@ export function StatusUpdate({ episodeId }: { episodeId: string }) {
 	};
 
 	return (
-		<div className="rounded-xl border bg-card p-3.5 space-y-2.5">
+		<div className="rounded-2xl bg-card surface p-3.5 space-y-2.5">
 			<div className="flex items-baseline justify-between gap-2">
 				<div>
 					<div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground">

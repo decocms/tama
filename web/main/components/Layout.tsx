@@ -1,8 +1,15 @@
 import { Link } from "@tanstack/react-router";
-import { PawPrint } from "lucide-react";
-import type { ReactNode } from "react";
+import { PawPrint, Wind } from "lucide-react";
+import { type ReactNode, useState } from "react";
+import { Button } from "@/components/ui/button.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
+import { BreathingCounter } from "./BreathingCounter.tsx";
 
+/**
+ * App shell. Provides the persistent header (logo + breadcrumb + tools)
+ * and mounts the breathing-rate tool globally so it's reachable from any
+ * page via the wind-icon button in the topbar.
+ */
 export function Layout({
 	children,
 	breadcrumb,
@@ -10,9 +17,11 @@ export function Layout({
 	children: ReactNode;
 	breadcrumb?: ReactNode;
 }) {
+	const [breathingOpen, setBreathingOpen] = useState(false);
+
 	return (
 		<div className="min-h-dvh flex flex-col bg-background overflow-x-hidden">
-			<header className="border-b border-border/60 bg-background/85 backdrop-blur sticky top-0 z-30">
+			<header className="bg-background/85 backdrop-blur sticky top-0 z-30 shadow-[0_1px_0_rgba(31,26,20,0.06)]">
 				<div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
 					<Link
 						to="/"
@@ -31,9 +40,28 @@ export function Layout({
 							<span className="truncate">{breadcrumb}</span>
 						</div>
 					) : null}
+					<div className="ml-auto flex items-center gap-2">
+						<Button
+							variant="ghost"
+							size="sm"
+							className="rounded-full h-9 px-3 gap-1.5 text-foreground/85 hover:text-foreground hover:bg-primary/10"
+							onClick={() => setBreathingOpen(true)}
+							aria-label="Open respiratory rate tool"
+							title="Respiratory rate"
+						>
+							<Wind className="w-4 h-4" />
+							<span className="text-xs font-medium hidden sm:inline">
+								Resp. rate
+							</span>
+						</Button>
+					</div>
 				</div>
 			</header>
 			<main className="flex-1">{children}</main>
+			<BreathingCounter
+				open={breathingOpen}
+				onClose={() => setBreathingOpen(false)}
+			/>
 			<Toaster position="bottom-right" closeButton richColors />
 		</div>
 	);

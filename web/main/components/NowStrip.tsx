@@ -125,10 +125,10 @@ export function NowStrip({
 	return (
 		<div
 			className={cn(
-				"relative h-full rounded-xl border p-4 flex flex-col gap-3",
+				"relative h-full rounded-2xl surface p-4 flex flex-col gap-3",
 				isOverdue
-					? "border-[var(--color-status-overdue)]/40 bg-[var(--color-tint-overdue)]"
-					: "border-[var(--color-status-upcoming)]/35 bg-[var(--color-tint-upcoming)]",
+					? "bg-[var(--color-tint-overdue)]"
+					: "bg-[var(--color-tint-upcoming)]",
 				isOverdue ? "animate-overdue-pulse" : "",
 			)}
 		>
@@ -249,7 +249,7 @@ function IdleTile({
 		)[0];
 
 	return (
-		<div className="h-full rounded-xl border border-border/60 bg-secondary/30 p-4 flex flex-col gap-2 justify-center text-center">
+		<div className="h-full rounded-2xl surface bg-secondary/30 p-4 flex flex-col gap-2 justify-center text-center">
 			<div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground">
 				All caught up
 			</div>

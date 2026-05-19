@@ -30,7 +30,7 @@ export function EpisodeHero({
 	const isOpen = episode.status === "open";
 
 	return (
-		<header className="rounded-2xl border bg-card p-4 sm:p-5 space-y-3">
+		<header className="rounded-2xl bg-card surface p-4 sm:p-5 space-y-3">
 			{/* Breadcrumb row: avatar + pet · status badge · day. Single line, no
 			    wasted vertical space. */}
 			<div className="flex items-center gap-2.5 min-w-0">

@@ -1,4 +1,13 @@
-import { Activity, AlertCircle, Lock, Sparkles, Wind, X } from "lucide-react";
+import {
+	Activity,
+	AlertCircle,
+	Lock,
+	Minus,
+	Plus,
+	Sparkles,
+	Wind,
+	X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
@@ -72,6 +81,12 @@ export function BreathingCounter({
 	const [error, setError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
 	const [debug, setDebug] = useState(false);
+	const [zoom, setZoom] = useState<{
+		current: number;
+		min: number;
+		max: number;
+		step: number;
+	} | null>(null);
 
 	useEffect(() => {
 		if (!open) return;
@@ -105,6 +120,26 @@ export function BreathingCounter({
 				if (!video) return;
 				video.srcObject = stream;
 				await video.play();
+				// Some platforms (Safari < 17, desktop webcams) don't expose
+				// zoom in MediaTrackCapabilities; we only show the controls
+				// when the track actually supports it.
+				const [track] = stream.getVideoTracks();
+				const caps = (track?.getCapabilities?.() ?? {}) as {
+					zoom?: { min: number; max: number; step?: number };
+				};
+				if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+					const settings = (track?.getSettings?.() ?? {}) as {
+						zoom?: number;
+					};
+					setZoom({
+						current: settings.zoom ?? caps.zoom.min,
+						min: caps.zoom.min,
+						max: caps.zoom.max,
+						step: caps.zoom.step ?? 0.1,
+					});
+				} else {
+					setZoom(null);
+				}
 				setReady(true);
 			} catch (err) {
 				setError(
@@ -217,6 +252,21 @@ export function BreathingCounter({
 		};
 	}, [open, ready, roi, estimator, debug]);
 
+	const applyZoom = (next: number) => {
+		const stream = streamRef.current;
+		if (!stream || !zoom) return;
+		const clamped = Math.max(zoom.min, Math.min(zoom.max, next));
+		const [track] = stream.getVideoTracks();
+		track
+			?.applyConstraints({
+				advanced: [{ zoom: clamped } as MediaTrackConstraintSet],
+			})
+			.catch(() => {
+				/* the device may transiently reject; ignore */
+			});
+		setZoom({ ...zoom, current: clamped });
+	};
+
 	if (!open) return null;
 
 	const status = describeStatus(estimate, ready, error);
@@ -250,7 +300,11 @@ export function BreathingCounter({
 				</Button>
 			</div>
 
-			<div className="relative flex-1 overflow-hidden">
+			<PinchableVideoStage
+				zoom={zoom}
+				onZoomChange={applyZoom}
+				className="relative flex-1 overflow-hidden"
+			>
 				<video
 					ref={videoRef}
 					playsInline
@@ -268,6 +322,13 @@ export function BreathingCounter({
 							/>
 						) : null}
 						<BreathPulse trigger={breathPulse} />
+						{debug ? (
+							<FloatingDebug
+								estimate={estimate}
+								profileCanvasRef={profileCanvasRef}
+							/>
+						) : null}
+						{zoom ? <ZoomControls zoom={zoom} onApply={applyZoom} /> : null}
 					</>
 				) : error ? (
 					<CameraError
@@ -283,9 +344,9 @@ export function BreathingCounter({
 						Requesting camera…
 					</div>
 				)}
-			</div>
+			</PinchableVideoStage>
 
-			<div className="bg-background border-t p-4 sm:p-5 space-y-3 min-h-[224px]">
+			<div className="bg-background border-t p-4 sm:p-5 space-y-3">
 				<div className="flex items-end justify-between gap-4">
 					<div>
 						<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
@@ -325,15 +386,6 @@ export function BreathingCounter({
 					className="rounded-md bg-muted w-full"
 					style={{ height: 96 }}
 				/>
-				{debug ? (
-					<DebugPanel estimate={estimate} profileCanvasRef={profileCanvasRef} />
-				) : (
-					<div className="text-[11px] text-muted-foreground leading-snug">
-						Point at Beto's chest or flank, or across the back–background line.
-						The dot pulses with each detected breath — once a pattern holds for
-						a few seconds the reading locks and resists camera wobble.
-					</div>
-				)}
 			</div>
 		</div>
 	);
@@ -459,7 +511,11 @@ function QualityChip({ estimate }: { estimate: BreathingEstimate }) {
 	);
 }
 
-function DebugPanel({
+// Floating debug card overlaid on the video surface. Keeps the bottom
+// panel at its natural height (so the camera stays large) while still
+// surfacing the per-sub-region row-profile chart and the quality
+// breakdown for users who want to know what the algorithm is seeing.
+function FloatingDebug({
 	estimate,
 	profileCanvasRef,
 }: {
@@ -468,58 +524,136 @@ function DebugPanel({
 }) {
 	const b = estimate.quality.breakdown;
 	return (
-		<div className="space-y-2">
-			<div className="text-[10px] text-muted-foreground leading-snug">
-				Grid overlay: each cell is one of 6 sub-regions the algorithm measures
-				independently. Brighter green = more periodic motion (reposition the box
-				so more cells are bright); red = body motion outlier; outlined cells
-				contributed to the latest median. The chart below is the row-projection
-				profile of the center cell.
+		<div className="absolute top-16 left-3 z-10 pointer-events-none w-[min(72vw,260px)] rounded-lg bg-black/70 backdrop-blur-md text-white p-2.5 space-y-1.5 text-[10px] font-mono leading-tight">
+			<div className="font-sans text-[10px] text-white/70 leading-snug">
+				Grid: green = periodic motion (reposition for more bright cells); red =
+				motion outlier; outlined = contributed to median.
 			</div>
 			<canvas
 				ref={profileCanvasRef}
 				width={ROI_H * 3}
-				height={36}
-				className="rounded-md bg-muted/50 w-full"
-				style={{ height: 36 }}
+				height={28}
+				className="rounded bg-white/10 w-full"
+				style={{ height: 28 }}
 			/>
-			<div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono leading-relaxed">
-				<DebugRow label="spectral" value={b.spectral} />
-				<DebugRow label="peak sharpness" value={b.peakSharpness} />
-				<DebugRow label="regularity" value={b.regularity} />
-				<DebugRow label="feature health" value={b.featureHealth} />
-				<DebugRow label="shake penalty" value={b.shakePenalty} />
-				<DebugRow label="exposure penalty" value={b.exposurePenalty} />
-				<DebugRow label="display state" value={estimate.displayState} span />
-				<DebugRow label="lock age" value={estimate.lockAge} />
-				<DebugRow
-					label="tracker σ (BPM)"
-					value={Math.sqrt(estimate.trackerVariance).toFixed(2)}
-				/>
-				<DebugRow label="cycles" value={estimate.cycleCount} />
-				<DebugRow
-					label="regularity CV"
-					value={estimate.regularityCV?.toFixed(3) ?? "—"}
-				/>
-				<DebugRow label="valid samples" value={estimate.aliveFeatures} />
+			<div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+				<span className="text-white/60">spectral</span>
+				<span className="text-right">{b.spectral}</span>
+				<span className="text-white/60">peak</span>
+				<span className="text-right">{b.peakSharpness}</span>
+				<span className="text-white/60">regularity</span>
+				<span className="text-white/90 text-right">{b.regularity}</span>
+				<span className="text-white/60">tracker σ</span>
+				<span className="text-right">
+					{Math.sqrt(estimate.trackerVariance).toFixed(2)} BPM
+				</span>
+				<span className="text-white/60">cycles</span>
+				<span className="text-right">{estimate.cycleCount}</span>
+				<span className="text-white/60">state</span>
+				<span className="text-right">{estimate.displayState}</span>
 			</div>
 		</div>
 	);
 }
 
-function DebugRow({
-	label,
-	value,
-	span,
+// Floating zoom +/− buttons. Only rendered when the underlying
+// MediaStreamTrack actually exposes a `zoom` capability.
+function ZoomControls({
+	zoom,
+	onApply,
 }: {
-	label: string;
-	value: number | string;
-	span?: boolean;
+	zoom: { current: number; min: number; max: number; step: number };
+	onApply: (next: number) => void;
 }) {
+	const stepBig = Math.max(zoom.step, (zoom.max - zoom.min) / 10);
 	return (
-		<div className={cn("flex justify-between", span ? "col-span-2" : "")}>
-			<span className="text-muted-foreground">{label}</span>
-			<span>{value}</span>
+		<div className="absolute right-3 bottom-3 z-10 flex flex-col gap-2">
+			<Button
+				size="icon"
+				variant="secondary"
+				className="rounded-full bg-black/60 text-white hover:bg-black/80 border-0"
+				onClick={() => onApply(zoom.current + stepBig)}
+				disabled={zoom.current >= zoom.max}
+				aria-label="Zoom in"
+			>
+				<Plus className="w-4 h-4" />
+			</Button>
+			<div className="text-[10px] font-mono text-white bg-black/60 rounded-full w-8 h-8 flex items-center justify-center">
+				{zoom.current.toFixed(1)}×
+			</div>
+			<Button
+				size="icon"
+				variant="secondary"
+				className="rounded-full bg-black/60 text-white hover:bg-black/80 border-0"
+				onClick={() => onApply(zoom.current - stepBig)}
+				disabled={zoom.current <= zoom.min}
+				aria-label="Zoom out"
+			>
+				<Minus className="w-4 h-4" />
+			</Button>
+		</div>
+	);
+}
+
+// Wraps the video stage and translates two-finger pinch gestures into
+// hardware-zoom track constraints. Single-pointer events fall through
+// to the children (so RoiOverlay drag still works).
+function PinchableVideoStage({
+	zoom,
+	onZoomChange,
+	children,
+	className,
+}: {
+	zoom: { current: number; min: number; max: number; step: number } | null;
+	onZoomChange: (next: number) => void;
+	children: React.ReactNode;
+	className?: string;
+}) {
+	const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+	const pinchStartRef = useRef<{ dist: number; zoom: number } | null>(null);
+
+	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (!zoom || e.pointerType !== "touch") return;
+		pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		if (pointersRef.current.size === 2) {
+			const [a, b] = Array.from(pointersRef.current.values());
+			pinchStartRef.current = {
+				dist: Math.hypot(a.x - b.x, a.y - b.y),
+				zoom: zoom.current,
+			};
+		}
+	};
+
+	const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (!zoom || !pointersRef.current.has(e.pointerId)) return;
+		pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+		const start = pinchStartRef.current;
+		if (pointersRef.current.size === 2 && start) {
+			const [a, b] = Array.from(pointersRef.current.values());
+			const dist = Math.hypot(a.x - b.x, a.y - b.y);
+			if (dist > 0 && start.dist > 0) {
+				const factor = dist / start.dist;
+				onZoomChange(start.zoom * factor);
+			}
+		}
+	};
+
+	const onPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+		pointersRef.current.delete(e.pointerId);
+		if (pointersRef.current.size < 2) pinchStartRef.current = null;
+	};
+
+	return (
+		<div
+			className={className}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerUp={onPointerEnd}
+			onPointerCancel={onPointerEnd}
+			onPointerLeave={onPointerEnd}
+			style={{ touchAction: zoom ? "none" : undefined }}
+		>
+			{children}
 		</div>
 	);
 }
@@ -794,7 +928,7 @@ function CameraError({
 }) {
 	return (
 		<div className="absolute inset-0 flex items-center justify-center p-6">
-			<div className="bg-background rounded-xl border p-5 max-w-sm space-y-3">
+			<div className="bg-background rounded-2xl surface p-5 max-w-sm space-y-3">
 				<div className="flex items-center gap-2 text-destructive">
 					<AlertCircle className="w-4 h-4" />
 					<div className="font-semibold text-sm">Camera unavailable</div>

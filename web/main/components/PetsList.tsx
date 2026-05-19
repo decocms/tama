@@ -52,7 +52,7 @@ export function PetsList({
 					<li key={pet.id} className="min-w-0">
 						<div
 							className={cn(
-								"rounded-xl border bg-card transition-colors",
+								"rounded-2xl bg-card surface surface-hover transition-shadow",
 								linkable ? "hover:border-primary/40" : "",
 							)}
 						>

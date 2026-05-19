@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Activity, Plus, Sparkles } from "lucide-react";
+import { Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { formatDateTime } from "@/lib/format.ts";
 import type { Enrichment } from "@/types/api.ts";
-import { BreathingCounter } from "../components/BreathingCounter.tsx";
 import { EpisodesList } from "../components/EpisodesList.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
@@ -29,7 +28,6 @@ export function PetPage() {
 	const startEp = useStartEpisode();
 	const delEp = useDeleteEpisode();
 	const [showForm, setShowForm] = useState(false);
-	const [breathingOpen, setBreathingOpen] = useState(false);
 
 	const handleDeleteEpisode = (episodeId: string, title: string) => {
 		if (
@@ -80,25 +78,6 @@ export function PetPage() {
 						) : null}
 
 						<Section
-							title="Vitals"
-							eyebrow="Quick tools"
-							action={
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={() => setBreathingOpen(true)}
-								>
-									<Activity className="w-3.5 h-3.5" /> Count breathing rate
-								</Button>
-							}
-						>
-							<p className="text-xs text-muted-foreground">
-								Use the camera to measure {pet.name}'s respiratory rate in real
-								time — point at the chest or flank for ~15 seconds.
-							</p>
-						</Section>
-
-						<Section
 							title="Episodes"
 							eyebrow="Care history"
 							action={
@@ -138,17 +117,13 @@ export function PetPage() {
 					</>
 				)}
 			</div>
-			<BreathingCounter
-				open={breathingOpen}
-				onClose={() => setBreathingOpen(false)}
-			/>
 		</Layout>
 	);
 }
 
 function EnrichmentCard({ enrichment }: { enrichment: Enrichment }) {
 	return (
-		<div className="rounded-2xl border bg-card overflow-hidden">
+		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="flex items-center gap-2 px-5 py-3 border-b border-border/60">
 				<div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
 					<Sparkles className="w-3.5 h-3.5" />
@@ -226,7 +201,7 @@ function NewEpisodeForm({
 	const [title, setTitle] = useState("");
 	const [summary, setSummary] = useState("");
 	return (
-		<div className="rounded-xl border bg-card p-4 space-y-2">
+		<div className="rounded-2xl bg-card surface p-4 space-y-2">
 			<Input
 				placeholder="Title (e.g. 'GI episode May 2026')"
 				value={title}
