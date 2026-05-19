@@ -58,6 +58,25 @@ export function isStandalone(): boolean {
 	return iosStandalone || mqStandalone;
 }
 
+// On iOS, Web Push is exposed ONLY to Safari proper. iOS Chrome / Firefox /
+// Edge / in-app browsers all wrap WebKit and surface Notification/PushManager
+// in the global namespace, but `requestPermission()` silently returns
+// "denied" — there's no user-visible prompt. So `isPushSupported()` would lie
+// here; we need a tighter check to route those users to "open in Safari".
+//
+// Safari's iOS UA contains "Safari/<n>" and NONE of the third-party tokens
+// {CriOS, FxiOS, EdgiOS, OPiOS, GSA}. In-app WKWebViews (Facebook, Instagram,
+// Chrome's custom tabs, etc.) usually lack "Safari/" entirely.
+export function isIOSSafari(): boolean {
+	if (!isIOS()) return false;
+	if (typeof navigator === "undefined") return false;
+	const ua = navigator.userAgent;
+	if (/CriOS|FxiOS|EdgiOS|OPiOS|GSA|FBAN|FBAV|Instagram|Line\//.test(ua))
+		return false;
+	if (!/Safari\//.test(ua)) return false;
+	return true;
+}
+
 // Detect whether we're loaded as a cross-origin iframe (e.g. inside deco
 // studio). Cross-origin iframes can't reliably show notification permission
 // prompts (Chrome blocks without permissions-policy, Safari blocks outright)

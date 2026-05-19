@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button.tsx";
 import {
 	getExistingSubscription,
 	isIOS,
+	isIOSSafari,
 	isPushSupported,
 	isStandalone,
 	notificationPermission,
@@ -42,7 +43,8 @@ const STUDIO_URL = "https://studio.decocms.com";
 
 type Phase =
 	| "loading" // checking existing subscription state
-	| "needs-install" // iOS, not yet added to home screen
+	| "needs-safari" // iOS but not Safari (Chrome/Firefox/in-app browser)
+	| "needs-install" // iOS Safari, not yet added to home screen
 	| "needs-permission" // ready to ask the browser
 	| "blocked" // user previously denied notifications
 	| "subscribing" // in-flight
@@ -55,11 +57,18 @@ export function SubscribePage() {
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
-		// iOS Safari ships Web Push only to home-screen-installed PWAs — in a
-		// regular Safari tab the Notification + PushManager APIs are entirely
-		// hidden, which would make isPushSupported() return false. Check the
-		// iOS install state FIRST so iPhone users see the Add-to-Home-Screen
-		// hint instead of a misleading "browser doesn't support push" message.
+		// iOS gotchas, in order:
+		//  1. Non-Safari iOS browser (Chrome, Firefox, in-app WKWebViews) — has
+		//     the Notification API surface but requestPermission() silently
+		//     returns "denied". We can't prompt; user must open in Safari.
+		//  2. iOS Safari but not yet installed to home screen — Notification API
+		//     is hidden entirely so isPushSupported() would lie. User must Add
+		//     to Home Screen first, then launch from there.
+		// Both check before isPushSupported() so iPhones get the right hint.
+		if (isIOS() && !isIOSSafari()) {
+			setPhase("needs-safari");
+			return;
+		}
 		if (isIOS() && !isStandalone()) {
 			setPhase("needs-install");
 			return;
@@ -116,6 +125,7 @@ export function SubscribePage() {
 				<div className="rounded-2xl border bg-card p-5 space-y-4">
 					{phase === "loading" ? <LoadingState /> : null}
 					{phase === "unsupported" ? <UnsupportedState /> : null}
+					{phase === "needs-safari" ? <NeedsSafariState /> : null}
 					{phase === "needs-install" ? <NeedsInstallState /> : null}
 					{phase === "needs-permission" ? (
 						<NeedsPermissionState onEnable={handleEnable} />
@@ -223,6 +233,42 @@ function UnsupportedState() {
 				Try a recent version of Chrome, Edge, Firefox, or Safari (iOS 16.4+).
 			</p>
 			<OpenStudioButton />
+		</div>
+	);
+}
+
+function NeedsSafariState() {
+	const copyUrl = async () => {
+		try {
+			await navigator.clipboard.writeText(window.location.href);
+			toast.success("Link copied — paste into Safari");
+		} catch {
+			toast.error("Couldn't copy. Long-press the URL bar instead.");
+		}
+	};
+	return (
+		<div className="space-y-3 text-sm">
+			<div>
+				<p className="font-semibold">Open this page in Safari</p>
+				<p className="text-muted-foreground mt-1">
+					On iPhone, Web Push only works in <strong>Safari</strong>. Chrome,
+					Firefox, and in-app browsers can show this page but Apple won't let
+					them request notification permission.
+				</p>
+			</div>
+			<ol className="space-y-1 text-muted-foreground list-decimal pl-5">
+				<li>Copy this page's URL.</li>
+				<li>Open the Safari app.</li>
+				<li>Paste and load the URL.</li>
+				<li>Then tap Share → Add to Home Screen.</li>
+			</ol>
+			<Button onClick={copyUrl} className="w-full">
+				<Copy className="w-4 h-4" />
+				Copy URL
+			</Button>
+			<Badge variant="outline" className="text-[10px]">
+				iOS 16.4+ Safari required
+			</Badge>
 		</div>
 	);
 }
