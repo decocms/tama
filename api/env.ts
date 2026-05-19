@@ -19,6 +19,12 @@ export interface Bindings {
 	ANTHROPIC_API_KEY?: string;
 	PERPLEXITY_API_KEY?: string;
 	OPENAI_API_KEY?: string;
+	// Web Push / VAPID. Public key is also surfaced to the frontend via the
+	// push_vapid_public_key tool (VAPID public keys are inherently public).
+	// Generate with `npx web-push generate-vapid-keys` once per environment.
+	VAPID_PUBLIC_KEY?: string;
+	VAPID_PRIVATE_KEY?: string;
+	VAPID_SUBJECT?: string;
 }
 
 export type Env = DefaultEnv<typeof StateSchema> & Bindings;

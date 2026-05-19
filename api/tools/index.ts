@@ -24,6 +24,12 @@ import {
 	prescriptionUploadTool,
 } from "./prescription.ts";
 import {
+	pushSubscribeTool,
+	pushTestTool,
+	pushUnsubscribeTool,
+	pushVapidPublicKeyTool,
+} from "./push.ts";
+import {
 	recordingAddChunkTool,
 	recordingApplyGroupTool,
 	recordingApplyTool,
@@ -74,4 +80,8 @@ export const tools = [
 	recordingListTool,
 	episodeInsightsTool,
 	vetResearchTool,
+	pushVapidPublicKeyTool,
+	pushSubscribeTool,
+	pushUnsubscribeTool,
+	pushTestTool,
 ];

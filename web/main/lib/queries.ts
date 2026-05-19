@@ -284,6 +284,66 @@ export function useRefreshInsights(episodeId: string) {
 	});
 }
 
+// ---------- Push notifications ----------
+
+export const pushKeys = {
+	subscription: ["push", "subscription"] as const,
+};
+
+import {
+	getExistingSubscription,
+	subscribeToPush,
+	unsubscribeFromPush,
+} from "./push.ts";
+
+export function usePushSubscription() {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: pushKeys.subscription,
+		queryFn: async () => {
+			const sub = await getExistingSubscription();
+			return sub
+				? { endpoint: sub.endpoint, subscribed: true as const }
+				: { endpoint: null, subscribed: false as const };
+		},
+		enabled: !!app,
+		// Subscription state doesn't change without a user gesture, so we can
+		// keep this fresh for a while.
+		staleTime: 60_000,
+	});
+}
+
+export function useSubscribeToPush() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { petId?: string } = {}) =>
+			subscribeToPush({ app, petId: input.petId }),
+		onSuccess: () => qc.invalidateQueries({ queryKey: pushKeys.subscription }),
+	});
+}
+
+export function useUnsubscribeFromPush() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () => unsubscribeFromPush(app),
+		onSuccess: () => qc.invalidateQueries({ queryKey: pushKeys.subscription }),
+	});
+}
+
+export function useSendTestPush() {
+	const app = useMcpApp();
+	return useMutation({
+		mutationFn: () =>
+			callTool<{ attempted: number; sent: number; errors: number }>(
+				app,
+				"push_test",
+				{},
+			),
+	});
+}
+
 // ---------- Recordings ----------
 
 export const recordingKeys = {

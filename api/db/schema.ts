@@ -174,6 +174,28 @@ export const recordingChunks = sqliteTable("recording_chunks", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
+// Web Push: one row per browser/device that opted in. Single-tenant today,
+// but petId is captured so we can scope notifications per-pet later without
+// another migration. Endpoint is UNIQUE so re-subscribing is idempotent.
+export const pushSubscriptions = sqliteTable("push_subscriptions", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id").references(() => pets.id, { onDelete: "set null" }),
+	endpoint: text("endpoint").notNull().unique(),
+	p256dh: text("p256dh").notNull(),
+	auth: text("auth").notNull(),
+	userAgent: text("user_agent"),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// Idempotency log for the reminder cron. (scheduleStateId, plannedAt) is the
+// primary key — INSERT OR IGNORE guarantees a single send per dose slot even
+// if cron ticks overlap or retry.
+export const notificationsSent = sqliteTable("notifications_sent", {
+	scheduleStateId: text("schedule_state_id").notNull(),
+	plannedAt: text("planned_at").notNull(),
+	sentAt: text("sent_at").notNull().default(nowSql),
+});
+
 export type Pet = typeof pets.$inferSelect;
 export type NewPet = typeof pets.$inferInsert;
 export type Episode = typeof episodes.$inferSelect;
@@ -194,3 +216,7 @@ export type EpisodeInsightsRow = typeof episodeInsights.$inferSelect;
 export type NewEpisodeInsightsRow = typeof episodeInsights.$inferInsert;
 export type ScheduleStateRow = typeof scheduleState.$inferSelect;
 export type NewScheduleStateRow = typeof scheduleState.$inferInsert;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscriptionRow = typeof pushSubscriptions.$inferInsert;
+export type NotificationSentRow = typeof notificationsSent.$inferSelect;
+export type NewNotificationSentRow = typeof notificationsSent.$inferInsert;

@@ -76,9 +76,7 @@ function transformDump(sql: string): string {
 			// Skip SQLite internal bookkeeping tables — d1 manages these on
 			// each side, and `sqlite_sequence` in particular gets bloated by
 			// wrangler's migration runner (one row per migration apply).
-			if (
-				/INSERT\s+INTO\s+"?(sqlite_sequence|_cf_METADATA)"?/i.test(trimmed)
-			) {
+			if (/INSERT\s+INTO\s+"?(sqlite_sequence|_cf_METADATA)"?/i.test(trimmed)) {
 				continue;
 			}
 			out.push(

@@ -3,8 +3,14 @@ main = "api/main.cf.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Reminder cron: scans schedule_state every 10 min and pushes notifications
+# 10–20 min ahead of each dose anchor. See api/notifications/scheduler.ts.
+[triggers]
+crons = ["*/10 * * * *"]
+
 # Non-secret config. Secrets (CF_AI_GATEWAY_TOKEN, ANTHROPIC_API_KEY,
-# PERPLEXITY_API_KEY) go in .dev.vars locally and `wrangler secret put` for prod.
+# PERPLEXITY_API_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT)
+# go in .dev.vars locally and `wrangler secret put` for prod.
 [vars]
 AI_GATEWAY_ACCOUNT_ID = "55dd6d847f366735ef6e0f860c7bdc51"
 AI_GATEWAY_NAME = "default"

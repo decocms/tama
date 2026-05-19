@@ -25,7 +25,9 @@ async function main() {
 		console.log(`\n=== ${env.toUpperCase()} ===`);
 		await gc(env);
 	}
-	console.log(dryRun ? "\n(dry run — no deletes performed)" : "\n✓ GC complete");
+	console.log(
+		dryRun ? "\n(dry run — no deletes performed)" : "\n✓ GC complete",
+	);
 }
 
 interface FileRow {
@@ -53,7 +55,9 @@ async function gc(env: "local" | "remote") {
 		}
 	}
 
-	console.log(`  ${orphansMissingR2.length} orphan(s) (unreferenced + R2 missing)`);
+	console.log(
+		`  ${orphansMissingR2.length} orphan(s) (unreferenced + R2 missing)`,
+	);
 	if (referencedMissingR2.length > 0) {
 		console.log(
 			`  ${referencedMissingR2.length} referenced row(s) with missing R2 — KEPT (something in the DB points at them)`,

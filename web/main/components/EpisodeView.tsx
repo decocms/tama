@@ -12,6 +12,7 @@ import { NowStrip } from "./NowStrip.tsx";
 import { PrescriptionReview } from "./PrescriptionReview.tsx";
 import { Prescriptions } from "./Prescriptions.tsx";
 import { Recordings } from "./Recordings.tsx";
+import { RemindersToggle } from "./RemindersToggle.tsx";
 import { Section } from "./Section.tsx";
 import { Timetable } from "./Timetable.tsx";
 
@@ -62,7 +63,12 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 			<Section
 				title="Timetable"
 				eyebrow="Today"
-				action={<DoseHistoryButton doses={data.doses ?? []} />}
+				action={
+					<div className="flex items-center gap-1">
+						<RemindersToggle petId={ep.petId} />
+						<DoseHistoryButton doses={data.doses ?? []} />
+					</div>
+				}
 			>
 				<Timetable
 					episodeId={episodeId}

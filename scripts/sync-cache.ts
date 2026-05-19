@@ -42,10 +42,7 @@ export async function loadSyncedSet(dir: Direction): Promise<Set<string>> {
 	return new Set(c[dir]);
 }
 
-export async function recordSynced(
-	dir: Direction,
-	key: string,
-): Promise<void> {
+export async function recordSynced(dir: Direction, key: string): Promise<void> {
 	const c = await load();
 	if (!c[dir].includes(key)) {
 		c[dir].push(key);
