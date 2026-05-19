@@ -1,13 +1,13 @@
+import {
+	type BlockMatcher,
+	createBlockMatcher,
+} from "./breathing/block-match.ts";
 import { findPSDPeak, welchPSD } from "./breathing/fft.ts";
 import {
 	computeQuality,
 	detectExposureJump,
 	type QualityScore,
 } from "./breathing/quality.ts";
-import {
-	createRowProjector,
-	type RowProjector,
-} from "./breathing/row-projection.ts";
 import {
 	analyzeIBI,
 	bandpass,
@@ -153,7 +153,7 @@ export function createBreathingEstimator(
 	let lumaBuf: Uint8Array | null = null;
 	let lumaPrev: Uint8Array | null = null;
 	let scratch: Uint8Array | null = null;
-	let projectors: RowProjector[] = [];
+	let projectors: BlockMatcher[] = [];
 	let subBuffers: Uint8Array[] = [];
 	let subRegionW = 0;
 	let subRegionH = 0;
@@ -202,7 +202,7 @@ export function createBreathingEstimator(
 		subRegionHistories = [];
 		subRegionHistoryFills = [];
 		for (let i = 0; i < NUM_SUB_REGIONS; i++) {
-			projectors.push(createRowProjector(subRegionW, subRegionH));
+			projectors.push(createBlockMatcher(subRegionW, subRegionH));
 			subBuffers.push(new Uint8Array(subRegionW * subRegionH));
 			subRegionHistories.push(new Float32Array(SUB_REGION_DEBUG_HISTORY));
 			subRegionHistoryFills.push(0);
@@ -392,10 +392,22 @@ export function createBreathingEstimator(
 		},
 
 		getRowProfile() {
-			// Return the center-region profile as a representative sample for
-			// the debug visualization.
+			// Synthesize a 1D profile from the center sub-region's 2D template
+			// (mean luma per row) — block-match doesn't track a 1D profile
+			// itself, but a row mean is still a useful at-a-glance debug
+			// visualization of what the algorithm is locked onto.
 			const centerIdx = Math.floor(NUM_SUB_REGIONS / 2);
-			return projectors[centerIdx]?.getCurrentProfile() ?? new Float32Array(0);
+			const tmpl = projectors[centerIdx]?.getTemplate();
+			if (!tmpl || subRegionH === 0 || subRegionW === 0) {
+				return new Float32Array(0);
+			}
+			const out = new Float32Array(subRegionH);
+			for (let y = 0; y < subRegionH; y++) {
+				let s = 0;
+				for (let x = 0; x < subRegionW; x++) s += tmpl[y * subRegionW + x];
+				out[y] = s / subRegionW;
+			}
+			return out;
 		},
 
 		getDebugSubRegions(): SubRegionDebug[] {

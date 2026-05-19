@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { createBlockMatcher, nccAtShift2D } from "./breathing/block-match.ts";
 import { fft, findPSDPeak, welchPSD } from "./breathing/fft.ts";
 import { computeQuality, detectExposureJump } from "./breathing/quality.ts";
-import {
-	createRowProjector,
-	measureVerticalShift,
-} from "./breathing/row-projection.ts";
 import {
 	analyzeIBI,
 	bandpass,
@@ -67,54 +64,118 @@ describe("fft", () => {
 	});
 });
 
-describe("row-projection", () => {
-	test("measureVerticalShift recovers a known sub-pixel shift", () => {
-		const N = 60;
-		const prev = makeProfile(N, 20.0);
-		const curr = makeProfile(N, 20.3);
-		const r = measureVerticalShift(prev, curr, 3);
-		expect(Math.abs(r.dy - 0.3)).toBeLessThan(0.12);
-		expect(r.confidence).toBeGreaterThan(0.9);
+describe("block-match", () => {
+	test("nccAtShift2D returns ~1 when shift matches the true offset", () => {
+		const W = 32;
+		const H = 32;
+		// Build a textured template (checkerboard-ish, ensures variance).
+		const tmpl = new Float32Array(W * H);
+		for (let y = 0; y < H; y++) {
+			for (let x = 0; x < W; x++) {
+				tmpl[y * W + x] = (((x / 4) | 0) + ((y / 4) | 0)) % 2 === 0 ? 200 : 50;
+			}
+		}
+		// curr = tmpl shifted DOWN by 2 rows (so we expect dy = +2 to align).
+		const curr = new Uint8Array(W * H);
+		for (let y = 0; y < H; y++) {
+			for (let x = 0; x < W; x++) {
+				const srcY = y - 2;
+				if (srcY < 0 || srcY >= H) curr[y * W + x] = 0;
+				else curr[y * W + x] = tmpl[srcY * W + x];
+			}
+		}
+		const nccAt2 = nccAtShift2D(tmpl, curr, W, H, 2);
+		const nccAt0 = nccAtShift2D(tmpl, curr, W, H, 0);
+		expect(nccAt2).toBeGreaterThan(0.95);
+		expect(nccAt0).toBeLessThan(nccAt2);
 	});
 
-	test("measureVerticalShift handles 1-pixel shifts robustly", () => {
-		const N = 60;
-		const prev = makeProfile(N, 25.0);
-		const curr = makeProfile(N, 26.0);
-		const r = measureVerticalShift(prev, curr, 3);
-		expect(Math.abs(r.dy - 1.0)).toBeLessThan(0.15);
-	});
-
-	test("measureVerticalShift returns zero for identical profiles", () => {
-		const N = 60;
-		const prev = makeProfile(N, 30.0);
-		const curr = makeProfile(N, 30.0);
-		const r = measureVerticalShift(prev, curr, 3);
-		expect(Math.abs(r.dy)).toBeLessThan(0.05);
-		expect(r.confidence).toBeGreaterThan(0.99);
-	});
-
-	test("measureVerticalShift gives near-zero confidence on flat input", () => {
-		const N = 60;
-		const flat = new Float32Array(N);
-		flat.fill(120);
-		const r = measureVerticalShift(flat, flat, 3);
-		expect(r.confidence).toBe(0);
-	});
-
-	test("projector processes a 2D ROI and tracks cumulative motion", () => {
-		const W = 80;
-		const H = 60;
-		const proj = createRowProjector(W, H);
-		const buf = new Uint8Array(W * H);
-		fillSyntheticEdge(buf, W, H, 20.0);
-		proj.process(buf);
-		fillSyntheticEdge(buf, W, H, 20.4);
-		const r = proj.process(buf);
+	test("matcher recovers a known sub-pixel vertical shift on a textured ROI", () => {
+		const W = 40;
+		const H = 40;
+		// Aperiodic blob pattern — three Gaussian bumps at unique positions.
+		// A periodic texture (checkerboard) would alias and let NCC peak at
+		// any multiple of the period; blobs give a unique peak at the true
+		// shift.
+		const base = blobTexture(W, H);
+		const matcher = createBlockMatcher(W, H);
+		matcher.process(base);
+		const shifted = subpixelShifted(base, W, H, 0.4);
+		const r = matcher.process(shifted);
 		expect(r).not.toBeNull();
 		expect(Math.abs((r?.dy ?? 0) - 0.4)).toBeLessThan(0.2);
 	});
+
+	test("matcher also tracks a horizontal-edge ROI (no regression vs row-projection)", () => {
+		const W = 32;
+		const H = 60;
+		const buf1 = new Uint8Array(W * H);
+		const buf2 = new Uint8Array(W * H);
+		fillSyntheticEdge(buf1, W, H, 20.0);
+		fillSyntheticEdge(buf2, W, H, 20.4);
+		const matcher = createBlockMatcher(W, H);
+		matcher.process(buf1);
+		const r = matcher.process(buf2);
+		expect(r).not.toBeNull();
+		expect(Math.abs((r?.dy ?? 0) - 0.4)).toBeLessThan(0.25);
+	});
+
+	test("matcher returns near-zero confidence on a flat ROI", () => {
+		const W = 16;
+		const H = 16;
+		const flat = new Uint8Array(W * H);
+		flat.fill(140);
+		const matcher = createBlockMatcher(W, H);
+		matcher.process(flat);
+		const r = matcher.process(flat);
+		expect(r).not.toBeNull();
+		expect(r?.confidence ?? 1).toBeLessThan(0.05);
+	});
 });
+
+function blobTexture(W: number, H: number): Uint8Array {
+	const out = new Uint8Array(W * H);
+	const centers = [
+		{ x: W * 0.2, y: H * 0.25 },
+		{ x: W * 0.65, y: H * 0.2 },
+		{ x: W * 0.4, y: H * 0.6 },
+		{ x: W * 0.8, y: H * 0.7 },
+	];
+	for (let y = 0; y < H; y++) {
+		for (let x = 0; x < W; x++) {
+			let v = 60;
+			for (const c of centers) {
+				const dx = x - c.x;
+				const dy = y - c.y;
+				v += 130 * Math.exp(-(dx * dx + dy * dy) / 40);
+			}
+			out[y * W + x] = Math.min(255, Math.round(v));
+		}
+	}
+	return out;
+}
+
+function subpixelShifted(
+	src: Uint8Array,
+	W: number,
+	H: number,
+	dy: number,
+): Uint8Array {
+	const out = new Uint8Array(W * H);
+	for (let y = 0; y < H; y++) {
+		const sy = y - dy;
+		const yi = Math.floor(sy);
+		const fy = sy - yi;
+		const y0 = Math.max(0, Math.min(H - 1, yi));
+		const y1 = Math.max(0, Math.min(H - 1, yi + 1));
+		for (let x = 0; x < W; x++) {
+			const a = src[y0 * W + x];
+			const b = src[y1 * W + x];
+			out[y * W + x] = Math.round(a * (1 - fy) + b * fy);
+		}
+	}
+	return out;
+}
 
 describe("tracker", () => {
 	test("seeds on the first measurement and locks after consistent inputs", () => {
@@ -428,16 +489,6 @@ describe("integrated estimator", () => {
 });
 
 // ---------------- test helpers ----------------
-
-function makeProfile(N: number, peakY: number): Float32Array {
-	const out = new Float32Array(N);
-	for (let y = 0; y < N; y++) {
-		// Gaussian-like profile peaked at peakY with sub-pixel sensitivity.
-		const d = y - peakY;
-		out[y] = 200 * Math.exp(-(d * d) / 40) + 30;
-	}
-	return out;
-}
 
 function makeCheckerboard(w: number, h: number, square: number): Uint8Array {
 	const buf = new Uint8Array(w * h);
