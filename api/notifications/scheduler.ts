@@ -1,9 +1,11 @@
-// Cron tick: scan upcoming doses and fire push notifications 10-20 min ahead.
+// Cron tick: scan upcoming doses and fire push notifications.
 //
-// Lifecycle per tick (runs every 10 minutes):
-//   1. Compute fire window: anchors due in [now+10m, now+20m+30s].
-//      The 30s slack absorbs cron jitter without leaving a gap. Overlap is
-//      safe — the idempotency table guarantees one notification per dose.
+// Lifecycle per tick (runs every 2 minutes):
+//   1. Compute fire window: anchors due in [now, now+15min]. A dose first
+//      enters this window 15min before its anchor; the next cron tick (within
+//      2 min) catches it and fires once. The idempotency table guarantees a
+//      single send per dose even though the window keeps re-including the
+//      same row across ticks until the anchor passes.
 //   2. Pull active schedule_state rows in that window.
 //   3. For each row, atomically claim (scheduleStateId, anchorAt) via
 //      INSERT OR IGNORE INTO notifications_sent. Skip if already claimed.
@@ -30,9 +32,10 @@ import {
 } from "../storage/push-subscriptions.ts";
 import { type PushPayload, sendPush } from "./webpush.ts";
 
-const LEAD_MS = 10 * 60_000;
-const SLICE_MS = 10 * 60_000;
-const SLACK_MS = 30_000;
+// Look-ahead window: any dose anchor in the next 15 minutes is a candidate.
+// Idempotency (INSERT OR IGNORE on notifications_sent) ensures the same dose
+// fires exactly one push even though it stays in the window for 15 minutes.
+const LOOKAHEAD_MS = 15 * 60_000;
 
 export interface TickResult {
 	scanned: number;
@@ -52,10 +55,8 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 	};
 
 	const now = Date.now();
-	const windowStartIso = new Date(now + LEAD_MS).toISOString();
-	const windowEndIso = new Date(
-		now + LEAD_MS + SLICE_MS + SLACK_MS,
-	).toISOString();
+	const windowStartIso = new Date(now).toISOString();
+	const windowEndIso = new Date(now + LOOKAHEAD_MS).toISOString();
 
 	// ISO strings sort lexicographically when they're zero-padded UTC, which
 	// is what we always insert (strftime('%Y-%m-%dT%H:%M:%fZ', 'now') and

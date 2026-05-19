@@ -3,10 +3,11 @@ main = "api/main.cf.ts"
 compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Reminder cron: scans schedule_state every 10 min and pushes notifications
-# 10–20 min ahead of each dose anchor. See api/notifications/scheduler.ts.
+# Reminder cron: scans schedule_state every 2 min for doses due in the next
+# 15 min and pushes notifications with the actual minutes-ahead in the title.
+# Idempotency table in scheduler.ts prevents duplicate sends across overlap.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/2 * * * *"]
 
 # Non-secret config. Secrets (CF_AI_GATEWAY_TOKEN, ANTHROPIC_API_KEY,
 # PERPLEXITY_API_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT)
