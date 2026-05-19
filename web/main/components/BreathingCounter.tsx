@@ -12,10 +12,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
 import {
-	type Anchor,
-	createAnchorStabilizer,
-} from "../lib/breathing/anchors.ts";
-import {
 	type BreathingEstimate,
 	createBreathingEstimator,
 	type SubRegionDebug,
@@ -23,27 +19,9 @@ import {
 
 const ROI_W = 240;
 const ROI_H = 180;
-// Full-frame stabilization canvas — captures the whole video at a fixed
-// downsampled size so the anchor stabilizer can find background corners
-// outside the ROI. 480×320 gives plenty of margin around a centered ROI
-// and runs cheap enough that the per-frame cost is invisible.
-const STAB_W = 480;
-const STAB_H = 320;
 const SAMPLE_RATE_HZ = 30;
 const WAVEFORM_SAMPLES = SAMPLE_RATE_HZ * 12;
 const DISPLAY_BPM_SMOOTHING = 0.35;
-// Subject-drift low-pass filter. The ROI sampling rect slides toward
-// the raw drift one frame at a time; if it slides too fast the per-
-// frame ROI content changes enough for the block-matchers to read it
-// as breathing motion (spikes in the waveform). α = 0.06 gives a
-// ~0.7 s time constant — visibly tracks the subject but per-frame ROI
-// shift stays below 0.5 px during typical movement so the breathing
-// signal stays smooth.
-const DRIFT_SMOOTH_ALPHA = 0.06;
-// Need at least this many alive halo anchors to TRUST the drift this
-// frame. Below this we hold the previous smoothed drift instead of
-// jumping to whatever 0–1 anchors are saying.
-const MIN_ALIVE_ANCHORS_FOR_DRIFT = 3;
 
 type RoiFrac = { x: number; y: number; w: number; h: number };
 const DEFAULT_ROI: RoiFrac = { x: 0.3, y: 0.35, w: 0.4, h: 0.3 };
@@ -85,7 +63,6 @@ export function BreathingCounter({
 }) {
 	const videoRef = useRef<HTMLVideoElement>(null);
 	const captureCanvasRef = useRef<HTMLCanvasElement>(null);
-	const stabCanvasRef = useRef<HTMLCanvasElement>(null);
 	const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
 	const profileCanvasRef = useRef<HTMLCanvasElement>(null);
 	const subRegionLayerRef = useRef<HTMLCanvasElement>(null);
@@ -95,10 +72,6 @@ export function BreathingCounter({
 	const lastSampleAtRef = useRef(0);
 	const lastBreathCountRef = useRef(0);
 	const displayedBpmRef = useRef<number | null>(null);
-	const stabilizer = useMemo(() => createAnchorStabilizer(), []);
-	const stabLumaRef = useRef<Uint8Array | null>(null);
-	const camDriftRef = useRef({ dxFrac: 0, dyFrac: 0 });
-	const anchorsSnapshotRef = useRef<readonly Anchor[]>([]);
 
 	const estimator = useMemo(() => createBreathingEstimator(), []);
 	const [roi, setRoi] = useState<RoiFrac>(DEFAULT_ROI);
@@ -108,7 +81,6 @@ export function BreathingCounter({
 	const [error, setError] = useState<string | null>(null);
 	const [ready, setReady] = useState(false);
 	const [debug, setDebug] = useState(false);
-	const [camDrift, setCamDrift] = useState({ dxFrac: 0, dyFrac: 0 });
 	const [zoom, setZoom] = useState<{
 		current: number;
 		min: number;
@@ -123,13 +95,8 @@ export function BreathingCounter({
 		setReady(false);
 		setEstimate(emptyEstimate);
 		setDisplayedBpm(null);
-		setCamDrift({ dxFrac: 0, dyFrac: 0 });
 		displayedBpmRef.current = null;
 		estimator.reset();
-		stabilizer.reset();
-		stabLumaRef.current = new Uint8Array(STAB_W * STAB_H);
-		camDriftRef.current = { dxFrac: 0, dyFrac: 0 };
-		anchorsSnapshotRef.current = [];
 		frameCountRef.current = 0;
 		lastBreathCountRef.current = 0;
 
@@ -198,17 +165,11 @@ export function BreathingCounter({
 		if (!open || !ready) return;
 		const video = videoRef.current;
 		const canvas = captureCanvasRef.current;
-		const stabCanvas = stabCanvasRef.current;
-		if (!video || !canvas || !stabCanvas) return;
+		if (!video || !canvas) return;
 		const ctx = canvas.getContext("2d", { willReadFrequently: true });
-		const stabCtx = stabCanvas.getContext("2d", {
-			willReadFrequently: true,
-		});
-		if (!ctx || !stabCtx) return;
+		if (!ctx) return;
 		canvas.width = ROI_W;
 		canvas.height = ROI_H;
-		stabCanvas.width = STAB_W;
-		stabCanvas.height = STAB_H;
 
 		const frameIntervalMs = 1000 / SAMPLE_RATE_HZ;
 		let active = true;
@@ -225,63 +186,11 @@ export function BreathingCounter({
 			const vh = video.videoHeight;
 			if (!vw || !vh) return;
 
-			// Step 1 — full-frame capture for the anchor stabilizer. Down-
-			// sampled to STAB_W×STAB_H so the per-frame Shi-Tomasi search
-			// stays cheap. Convert to luma once; the stabilizer reads it.
-			stabCtx.drawImage(video, 0, 0, vw, vh, 0, 0, STAB_W, STAB_H);
-			const stabRgba = stabCtx.getImageData(0, 0, STAB_W, STAB_H).data;
-			const stabLuma = stabLumaRef.current;
-			if (!stabLuma) return;
-			const N = STAB_W * STAB_H;
-			for (let i = 0, j = 0; j < N; i += 4, j++) {
-				stabLuma[j] =
-					(stabRgba[i] * 76 + stabRgba[i + 1] * 150 + stabRgba[i + 2] * 29) >>
-					8;
-			}
-
-			// Step 2 — initialize anchors once we have a frame to seed them.
-			// Anchors are placed in a halo RING just outside the ROI: close
-			// enough that they sit on the subject's body (not the
-			// background), far enough that they don't pick up breathing
-			// motion. Margin = 30% of the ROI dimensions — tight enough
-			// that anchors stay close to whatever the user pointed at.
-			if (!stabilizer.isInitialized()) {
-				const haloX = 0.3 * roi.w;
-				const haloY = 0.3 * roi.h;
-				const haloRect = {
-					x: Math.max(0, roi.x - haloX),
-					y: Math.max(0, roi.y - haloY),
-					w: Math.min(1, roi.w + 2 * haloX),
-					h: Math.min(1, roi.h + 2 * haloY),
-				};
-				stabilizer.init(stabLuma, STAB_W, STAB_H, roi, haloRect);
-			}
-
-			// Step 3 — update the stabilizer. The raw median across anchors
-			// jitters frame-to-frame; we EMA-smooth it so the ROI doesn't
-			// shake with anchor noise, and we hold the previous smoothed
-			// value when too few anchors are alive to trust the reading.
-			const raw = stabilizer.update(stabLuma, STAB_W, STAB_H);
-			anchorsSnapshotRef.current = raw.anchors;
-			if (raw.aliveCount >= MIN_ALIVE_ANCHORS_FOR_DRIFT) {
-				camDriftRef.current = {
-					dxFrac:
-						(1 - DRIFT_SMOOTH_ALPHA) * camDriftRef.current.dxFrac +
-						DRIFT_SMOOTH_ALPHA * raw.dxFrac,
-					dyFrac:
-						(1 - DRIFT_SMOOTH_ALPHA) * camDriftRef.current.dyFrac +
-						DRIFT_SMOOTH_ALPHA * raw.dyFrac,
-				};
-			}
-			const drift = camDriftRef.current;
-			setCamDrift({ dxFrac: drift.dxFrac, dyFrac: drift.dyFrac });
-
-			// Step 4 — shift the ROI sampling rect to follow the subject.
-			// Halo anchors move with the subject in the frame; we add their
-			// drift directly so the ROI stays on top of them (subject moves
-			// right → anchors move right → ROI samples further right).
-			const sx = (roi.x + drift.dxFrac) * vw;
-			const sy = (roi.y + drift.dyFrac) * vh;
+			// Sample the ROI at the user's placed position. Nothing fancy —
+			// no camera-anchor stabilization, no subject tracking. The box
+			// is the user's contract; what's inside it is what we measure.
+			const sx = roi.x * vw;
+			const sy = roi.y * vh;
 			const sw = roi.w * vw;
 			const sh = roi.h * vh;
 			ctx.drawImage(video, sx, sy, sw, sh, 0, 0, ROI_W, ROI_H);
@@ -302,13 +211,10 @@ export function BreathingCounter({
 			drawWaveform(waveformCanvasRef.current, estimator.getWaveform(), est);
 			drawRowProfile(profileCanvasRef.current, estimator.getRowProfile());
 			if (debug) {
-				// Sub-region grid follows the visible (subject-tracked) box.
-				const d = camDriftRef.current;
 				drawSubRegionGrid(
 					subRegionLayerRef.current,
 					estimator.getDebugSubRegions(),
-					{ ...roi, x: roi.x + d.dxFrac, y: roi.y + d.dyFrac },
-					anchorsSnapshotRef.current,
+					roi,
 				);
 			}
 
@@ -345,18 +251,7 @@ export function BreathingCounter({
 			rafRef.current = null;
 			window.clearInterval(uiInterval);
 		};
-	}, [open, ready, roi, estimator, stabilizer, debug]);
-
-	// User dragged the ROI → the anchor exclude rect is stale (background
-	// corners may now sit inside the new box). Re-seed the stabilizer on
-	// the next frame so the exclude rect tracks the new ROI, and zero out
-	// the displayed drift since the new world-anchor is wherever the user
-	// just placed the box.
-	useEffect(() => {
-		stabilizer.reset();
-		camDriftRef.current = { dxFrac: 0, dyFrac: 0 };
-		setCamDrift({ dxFrac: 0, dyFrac: 0 });
-	}, [roi, stabilizer]);
+	}, [open, ready, roi, estimator, debug]);
 
 	const applyZoom = (next: number) => {
 		const stream = streamRef.current;
@@ -418,10 +313,9 @@ export function BreathingCounter({
 					className="absolute inset-0 w-full h-full object-cover"
 				/>
 				<canvas ref={captureCanvasRef} className="hidden" />
-				<canvas ref={stabCanvasRef} className="hidden" />
 				{ready ? (
 					<>
-						<RoiOverlay value={roi} camDrift={camDrift} onChange={setRoi} />
+						<RoiOverlay value={roi} onChange={setRoi} />
 						{debug ? (
 							<canvas
 								ref={subRegionLayerRef}
@@ -433,10 +327,6 @@ export function BreathingCounter({
 							<FloatingDebug
 								estimate={estimate}
 								profileCanvasRef={profileCanvasRef}
-								camDrift={camDrift}
-								anchorCount={
-									anchorsSnapshotRef.current.filter((a) => a.alive).length
-								}
 							/>
 						) : null}
 						{zoom ? <ZoomControls zoom={zoom} onApply={applyZoom} /> : null}
@@ -629,22 +519,16 @@ function QualityChip({ estimate }: { estimate: BreathingEstimate }) {
 function FloatingDebug({
 	estimate,
 	profileCanvasRef,
-	camDrift,
-	anchorCount,
 }: {
 	estimate: BreathingEstimate;
 	profileCanvasRef: React.RefObject<HTMLCanvasElement | null>;
-	camDrift: { dxFrac: number; dyFrac: number };
-	anchorCount: number;
 }) {
 	const b = estimate.quality.breakdown;
-	const driftPct = `${(camDrift.dxFrac * 100).toFixed(1)}, ${(camDrift.dyFrac * 100).toFixed(1)}%`;
 	return (
 		<div className="absolute top-16 left-3 z-10 pointer-events-none w-[min(72vw,260px)] rounded-lg bg-black/70 backdrop-blur-md text-white p-2.5 space-y-1.5 text-[10px] font-mono leading-tight">
 			<div className="font-sans text-[10px] text-white/70 leading-snug">
 				Grid: green = periodic motion (reposition for more bright cells); red =
-				motion outlier; outlined = contributed to median. Crosshairs are
-				stabilization anchors.
+				motion outlier; outlined = contributed to median.
 			</div>
 			<canvas
 				ref={profileCanvasRef}
@@ -668,10 +552,6 @@ function FloatingDebug({
 				<span className="text-right">{estimate.cycleCount}</span>
 				<span className="text-white/60">state</span>
 				<span className="text-right">{estimate.displayState}</span>
-				<span className="text-white/60">anchors</span>
-				<span className="text-right">{anchorCount}</span>
-				<span className="text-white/60">drift x,y</span>
-				<span className="text-right">{driftPct}</span>
 			</div>
 		</div>
 	);
@@ -869,7 +749,6 @@ function drawSubRegionGrid(
 	canvas: HTMLCanvasElement | null,
 	regions: SubRegionDebug[],
 	roi: RoiFrac,
-	anchors: readonly Anchor[],
 ) {
 	if (!canvas) return;
 	const parent = canvas.parentElement;
@@ -910,24 +789,6 @@ function drawSubRegionGrid(
 			ctx.textBaseline = "top";
 			ctx.fillText(region.amplitude.toFixed(2), sx + 4, sy + 4);
 		}
-	}
-
-	// Camera-stabilization anchors: each one rendered as a small white
-	// crosshair at its current world-tracked position. Watching them
-	// move with the camera (while the ROI grid stays put on the
-	// breathing subject) makes the stabilization visible.
-	for (const a of anchors) {
-		if (!a.alive) continue;
-		const sx = (a.x / STAB_W) * W;
-		const sy = (a.y / STAB_H) * H;
-		ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-		ctx.lineWidth = 1.5;
-		ctx.beginPath();
-		ctx.moveTo(sx - 5, sy);
-		ctx.lineTo(sx + 5, sy);
-		ctx.moveTo(sx, sy - 5);
-		ctx.lineTo(sx, sy + 5);
-		ctx.stroke();
 	}
 }
 
@@ -975,19 +836,11 @@ function drawRowProfile(
 
 function RoiOverlay({
 	value,
-	camDrift,
 	onChange,
 }: {
 	value: RoiFrac;
-	camDrift: { dxFrac: number; dyFrac: number };
 	onChange: (next: RoiFrac) => void;
 }) {
-	// The user's anchor stays put; the visible box slides in the same
-	// direction as the halo anchors (toward the subject's new position)
-	// so it visually tracks them. Drag math still operates on the user's
-	// anchor (a drag re-places the box on a new subject region).
-	const displayedX = value.x + camDrift.dxFrac;
-	const displayedY = value.y + camDrift.dyFrac;
 	const containerRef = useRef<HTMLDivElement>(null);
 	const dragRef = useRef<{
 		startX: number;
@@ -1043,8 +896,8 @@ function RoiOverlay({
 			<div
 				className="absolute border-2 border-white/80 shadow-[0_0_0_2px_rgba(0,0,0,0.25)] pointer-events-auto cursor-move touch-none"
 				style={{
-					left: `${displayedX * 100}%`,
-					top: `${displayedY * 100}%`,
+					left: `${value.x * 100}%`,
+					top: `${value.y * 100}%`,
 					width: `${value.w * 100}%`,
 					height: `${value.h * 100}%`,
 				}}
