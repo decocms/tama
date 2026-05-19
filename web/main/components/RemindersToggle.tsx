@@ -95,9 +95,14 @@ export function RemindersToggle({ petId }: Props) {
 					variant="ghost"
 					onClick={openStandalone}
 					className="text-xs"
+					aria-label="Set up reminders"
+					title="Set up reminders"
 				>
 					<Bell className="w-3.5 h-3.5" />
-					Set up reminders
+					{/* Section header doubles up with the History button — on narrow
+					    phone viewports the labels would overflow and clip out of
+					    sight. Hide labels below sm to keep both buttons visible. */}
+					<span className="hidden sm:inline">Set up reminders</span>
 					<ExternalLink className="w-3 h-3 opacity-60" />
 				</Button>
 			);
@@ -110,9 +115,11 @@ export function RemindersToggle({ petId }: Props) {
 					variant="ghost"
 					onClick={() => setOpen(true)}
 					className="text-xs"
+					aria-label="Enable reminders"
+					title="Enable reminders"
 				>
 					<Bell className="w-3.5 h-3.5" />
-					Enable reminders
+					<span className="hidden sm:inline">Enable reminders</span>
 				</Button>
 				<EnableDialog
 					open={open}
@@ -144,9 +151,11 @@ export function RemindersToggle({ petId }: Props) {
 				variant="ghost"
 				onClick={() => setOpen(true)}
 				className="text-xs"
+				aria-label="Reminders on — manage"
+				title="Reminders on — tap to manage"
 			>
 				<BellRing className="w-3.5 h-3.5 text-[var(--color-status-given)]" />
-				Reminders on
+				<span className="hidden sm:inline">Reminders on</span>
 			</Button>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent className="max-w-md">

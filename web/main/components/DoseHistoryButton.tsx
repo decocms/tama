@@ -51,9 +51,14 @@ export function DoseHistoryButton({ doses }: { doses: Dose[] }) {
 				variant="ghost"
 				onClick={() => setOpen(true)}
 				className="text-xs"
+				aria-label={`History (${totalDoses})`}
+				title={`History (${totalDoses})`}
 			>
 				<History className="w-3.5 h-3.5" />
-				History ({totalDoses})
+				{/* Section header is shared with RemindersToggle — collapse the
+				    text label below sm so both icons stay visible on phones. */}
+				<span className="hidden sm:inline">History ({totalDoses})</span>
+				<span className="sm:hidden">{totalDoses}</span>
 			</Button>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
