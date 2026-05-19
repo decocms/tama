@@ -1,6 +1,7 @@
 import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import type { Env } from "../env.ts";
+import { broadcastDoseLogged } from "../notifications/broadcasts.ts";
 import {
 	findDoseForItem,
 	listDoses,
@@ -169,6 +170,16 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 			// not the original 00:00 slot.
 			if (context.status === "given" || context.status === "skipped") {
 				await advanceAnchorAfterDose(env, ep.id, key, dose.actualAt);
+				// Broadcast to every subscribed device so a second caretaker
+				// doesn't accidentally re-administer. Awaited so the Worker
+				// doesn't terminate mid-fetch when the tool returns.
+				await broadcastDoseLogged(env, {
+					episodeId: ep.id,
+					itemName: canonical,
+					status: context.status,
+					actualAt: dose.actualAt,
+					note: context.note ?? null,
+				});
 			}
 
 			return { doseId: dose.id, action: "inserted" as const };
