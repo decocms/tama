@@ -35,6 +35,12 @@ interface Props {
 	petId?: string;
 }
 
+// Deco studio proxies the MyVet bundle into an iframe on its own origin
+// (studio.decocms.com), so `window.location.origin` from inside the iframe
+// is studio's domain — not our worker. We hardcode the worker origin so the
+// /subscribe popup actually loads the MyVet page rather than a studio route.
+const WORKER_ORIGIN = "https://myvet.deco-ceo.workers.dev";
+
 // Sits in the Timetable section header. States:
 //   1. Iframed + not subscribed → "Set up on this device" button that opens
 //      the standalone /subscribe page in a new tab (cross-origin iframes
@@ -86,8 +92,14 @@ export function RemindersToggle({ petId }: Props) {
 		// iframes because browsers gate Notification.requestPermission().
 		if (inIframe) {
 			const openStandalone = () => {
-				const url = `${window.location.origin}/#/subscribe`;
-				window.open(url, "_blank", "noopener,noreferrer");
+				// Always open the worker origin, not window.location.origin —
+				// studio embeds us in a same-origin frame at studio.decocms.com,
+				// so `origin` would resolve the hash route against studio.
+				window.open(
+					`${WORKER_ORIGIN}/#/subscribe`,
+					"_blank",
+					"noopener,noreferrer",
+				);
 			};
 			return (
 				<Button
