@@ -53,6 +53,15 @@ export function SubscribePage() {
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
+		// iOS Safari ships Web Push only to home-screen-installed PWAs — in a
+		// regular Safari tab the Notification + PushManager APIs are entirely
+		// hidden, which would make isPushSupported() return false. Check the
+		// iOS install state FIRST so iPhone users see the Add-to-Home-Screen
+		// hint instead of a misleading "browser doesn't support push" message.
+		if (isIOS() && !isStandalone()) {
+			setPhase("needs-install");
+			return;
+		}
 		if (!isPushSupported()) {
 			setPhase("unsupported");
 			return;
@@ -60,10 +69,6 @@ export function SubscribePage() {
 		getExistingSubscription().then((sub) => {
 			if (sub) {
 				setPhase("subscribed");
-				return;
-			}
-			if (isIOS() && !isStandalone()) {
-				setPhase("needs-install");
 				return;
 			}
 			const perm = notificationPermission();
