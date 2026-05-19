@@ -41,16 +41,62 @@ interface Props {
 // /subscribe popup actually loads the MyVet page rather than a studio route.
 const WORKER_ORIGIN = "https://myvet.deco-ceo.workers.dev";
 
-// Sits in the Timetable section header. States:
-//   1. Iframed + not subscribed → "Set up on this device" button that opens
-//      the standalone /subscribe page in a new tab (cross-origin iframes
-//      can't reliably request notification permission; iOS can't install an
-//      iframe). Once the user subscribes there, the SW subscription is
-//      visible to this iframe too (same origin) and we flip to (3).
-//   2. Standalone (rare — not iframed) + not subscribed → inline subscribe.
-//   3. Subscribed → "Reminders on" dialog with test + off-toggle.
-//   4. Unsupported → render nothing (keep the header clean).
+// Two render paths, split into separate components so neither leaks hook
+// requirements to the other:
+//
+//   • IframeButton (RemindersToggle when isInIframe) — a thin deep-link to
+//     the standalone /subscribe page at the worker origin. CRITICAL: this
+//     path must not call isPushSupported() or registerServiceWorker(),
+//     because iOS Safari hides the Notification API from iframes (so the
+//     gate would return false and the button would disappear — which is
+//     exactly what was happening on iPhone inside studio).
+//
+//   • StandaloneToggle — full inline subscribe/unsubscribe/test flow, used
+//     when the page is loaded directly (PWA, direct worker URL).
+//
+// Subscription state is intentionally not inspected from inside the iframe:
+// the SW + subscription live at the worker origin, and the iframe runs at
+// studio's origin, so the iframe genuinely can't see them. We always show
+// "Set up reminders" inside the iframe; the popup itself reports back the
+// real state.
 export function RemindersToggle({ petId }: Props) {
+	// useMemo with empty deps → stable across renders, hook order safe.
+	const inIframe = useMemo(() => isInIframe(), []);
+	if (inIframe) return <IframeRemindersButton />;
+	return <StandaloneRemindersToggle petId={petId} />;
+}
+
+function IframeRemindersButton() {
+	const openStandalone = () => {
+		// Always open the worker origin, not window.location.origin — studio
+		// embeds us in a frame at studio.decocms.com, so `origin` would resolve
+		// the hash route against studio.
+		window.open(
+			`${WORKER_ORIGIN}/#/subscribe`,
+			"_blank",
+			"noopener,noreferrer",
+		);
+	};
+	return (
+		<Button
+			size="sm"
+			variant="ghost"
+			onClick={openStandalone}
+			className="text-xs"
+			aria-label="Set up reminders"
+			title="Set up reminders"
+		>
+			<Bell className="w-3.5 h-3.5" />
+			{/* Section header doubles up with the History button — on narrow
+			    phone viewports the labels would overflow and clip out of
+			    sight. Hide labels below sm to keep both buttons visible. */}
+			<span className="hidden sm:inline">Set up reminders</span>
+			<ExternalLink className="w-3 h-3 opacity-60" />
+		</Button>
+	);
+}
+
+function StandaloneRemindersToggle({ petId }: Props) {
 	const [open, setOpen] = useState(false);
 	const [permission, setPermission] = useState<NotificationPermission>(() =>
 		notificationPermission(),
@@ -58,9 +104,8 @@ export function RemindersToggle({ petId }: Props) {
 	const supported = isPushSupported();
 	const onIos = useMemo(() => isIOS(), []);
 	const standalone = useMemo(() => isStandalone(), []);
-	const inIframe = useMemo(() => isInIframe(), []);
 
-	const { data: sub, refetch: refetchSub } = usePushSubscription();
+	const { data: sub } = usePushSubscription();
 	const subscribe = useSubscribeToPush();
 	const unsubscribe = useUnsubscribeFromPush();
 	const test = useSendTestPush();
@@ -71,55 +116,12 @@ export function RemindersToggle({ petId }: Props) {
 		if (open) setPermission(notificationPermission());
 	}, [open]);
 
-	// When the user returns from the standalone /subscribe popup, re-check the
-	// subscription state so the toggle flips to "Reminders on" without a
-	// manual reload. window focus is the simplest cross-browser trigger.
-	useEffect(() => {
-		if (!inIframe) return;
-		const onFocus = () => refetchSub();
-		window.addEventListener("focus", onFocus);
-		return () => window.removeEventListener("focus", onFocus);
-	}, [inIframe, refetchSub]);
-
 	if (!supported) return null;
 
 	const subscribed = sub?.subscribed === true;
 	const iosNeedsInstall = onIos && !standalone;
 
 	if (!subscribed) {
-		// Iframed path: punt to the standalone /subscribe page in a popup. The
-		// inline subscribe button below would silently fail in cross-origin
-		// iframes because browsers gate Notification.requestPermission().
-		if (inIframe) {
-			const openStandalone = () => {
-				// Always open the worker origin, not window.location.origin —
-				// studio embeds us in a same-origin frame at studio.decocms.com,
-				// so `origin` would resolve the hash route against studio.
-				window.open(
-					`${WORKER_ORIGIN}/#/subscribe`,
-					"_blank",
-					"noopener,noreferrer",
-				);
-			};
-			return (
-				<Button
-					size="sm"
-					variant="ghost"
-					onClick={openStandalone}
-					className="text-xs"
-					aria-label="Set up reminders"
-					title="Set up reminders"
-				>
-					<Bell className="w-3.5 h-3.5" />
-					{/* Section header doubles up with the History button — on narrow
-					    phone viewports the labels would overflow and clip out of
-					    sight. Hide labels below sm to keep both buttons visible. */}
-					<span className="hidden sm:inline">Set up reminders</span>
-					<ExternalLink className="w-3 h-3 opacity-60" />
-				</Button>
-			);
-		}
-
 		return (
 			<>
 				<Button
