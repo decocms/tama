@@ -17,11 +17,13 @@ import {
 	Bell,
 	BellRing,
 	CheckCircle2,
+	Copy,
 	ExternalLink,
 	Loader2,
 	Share,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -137,23 +139,37 @@ export function SubscribePage() {
 // subscribed. Single huge CTA into studio (external Safari for session) +
 // a small reminders-on badge. No "subscribe" framing — this screen is the
 // MyVet launcher, not a setup wizard.
+//
+// iOS PWA caveat: WebKit may route the studio link through SFSafariViewController
+// or its own WKWebView instead of the real Safari app. Both have a different
+// localStorage jar from Safari, so the user appears logged out. There is no
+// JS-level "open in Safari.app" call on iOS — Apple doesn't expose one. So we
+// pair the Open button with a Copy-link button as a guaranteed fallback.
 function LauncherView() {
+	const copyStudioUrl = async () => {
+		try {
+			await navigator.clipboard.writeText(STUDIO_URL);
+			toast.success("Link copied — paste into Safari");
+		} catch {
+			toast.error("Couldn't copy. URL: studio.decocms.com");
+		}
+	};
 	return (
 		<div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-between pt-16 pb-12 px-6">
-			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-md text-center space-y-6">
+			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-md text-center space-y-5">
 				<div className="w-24 h-24 rounded-3xl bg-secondary flex items-center justify-center">
 					<BellRing className="w-12 h-12" />
 				</div>
 				<div className="space-y-1.5">
 					<h1 className="font-display text-3xl font-semibold">MyVet</h1>
 					<p className="text-sm text-muted-foreground">
-						Tap below to open the app in deco studio.
+						Open the app in deco studio.
 					</p>
 				</div>
 				<a
 					href={STUDIO_URL}
 					target="_blank"
-					rel="noopener noreferrer"
+					rel="noopener noreferrer external"
 					className="block w-full"
 				>
 					<Button size="lg" className="w-full h-14 text-base font-semibold">
@@ -161,6 +177,20 @@ function LauncherView() {
 						<ExternalLink className="w-4 h-4" />
 					</Button>
 				</a>
+				<Button
+					variant="outline"
+					size="lg"
+					className="w-full h-12"
+					onClick={copyStudioUrl}
+				>
+					<Copy className="w-4 h-4" />
+					Copy link to paste in Safari
+				</Button>
+				<p className="text-[11px] text-muted-foreground leading-relaxed max-w-[280px]">
+					iOS may open the link in an in-app browser without your login. If
+					that happens, use <strong>Copy link</strong> and paste it into Safari
+					— or long-press the button and choose <strong>Open in Safari</strong>.
+				</p>
 				<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
 					<CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-status-given)]" />
 					Reminders are on for this device
