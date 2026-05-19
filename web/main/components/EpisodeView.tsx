@@ -13,7 +13,6 @@ import { PrescriptionReview } from "./PrescriptionReview.tsx";
 import { Prescriptions } from "./Prescriptions.tsx";
 import { Recordings } from "./Recordings.tsx";
 import { Section } from "./Section.tsx";
-import { StatusUpdate } from "./StatusUpdate.tsx";
 import { Timetable } from "./Timetable.tsx";
 
 export function EpisodeView({ episodeId }: { episodeId: string }) {
@@ -47,8 +46,6 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 				prescriptions={data.prescriptions}
 				doses={data.doses ?? []}
 			/>
-
-			<StatusUpdate episodeId={episodeId} />
 
 			{/* NowStrip + Insights share a row at sm+ (1/3 + 2/3); stacks on
 			    mobile. NowStrip renders an idle "All caught up" tile when
