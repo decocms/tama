@@ -90,6 +90,12 @@ export function SubscribePage() {
 		}
 	};
 
+	// Subscribed is the steady state — this is what the user sees every time
+	// they tap the home-screen icon. Render a launcher-style layout (big logo,
+	// huge primary CTA to studio) instead of a setup-y card. Other phases stay
+	// in the original setup card layout.
+	if (phase === "subscribed") return <LauncherView />;
+
 	return (
 		<div className="min-h-screen bg-background text-foreground flex items-start justify-center pt-12 pb-24 px-4">
 			<div className="w-full max-w-md space-y-6">
@@ -114,7 +120,6 @@ export function SubscribePage() {
 					) : null}
 					{phase === "subscribing" ? <SubscribingState /> : null}
 					{phase === "blocked" ? <BlockedState /> : null}
-					{phase === "subscribed" ? <SubscribedState /> : null}
 					{phase === "error" ? (
 						<ErrorState message={error} onRetry={handleEnable} />
 					) : null}
@@ -124,6 +129,47 @@ export function SubscribePage() {
 					You can manage notifications later from the timetable in deco studio.
 				</p>
 			</div>
+		</div>
+	);
+}
+
+// Launcher view: the steady-state PWA home screen after the user has
+// subscribed. Single huge CTA into studio (external Safari for session) +
+// a small reminders-on badge. No "subscribe" framing — this screen is the
+// MyVet launcher, not a setup wizard.
+function LauncherView() {
+	return (
+		<div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-between pt-16 pb-12 px-6">
+			<div className="flex-1 flex flex-col items-center justify-center w-full max-w-md text-center space-y-6">
+				<div className="w-24 h-24 rounded-3xl bg-secondary flex items-center justify-center">
+					<BellRing className="w-12 h-12" />
+				</div>
+				<div className="space-y-1.5">
+					<h1 className="font-display text-3xl font-semibold">MyVet</h1>
+					<p className="text-sm text-muted-foreground">
+						Tap below to open the app in deco studio.
+					</p>
+				</div>
+				<a
+					href={STUDIO_URL}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="block w-full"
+				>
+					<Button size="lg" className="w-full h-14 text-base font-semibold">
+						Open MyVet
+						<ExternalLink className="w-4 h-4" />
+					</Button>
+				</a>
+				<div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+					<CheckCircle2 className="w-3.5 h-3.5 text-[var(--color-status-given)]" />
+					Reminders are on for this device
+				</div>
+			</div>
+			<p className="text-center text-[11px] text-muted-foreground max-w-xs">
+				This home-screen icon keeps push notifications working. The full app
+				lives in deco studio.
+			</p>
 		</div>
 	);
 }
@@ -211,22 +257,6 @@ function BlockedState() {
 	);
 }
 
-function SubscribedState() {
-	return (
-		<div className="space-y-3 text-sm">
-			<div className="flex items-center gap-2 text-[var(--color-status-given)]">
-				<CheckCircle2 className="w-5 h-5" />
-				<p className="font-semibold text-foreground">Reminders are on.</p>
-			</div>
-			<p className="text-muted-foreground">
-				You're all set on this device. Reminders will arrive even when MyVet
-				isn't open.
-			</p>
-			<OpenStudioButton />
-		</div>
-	);
-}
-
 function ErrorState({
 	message,
 	onRetry,
@@ -255,8 +285,17 @@ function OpenStudioButton({
 }: {
 	variant?: "default" | "outline" | "ghost";
 }) {
+	// target="_blank" + rel="noopener" bounces out of the iOS PWA WebView
+	// into external Safari, where the user's studio.decocms.com session
+	// already exists. Without this, the link opens inside the PWA's own
+	// WebView, which has a separate cookie jar and would log them out.
 	return (
-		<a href={STUDIO_URL} className="block">
+		<a
+			href={STUDIO_URL}
+			target="_blank"
+			rel="noopener noreferrer"
+			className="block"
+		>
 			<Button variant={variant} className="w-full">
 				Open MyVet in deco studio
 				<ExternalLink className="w-3.5 h-3.5" />
