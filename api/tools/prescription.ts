@@ -74,16 +74,26 @@ function toRx(r: {
 export const prescriptionUploadTool = (_env: Env) =>
 	createTool({
 		id: "prescription_upload",
-		description:
-			"Upload a prescription image (or any photo describing scheduled care — meds and meals). Stores the file in R2, runs AI vision extraction, returns a draft prescription with extracted ScheduleItems for review.",
+		description: `Upload a raw image OR PDF of a prescription and let the vision model extract the ScheduleItems for you. Stores the file in R2 (so the original document stays linked to the episode), runs Claude vision/document extraction, returns a draft prescription with the extracted items.
+
+DO NOT use this when you already have the prescription content as structured/text data — in that case use prescription_create directly. This tool is wasted compute (and a failure point) when OCR isn't actually needed. Typical "already have the text" signals:
+  • The platform inlined the PDF text into your conversation as a <document> block.
+  • The user pasted/dictated the medication list in chat.
+  • You parsed the items from another source.
+
+Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf. The PDF path uses Anthropic's native document content blocks — multi-page PDFs work.`,
 		inputSchema: z.object({
 			episodeId: z.string(),
 			imageBase64: z
 				.string()
-				.describe("Base64-encoded file bytes (data URI prefix optional)"),
+				.describe(
+					"Base64-encoded file bytes (data URI prefix optional). Required only when you actually need OCR — see the description.",
+				),
 			mimeType: z
 				.string()
-				.describe("e.g. image/jpeg, image/png, application/pdf"),
+				.describe(
+					"image/jpeg, image/png, image/webp, image/gif, or application/pdf.",
+				),
 			originalName: z.string().optional(),
 			sourceNotes: z
 				.string()
@@ -123,8 +133,16 @@ export const prescriptionUploadTool = (_env: Env) =>
 export const prescriptionCreateTool = (_env: Env) =>
 	createTool({
 		id: "prescription_create",
-		description:
-			"Create a prescription from structured schedule items — no file required. Use this when the agent has already extracted (or the user has dictated) medication/meal schedules, e.g. from a second prescription dictated in chat or items copied from a PDF too large to upload. Defaults to status='confirmed' so the items appear on the timetable immediately. Multiple confirmed prescriptions can coexist on the same episode — each keeps its own sourceNotes so the provenance (which vet / which document) stays traceable. For a photo/PDF use prescription_upload instead so the AI can extract the items.",
+		description: `PREFERRED entry point for creating a prescription from structured data — no file, no OCR, no failure points. Use this whenever you already have the medication/meal list as text or structured items, regardless of how you got them:
+
+  • The platform inlined a PDF the user attached as a <document> block and you can read every line.
+  • The user dictated the meds in chat.
+  • You copied items from another prescription.
+  • A second prescription was added on top of the first one (each rx stays independent — multiple confirmed prescriptions coexist on an episode).
+
+Defaults to status='confirmed' so items appear on the timetable immediately. Each prescription keeps its own sourceNotes so provenance (which vet, which document, which chat snippet) stays traceable.
+
+Only fall back to prescription_upload when you truly do not have the text and need vision/OCR to extract it.`,
 		inputSchema: z.object({
 			episodeId: z.string(),
 			scheduleItems: z

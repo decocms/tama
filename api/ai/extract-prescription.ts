@@ -40,8 +40,30 @@ export async function extractPrescription(
 	input: ExtractInput,
 ): Promise<ExtractOutput> {
 	const userText = input.sourceNotes
-		? `Owner-provided context: ${input.sourceNotes}\n\nExtract all scheduled items from the image.`
-		: "Extract all scheduled items from the image.";
+		? `Owner-provided context: ${input.sourceNotes}\n\nExtract all scheduled items from the document.`
+		: "Extract all scheduled items from the document.";
+
+	// Anthropic accepts images and PDFs via two different content block types.
+	// Sending a PDF as an "image" block returns 400 "Could not process image",
+	// which is what was killing the upload-PDF path. Dispatch on mime type.
+	const isPdf = input.mimeType === "application/pdf";
+	const sourceBlock = isPdf
+		? {
+				type: "document" as const,
+				source: {
+					type: "base64" as const,
+					media_type: "application/pdf" as const,
+					data: input.imageBase64,
+				},
+			}
+		: {
+				type: "image" as const,
+				source: {
+					type: "base64" as const,
+					media_type: input.mimeType,
+					data: input.imageBase64,
+				},
+			};
 
 	const call = (priorErr?: string) =>
 		anthropicMessages(env, {
@@ -52,14 +74,7 @@ export async function extractPrescription(
 				{
 					role: "user",
 					content: [
-						{
-							type: "image",
-							source: {
-								type: "base64",
-								media_type: input.mimeType,
-								data: input.imageBase64,
-							},
-						},
+						sourceBlock,
 						{
 							type: "text",
 							text: priorErr
