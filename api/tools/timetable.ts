@@ -18,6 +18,7 @@ import {
 	advanceAnchorAfterDose,
 	ensureScheduleStateForEpisode,
 	itemKey,
+	setAnchor,
 	shiftAnchorBy,
 } from "../storage/schedule-state.ts";
 import {
@@ -170,16 +171,20 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 			// not the original 00:00 slot.
 			if (context.status === "given" || context.status === "skipped") {
 				await advanceAnchorAfterDose(env, ep.id, key, dose.actualAt);
-				// Broadcast to every subscribed device so a second caretaker
-				// doesn't accidentally re-administer. Awaited so the Worker
-				// doesn't terminate mid-fetch when the tool returns.
-				await broadcastDoseLogged(env, {
-					episodeId: ep.id,
-					itemName: canonical,
-					status: context.status,
-					actualAt: dose.actualAt,
-					note: context.note ?? null,
-				});
+				// Broadcast to every subscribed device in the BACKGROUND. We use
+				// ctx.waitUntil so the tool returns the instant the DB write is
+				// committed (~50–150ms) instead of blocking 1–3s on push services
+				// — the household sees the dose recorded with no perceptible lag,
+				// and the notifications still arrive within a second or two.
+				runtimeContext.ctx.waitUntil(
+					broadcastDoseLogged(env, {
+						episodeId: ep.id,
+						itemName: canonical,
+						status: context.status,
+						actualAt: dose.actualAt,
+						note: context.note ?? null,
+					}),
+				);
 			}
 
 			return { doseId: dose.id, action: "inserted" as const };
@@ -266,11 +271,14 @@ export const timetableSnoozeTool = (_env: Env) =>
 	createTool({
 		id: "timetable_snooze",
 		description:
-			"Postpone (or pull earlier) the next dose of an item by N hours. Shifts the schedule anchor — no dose row is created. Positive hours = later, negative = earlier. The shift cascades: every future dose of this item moves by the same amount until the next real dose log resets the anchor.",
+			"Postpone (or pull earlier) the next dose of an item by N hours. Shifts the schedule anchor — no dose row is created. Positive hours = later, negative = earlier. Decimals OK (e.g. 0.25 = +15min, -1.5 = pull 90min earlier). The shift cascades: every future dose of this item moves by the same amount until the next real dose log resets the anchor. For setting an absolute time (e.g. \"next PAPA at 14:00\"), prefer timetable_set_anchor.",
 		inputSchema: z.object({
 			episodeId: z.string(),
 			itemName: z.string(),
-			hours: z
+			// coerce so LLMs that JSON-serialize numbers as strings ("-1") still
+			// work. The string→number cast is straightforward; only non-numeric
+			// input fails validation.
+			hours: z.coerce
 				.number()
 				.describe("Positive = later, negative = earlier. e.g. 0.25 = +15min."),
 		}),
@@ -289,6 +297,62 @@ export const timetableSnoozeTool = (_env: Env) =>
 			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
 			const key = itemKey(context.itemName);
 			const updated = await shiftAnchorBy(env, ep.id, key, context.hours);
+			if (!updated) {
+				throw new Error(
+					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
+				);
+			}
+			return { itemKey: updated.itemKey, newAnchorAt: updated.anchorAt };
+		},
+	});
+
+export const timetableSetAnchorTool = (_env: Env) =>
+	createTool({
+		id: "timetable_set_anchor",
+		description: `Set the next-due time of an item to a specific wall-clock time (uses the pet's timezone). Skips the "calculate hours offset" math you'd otherwise need with timetable_snooze.
+
+Accepted formats for nextLocal:
+  • "HH:mm"                — today at that time, in the pet's tz (rolls to tomorrow if already past now)
+  • "YYYY-MM-DD HH:mm"     — exact date + time, in the pet's tz
+  • "YYYY-MM-DDTHH:mm"     — same, ISO separator
+
+Example: itemName="PAPA", nextLocal="14:00" → next PAPA at 14:00 in São Paulo time today (or tomorrow if it's already past 14:00).`,
+		inputSchema: z.object({
+			episodeId: z.string(),
+			itemName: z.string(),
+			nextLocal: z
+				.string()
+				.describe(
+					"Wall-clock time in pet's timezone: 'HH:mm', 'YYYY-MM-DD HH:mm', or ISO-ish 'YYYY-MM-DDTHH:mm'.",
+				),
+		}),
+		outputSchema: z.object({
+			itemKey: z.string(),
+			newAnchorAt: z.string(),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const ep = await getEpisode(env, context.episodeId);
+			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
+			const pet = await getPet(env, ep.petId);
+			const tz = pet?.timezone ?? "UTC";
+
+			const rxRows = await listPrescriptions(env, context.episodeId);
+			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
+			const key = itemKey(context.itemName);
+
+			// Resolve the wall-clock string in the pet's tz. If it's a bare
+			// "HH:mm" that's already past in that tz, roll forward by 24h so
+			// the user gets the natural "next 14:00" semantics.
+			let anchorIso = wallClockToIso(context.nextLocal, tz);
+			const isBareHHmm = /^\d{1,2}:\d{2}$/.test(context.nextLocal.trim());
+			if (isBareHHmm && new Date(anchorIso).getTime() <= Date.now()) {
+				anchorIso = new Date(
+					new Date(anchorIso).getTime() + 24 * 60 * 60 * 1000,
+				).toISOString();
+			}
+
+			const updated = await setAnchor(env, ep.id, key, anchorIso);
 			if (!updated) {
 				throw new Error(
 					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,

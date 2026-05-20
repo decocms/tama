@@ -3,6 +3,7 @@ import {
 	Check,
 	ChevronDown,
 	ChevronRight,
+	Loader2,
 	Pill,
 	Utensils,
 	X,
@@ -184,6 +185,9 @@ export function Timetable({
 }) {
 	const log = useLogDose(episodeId);
 	const [now, setNow] = useState(() => Date.now());
+	// Per-row pending tracking so clicking Give on one row only spins that
+	// button, not every Give in the list (mutation hook is shared).
+	const [pendingId, setPendingId] = useState<string | null>(null);
 
 	useEffect(() => {
 		const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -196,6 +200,7 @@ export function Timetable({
 	);
 
 	const give = (e: TimetableEntry) => {
+		setPendingId(e.id);
 		log.mutate(
 			{
 				itemName: e.itemName,
@@ -207,6 +212,7 @@ export function Timetable({
 			{
 				onSuccess: () => toast.success(`${e.itemName} logged`),
 				onError: (err) => toast.error((err as Error).message),
+				onSettled: () => setPendingId(null),
 			},
 		);
 	};
@@ -240,6 +246,7 @@ export function Timetable({
 				now={now}
 				onGive={give}
 				pending={log.isPending}
+				pendingId={pendingId}
 			/>
 			<Group
 				groupKey="earlier"
@@ -254,6 +261,7 @@ export function Timetable({
 				now={now}
 				onGive={give}
 				pending={log.isPending}
+				pendingId={pendingId}
 			/>
 			<Group
 				groupKey="tomorrow"
@@ -262,6 +270,7 @@ export function Timetable({
 				now={now}
 				onGive={give}
 				pending={log.isPending}
+				pendingId={pendingId}
 				collapsedByDefault
 			/>
 		</div>
@@ -296,6 +305,7 @@ function Group({
 	now,
 	onGive,
 	pending,
+	pendingId,
 	collapsedByDefault,
 }: {
 	groupKey: GroupKey;
@@ -304,6 +314,7 @@ function Group({
 	now: number;
 	onGive?: (e: TimetableEntry) => void;
 	pending?: boolean;
+	pendingId?: string | null;
 	collapsedByDefault?: boolean;
 }) {
 	const [open, setOpen] = useState(!collapsedByDefault);
@@ -348,6 +359,7 @@ function Group({
 								now={now}
 								onGive={() => onGive?.(r.entry)}
 								pending={!!pending}
+								isThisRowPending={pendingId === r.entry.id}
 								overdue={groupKey === "overdue"}
 								isNext={!!r.isNext}
 							/>
@@ -366,6 +378,7 @@ function PendingRowView({
 	now,
 	onGive,
 	pending,
+	isThisRowPending,
 	overdue,
 	isNext,
 }: {
@@ -373,6 +386,7 @@ function PendingRowView({
 	now: number;
 	onGive: () => void;
 	pending: boolean;
+	isThisRowPending: boolean;
 	overdue: boolean;
 	isNext: boolean;
 }) {
@@ -438,8 +452,12 @@ function PendingRowView({
 				disabled={pending}
 				className="shrink-0 h-9 px-3.5 font-semibold"
 			>
-				<Check className="w-3.5 h-3.5" />
-				Give
+				{isThisRowPending ? (
+					<Loader2 className="w-3.5 h-3.5 animate-spin" />
+				) : (
+					<Check className="w-3.5 h-3.5" />
+				)}
+				{isThisRowPending ? "Logging…" : "Give"}
 			</Button>
 		</li>
 	);
