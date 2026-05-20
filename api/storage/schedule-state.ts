@@ -356,6 +356,21 @@ export async function setAnchor(
 	return updated ?? null;
 }
 
+// Hard-delete a single schedule_state row by id. Used to clean up
+// orphan/ghost items left after a prescription_delete — those rows go
+// inactive but linger with prescription_id=null. Past dose history (the
+// doses table) is unaffected; only the runtime row goes away.
+export async function deleteScheduleState(
+	env: Env,
+	id: string,
+): Promise<boolean> {
+	const deleted = await db(env)
+		.delete(scheduleState)
+		.where(eq(scheduleState.id, id))
+		.returning({ id: scheduleState.id });
+	return deleted.length > 0;
+}
+
 export async function setActive(
 	env: Env,
 	episodeId: string,

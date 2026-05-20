@@ -16,6 +16,7 @@ import {
 } from "../storage/prescriptions.ts";
 import {
 	advanceAnchorAfterDose,
+	deleteScheduleState,
 	endScheduleStateItem,
 	ensureScheduleStateForEpisode,
 	itemKey,
@@ -368,6 +369,29 @@ Returns one row per (episode, item) tuple. Each row has the canonical display_na
 					endsAt: s.endsAt,
 				})),
 			};
+		},
+	});
+
+export const scheduleStateDeleteTool = (_env: Env) =>
+	createTool({
+		id: "schedule_state_delete",
+		description: `Hard-delete a single schedule_state row by id. Use ONLY to clean up orphan/ghost items left behind by prescription_delete — those rows go inactive but linger with prescription_id=null (because the FK has ON DELETE SET NULL). Past dose history (the doses table) is NOT touched; only the runtime schedule entry goes away.
+
+For "stop a treatment but keep history visible" use timetable_stop_item instead — this is a destructive cleanup tool, not a normal lifecycle action.`,
+		inputSchema: z.object({
+			id: z
+				.string()
+				.describe(
+					"The schedule_state row id (ss_xxx). Get it from schedule_state_list.",
+				),
+		}),
+		outputSchema: z.object({
+			deleted: z.boolean(),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const deleted = await deleteScheduleState(env, context.id);
+			return { deleted };
 		},
 	});
 

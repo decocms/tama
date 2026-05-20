@@ -44,6 +44,7 @@ import { vetResearchTool } from "./research.ts";
 import {
 	doseLogTool,
 	doseUpdateTool,
+	scheduleStateDeleteTool,
 	scheduleStateListTool,
 	timetableGetTool,
 	timetableSetAnchorTool,
@@ -74,6 +75,7 @@ export const tools = [
 	prescriptionDeleteTool,
 	timetableGetTool,
 	scheduleStateListTool,
+	scheduleStateDeleteTool,
 	doseLogTool,
 	doseUpdateTool,
 	timetableSnoozeTool,
