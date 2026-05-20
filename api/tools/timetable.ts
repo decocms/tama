@@ -19,6 +19,7 @@ import {
 	endScheduleStateItem,
 	ensureScheduleStateForEpisode,
 	itemKey,
+	listScheduleStates,
 	setAnchor,
 	setScheduleStateBounds,
 	shiftAnchorBy,
@@ -305,6 +306,68 @@ export const timetableSnoozeTool = (_env: Env) =>
 				);
 			}
 			return { itemKey: updated.itemKey, newAnchorAt: updated.anchorAt };
+		},
+	});
+
+export const scheduleStateListTool = (_env: Env) =>
+	createTool({
+		id: "schedule_state_list",
+		description: `List the live treatment state per item for an episode — the canonical view of "what's on the timetable right now". Use this BEFORE prescription_create to see what drugs are already active so you can reuse their exact display_name (or update them via timetable_set_duration / timetable_stop_item) instead of creating a duplicate row with a slightly different name.
+
+Returns one row per (episode, item) tuple. Each row has the canonical display_name, the current anchor (next dose), the live active flag, and the treatment lifecycle bounds (startsAt / endsAt). Items where active=false are recent/historical courses that have been stopped or expired — useful context but they won't appear on the timetable.`,
+		inputSchema: z.object({
+			episodeId: z.string(),
+			includeInactive: z
+				.boolean()
+				.optional()
+				.describe(
+					"Default true. When false, only active=true items are returned (the strict timetable view).",
+				),
+		}),
+		outputSchema: z.object({
+			scheduleStates: z.array(
+				z.object({
+					id: z.string(),
+					itemKey: z.string(),
+					displayName: z.string(),
+					kind: z.enum(["medication", "meal"]),
+					dosage: z.string().nullable(),
+					route: z.string().nullable(),
+					notes: z.string().nullable(),
+					intervalHours: z.number(),
+					anchorAt: z.string(),
+					durationDays: z.number().nullable(),
+					prescriptionId: z.string().nullable(),
+					active: z.boolean(),
+					startsAt: z.string().nullable(),
+					endsAt: z.string().nullable(),
+				}),
+			),
+		}),
+		annotations: { readOnlyHint: true },
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const all = await listScheduleStates(env, context.episodeId);
+			const includeInactive = context.includeInactive ?? true;
+			const filtered = includeInactive ? all : all.filter((s) => s.active);
+			return {
+				scheduleStates: filtered.map((s) => ({
+					id: s.id,
+					itemKey: s.itemKey,
+					displayName: s.displayName,
+					kind: s.kind,
+					dosage: s.dosage,
+					route: s.route,
+					notes: s.notes,
+					intervalHours: s.intervalHours,
+					anchorAt: s.anchorAt,
+					durationDays: s.durationDays,
+					prescriptionId: s.prescriptionId,
+					active: s.active,
+					startsAt: s.startsAt,
+					endsAt: s.endsAt,
+				})),
+			};
 		},
 	});
 

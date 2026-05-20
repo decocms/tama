@@ -19,6 +19,7 @@ import {
 } from "./pet.ts";
 import {
 	prescriptionCreateTool,
+	prescriptionDeleteTool,
 	prescriptionListTool,
 	prescriptionUpdateTool,
 	prescriptionUploadTool,
@@ -43,6 +44,7 @@ import { vetResearchTool } from "./research.ts";
 import {
 	doseLogTool,
 	doseUpdateTool,
+	scheduleStateListTool,
 	timetableGetTool,
 	timetableSetAnchorTool,
 	timetableSetDurationTool,
@@ -69,7 +71,9 @@ export const tools = [
 	prescriptionCreateTool,
 	prescriptionUpdateTool,
 	prescriptionListTool,
+	prescriptionDeleteTool,
 	timetableGetTool,
+	scheduleStateListTool,
 	doseLogTool,
 	doseUpdateTool,
 	timetableSnoozeTool,

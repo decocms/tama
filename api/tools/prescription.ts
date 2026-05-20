@@ -7,13 +7,79 @@ import { saveFile } from "../storage/files.ts";
 import { getPet } from "../storage/pets.ts";
 import {
 	createPrescription,
+	deletePrescription,
 	listPrescriptions,
 	parseScheduleItems,
 	updatePrescription,
 } from "../storage/prescriptions.ts";
-import { syncPrescriptionToScheduleState } from "../storage/schedule-state.ts";
+import {
+	itemKey,
+	listScheduleStates,
+	syncPrescriptionToScheduleState,
+} from "../storage/schedule-state.ts";
 import { type ScheduleItem, ScheduleItemSchema } from "./shared.ts";
 import { URI } from "./uris.ts";
+
+// Detect items whose name is suspiciously close to an existing active
+// schedule_state row, so prescription_create can warn callers BEFORE the
+// upsert silently creates a second timetable row. Three heuristics, OR'd:
+//   1. Exact match on the normalized item_key (lowercased, trimmed).
+//   2. Brand-prefix overlap — same first word ("Sucrafilm" ⊂ "Sucrafilm
+//      Flaconete").
+//   3. Containment — either name fully contains the other (trimmed,
+//      lowercased), so "PRELONE 3mg/ml" matches "Prelone".
+// The brand-prefix check is intentionally aggressive; the cost of a false
+// positive is a single warning, the cost of a false negative is a duplicate
+// row that needs manual cleanup.
+interface OverlapWarning {
+	itemName: string;
+	existingScheduleStateId: string;
+	existingDisplayName: string;
+	existingActive: boolean;
+	matchReason: "exact" | "brand-prefix" | "substring";
+}
+
+function firstToken(s: string): string {
+	return s.trim().toLowerCase().split(/\s+/)[0] ?? "";
+}
+
+async function detectOverlaps(
+	env: Env,
+	episodeId: string,
+	items: ScheduleItem[],
+): Promise<OverlapWarning[]> {
+	const existing = await listScheduleStates(env, episodeId);
+	if (existing.length === 0) return [];
+	const warnings: OverlapWarning[] = [];
+	for (const item of items) {
+		const newKey = itemKey(item.name);
+		const newToken = firstToken(item.name);
+		const newLower = item.name.trim().toLowerCase();
+		for (const s of existing) {
+			const existingLower = s.displayName.trim().toLowerCase();
+			let reason: OverlapWarning["matchReason"] | null = null;
+			if (s.itemKey === newKey) reason = "exact";
+			else if (newToken && newToken === firstToken(s.displayName))
+				reason = "brand-prefix";
+			else if (
+				newLower.length >= 4 &&
+				(existingLower.includes(newLower) || newLower.includes(existingLower))
+			)
+				reason = "substring";
+			if (reason) {
+				warnings.push({
+					itemName: item.name,
+					existingScheduleStateId: s.id,
+					existingDisplayName: s.displayName,
+					existingActive: s.active,
+					matchReason: reason,
+				});
+				break; // one warning per new item is enough
+			}
+		}
+	}
+	return warnings;
+}
 
 async function syncRxIfConfirmed(
 	env: Env,
@@ -140,6 +206,8 @@ export const prescriptionCreateTool = (_env: Env) =>
   • You copied items from another prescription.
   • A second prescription was added on top of the first one (each rx stays independent — multiple confirmed prescriptions coexist on an episode).
 
+CRITICAL preflight: BEFORE calling this for an episode that may already have an active treatment plan, call schedule_state_list first to see what items already exist. If a drug is already on the timetable, reuse its EXACT display_name (or use timetable_set_duration / timetable_stop_item to adjust the existing item) — a small name variation like "Sucrafilm Flaconete" vs "SUCRAFILM" produces a duplicate row instead of updating the original. The response of this tool includes an overlapsExisting array that flags likely duplicates after the fact, but checking up front is much cheaper.
+
 Defaults to status='confirmed' so items appear on the timetable immediately. Each prescription keeps its own sourceNotes so provenance (which vet, which document, which chat snippet) stays traceable.
 
 Only fall back to prescription_upload when you truly do not have the text and need vision/OCR to extract it.`,
@@ -164,17 +232,66 @@ Only fall back to prescription_upload when you truly do not have the text and ne
 					"Defaults to 'confirmed' so items appear on the timetable. Pass 'draft' if you want the owner to review before activation.",
 				),
 		}),
-		outputSchema: z.object({ prescription: PrescriptionSchema }),
+		outputSchema: z.object({
+			prescription: PrescriptionSchema,
+			overlapsExisting: z
+				.array(
+					z.object({
+						itemName: z.string(),
+						existingScheduleStateId: z.string(),
+						existingDisplayName: z.string(),
+						existingActive: z.boolean(),
+						matchReason: z.enum(["exact", "brand-prefix", "substring"]),
+					}),
+				)
+				.describe(
+					"Items in the new prescription whose name resembles an existing schedule_state row. 'exact' = same item_key (will update in place — usually fine). 'brand-prefix' / 'substring' = likely duplicate (different label for the same drug, will create a SECOND timetable row). If you see brand-prefix or substring matches, you probably want to delete this prescription and either reuse the canonical name OR adjust the existing item via timetable_set_duration.",
+				),
+		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
+			const items = context.scheduleItems as ScheduleItem[];
+			const overlapsExisting = await detectOverlaps(
+				env,
+				context.episodeId,
+				items,
+			);
 			const rx = await createPrescription(env, {
 				episodeId: context.episodeId,
-				scheduleItems: context.scheduleItems as ScheduleItem[],
+				scheduleItems: items,
 				sourceNotes: context.sourceNotes,
 				status: context.status ?? "confirmed",
 			});
 			await syncRxIfConfirmed(env, rx);
-			return { prescription: toRx(rx) };
+			return { prescription: toRx(rx), overlapsExisting };
+		},
+	});
+
+export const prescriptionDeleteTool = (_env: Env) =>
+	createTool({
+		id: "prescription_delete",
+		description: `Delete a prescription. Use to clean up duplicates created by mistake (e.g. a second prescription with slightly different item names that produced extra timetable rows). By default this also marks every schedule_state row pointing at this prescription as active=false so the timetable doesn't keep showing it after the prescription itself is gone — pass deactivateItems=false if you specifically want to orphan the schedule_state rows instead (rare).
+
+Past dose history (the doses table) is never touched. To stop a single item without deleting the whole prescription, use timetable_stop_item.`,
+		inputSchema: z.object({
+			prescriptionId: z.string(),
+			deactivateItems: z
+				.boolean()
+				.optional()
+				.describe(
+					"Default true. Sets schedule_state.active=false for every row whose prescription_id matches, so the items stop appearing on the timetable. Pass false only if you want to keep the items active under a different prescription (you'll need to re-point them manually).",
+				),
+		}),
+		outputSchema: z.object({
+			deleted: z.boolean(),
+			deactivatedItems: z.number(),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const result = await deletePrescription(env, context.prescriptionId, {
+				deactivateItems: context.deactivateItems ?? true,
+			});
+			return result;
 		},
 	});
 

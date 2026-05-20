@@ -5,7 +5,7 @@ export const ScheduleItemSchema = z.object({
 		.string()
 		.min(1)
 		.describe(
-			"The item label as it appears on the source (e.g. 'PRELONE/B12', 'PAPA')",
+			"The item label as it would appear on the timetable. Reuse the EXACT name an existing schedule_state row already has when re-prescribing the same drug (the canonical name is its display_name) — otherwise a slightly different label like 'Sucrafilm Flaconete' vs 'SUCRAFILM' creates a SECOND timetable row instead of updating the first. Call schedule_state_list first if you're not sure.",
 		),
 	kind: z
 		.enum(["medication", "meal"])
@@ -23,9 +23,17 @@ export const ScheduleItemSchema = z.object({
 	times: z
 		.array(z.string().regex(/^\d{2}:\d{2}$/))
 		.min(1)
-		.describe("Times of day in 24h HH:mm format, e.g. ['06:44', '14:00']"),
+		.describe(
+			"Times of day in 24h HH:mm format, interpreted in the PET's timezone (e.g. America/Sao_Paulo) — never UTC. The server resolves these against pets.timezone when computing anchors. Example: ['07:30', '14:30', '22:00'] = 7:30 AM, 2:30 PM, 10 PM local.",
+		),
 	frequencyHours: z.number().optional(),
 	durationDays: z.number().optional(),
+	startsAt: z
+		.string()
+		.optional()
+		.describe(
+			"Optional ISO timestamp (UTC) for when this treatment first started. Use when the prescription began before today and you want the anchor/lifecycle to count from the real start — e.g. 'Hemax started 2026-05-18' on a prescription you're recording later. If omitted, defaults to now (or the latest known dose for this item).",
+		),
 	notes: z.string().optional(),
 });
 export type ScheduleItem = z.infer<typeof ScheduleItemSchema>;

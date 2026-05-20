@@ -1,6 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
-import { type Prescription, prescriptions } from "../db/schema.ts";
+import {
+	type Prescription,
+	prescriptions,
+	scheduleState,
+} from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { type ScheduleItem, ScheduleItemsSchema } from "../tools/shared.ts";
 import { newId } from "./ids.ts";
@@ -89,4 +93,36 @@ export function parseScheduleItems(rx: Prescription): ScheduleItem[] {
 	} catch {
 		return [];
 	}
+}
+
+// Delete a prescription. When deactivateItems=true (default), every
+// schedule_state row that pointed at this prescription is marked inactive
+// first — otherwise items would orphan with prescription_id=null AND stay
+// active=true (because the FK has ON DELETE SET NULL), which is exactly the
+// "I deleted the duplicate but the timetable still shows it" trap.
+export async function deletePrescription(
+	env: Env,
+	id: string,
+	options: { deactivateItems?: boolean } = {},
+): Promise<{ deleted: boolean; deactivatedItems: number }> {
+	const deactivate = options.deactivateItems ?? true;
+	let deactivatedItems = 0;
+	if (deactivate) {
+		const rows = await db(env)
+			.update(scheduleState)
+			.set({ active: false, updatedAt: new Date().toISOString() })
+			.where(
+				and(
+					eq(scheduleState.prescriptionId, id),
+					eq(scheduleState.active, true),
+				),
+			)
+			.returning({ id: scheduleState.id });
+		deactivatedItems = rows.length;
+	}
+	const deleted = await db(env)
+		.delete(prescriptions)
+		.where(eq(prescriptions.id, id))
+		.returning({ id: prescriptions.id });
+	return { deleted: deleted.length > 0, deactivatedItems };
 }

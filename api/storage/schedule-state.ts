@@ -119,19 +119,25 @@ export async function upsertScheduleState(
 		return row;
 	}
 
-	// Anchor decision when creating a fresh row:
-	//   1. If there's a known last dose for this item, next = last + interval
-	//      (the natural cascade — same as advanceAnchorAfterDose).
-	//   2. Else, the prescription's first time today in pet's tz.
-	const anchorAt = input.latestDoseAt
+	// Anchor decision when creating a fresh row, in priority order:
+	//   1. Item-provided startsAt — when set, the next anchor is startsAt +
+	//      interval. Used to record "Hemax started on 2026-05-18" without
+	//      pinning slots to today.
+	//   2. Known last dose for this item (cascade — same as advanceAnchorAfterDose).
+	//   3. The prescription's first time today in the pet's tz.
+	const startsAt =
+		input.item.startsAt ?? input.latestDoseAt ?? new Date().toISOString();
+	const anchorAt = input.item.startsAt
 		? new Date(
-				new Date(input.latestDoseAt).getTime() + intervalHours * 60 * 60 * 1000,
+				new Date(input.item.startsAt).getTime() +
+					intervalHours * 60 * 60 * 1000,
 			).toISOString()
-		: deriveInitialAnchor(input.item, input.timeZone);
-	// Treatment lifecycle: startsAt = now (or latest dose, if backfilling an
-	// older course); endsAt = startsAt + durationDays. Open-ended courses
-	// (no durationDays) leave endsAt null.
-	const startsAt = input.latestDoseAt ?? new Date().toISOString();
+		: input.latestDoseAt
+			? new Date(
+					new Date(input.latestDoseAt).getTime() +
+						intervalHours * 60 * 60 * 1000,
+				).toISOString()
+			: deriveInitialAnchor(input.item, input.timeZone);
 	const endsAt = input.item.durationDays
 		? new Date(
 				new Date(startsAt).getTime() +
