@@ -85,7 +85,11 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 				eyebrow="Prescribed"
 				count={data.prescriptions.length}
 			>
-				<Medicines prescriptions={data.prescriptions} />
+				<Medicines
+					prescriptions={data.prescriptions}
+					scheduleStates={data.scheduleStates ?? []}
+					episodeId={episodeId}
+				/>
 			</AccordionSection>
 
 			<AccordionSection

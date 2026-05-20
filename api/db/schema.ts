@@ -112,6 +112,11 @@ export const scheduleState = sqliteTable("schedule_state", {
 		onDelete: "set null",
 	}),
 	active: integer("active", { mode: "boolean" }).notNull().default(true),
+	// Treatment lifecycle bounds. startsAt defaults to the schedule_state's
+	// createdAt on first insert; endsAt is derived from durationDays unless
+	// the user pins it explicitly. Either may be null (open-ended treatment).
+	startsAt: text("starts_at"),
+	endsAt: text("ends_at"),
 	createdAt: text("created_at").notNull().default(nowSql),
 	updatedAt: text("updated_at").notNull().default(nowSql),
 });

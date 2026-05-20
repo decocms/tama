@@ -128,6 +128,16 @@ export async function upsertScheduleState(
 				new Date(input.latestDoseAt).getTime() + intervalHours * 60 * 60 * 1000,
 			).toISOString()
 		: deriveInitialAnchor(input.item, input.timeZone);
+	// Treatment lifecycle: startsAt = now (or latest dose, if backfilling an
+	// older course); endsAt = startsAt + durationDays. Open-ended courses
+	// (no durationDays) leave endsAt null.
+	const startsAt = input.latestDoseAt ?? new Date().toISOString();
+	const endsAt = input.item.durationDays
+		? new Date(
+				new Date(startsAt).getTime() +
+					input.item.durationDays * 24 * 60 * 60 * 1000,
+			).toISOString()
+		: null;
 	const [row] = await db(env)
 		.insert(scheduleState)
 		.values({
@@ -144,9 +154,58 @@ export async function upsertScheduleState(
 			durationDays: input.item.durationDays,
 			prescriptionId: input.prescriptionId,
 			active: true,
+			startsAt,
+			endsAt,
 		})
 		.returning();
 	return row;
+}
+
+// End a treatment immediately or at a specific time. Sets endsAt and flips
+// active=false so the medicine stops appearing in the timetable. Use this
+// for "Stop simeticona — its 7 days are up" or any early-termination case.
+export async function endScheduleStateItem(
+	env: Env,
+	episodeId: string,
+	key: string,
+	endsAt?: string,
+): Promise<ScheduleState | null> {
+	const row = await getScheduleState(env, episodeId, key);
+	if (!row) return null;
+	const stopAt = endsAt ?? new Date().toISOString();
+	const [updated] = await db(env)
+		.update(scheduleState)
+		.set({
+			endsAt: stopAt,
+			active: false,
+			updatedAt: new Date().toISOString(),
+		})
+		.where(eq(scheduleState.id, row.id))
+		.returning();
+	return updated ?? null;
+}
+
+// Adjust treatment bounds without ending the course. Either bound may be
+// null to clear it (e.g. remove the end date to make a course open-ended).
+export async function setScheduleStateBounds(
+	env: Env,
+	episodeId: string,
+	key: string,
+	bounds: { startsAt?: string | null; endsAt?: string | null },
+): Promise<ScheduleState | null> {
+	const row = await getScheduleState(env, episodeId, key);
+	if (!row) return null;
+	const patch: { startsAt?: string | null; endsAt?: string | null; updatedAt: string } = {
+		updatedAt: new Date().toISOString(),
+	};
+	if (bounds.startsAt !== undefined) patch.startsAt = bounds.startsAt;
+	if (bounds.endsAt !== undefined) patch.endsAt = bounds.endsAt;
+	const [updated] = await db(env)
+		.update(scheduleState)
+		.set(patch)
+		.where(eq(scheduleState.id, row.id))
+		.returning();
+	return updated ?? null;
 }
 
 // Reconcile a prescription's items with schedule_state for an episode.
@@ -213,8 +272,28 @@ export async function ensureScheduleStateForEpisode(
 			if (!existingKeys.has(key)) touched = true;
 		}
 	}
+
+	// Auto-expire: anything whose endsAt has passed gets active=false on the
+	// next read. Cheaper to handle here (lazy) than to schedule a separate
+	// cleanup cron — every episode_get / timetable_get already calls this.
+	const nowIso = new Date().toISOString();
+	const refreshed = touched || existing.length === 0
+		? await listScheduleStates(env, episodeId)
+		: existing;
+	const toExpire = refreshed.filter(
+		(s) => s.active && s.endsAt && s.endsAt <= nowIso,
+	);
+	if (toExpire.length > 0) {
+		for (const s of toExpire) {
+			await db(env)
+				.update(scheduleState)
+				.set({ active: false, updatedAt: nowIso })
+				.where(eq(scheduleState.id, s.id));
+		}
+		return listScheduleStates(env, episodeId);
+	}
 	if (!touched && existing.length > 0) return existing;
-	return listScheduleStates(env, episodeId);
+	return refreshed;
 }
 
 export async function advanceAnchorAfterDose(

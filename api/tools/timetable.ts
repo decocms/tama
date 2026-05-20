@@ -16,9 +16,11 @@ import {
 } from "../storage/prescriptions.ts";
 import {
 	advanceAnchorAfterDose,
+	endScheduleStateItem,
 	ensureScheduleStateForEpisode,
 	itemKey,
 	setAnchor,
+	setScheduleStateBounds,
 	shiftAnchorBy,
 } from "../storage/schedule-state.ts";
 import {
@@ -303,6 +305,106 @@ export const timetableSnoozeTool = (_env: Env) =>
 				);
 			}
 			return { itemKey: updated.itemKey, newAnchorAt: updated.anchorAt };
+		},
+	});
+
+export const timetableStopItemTool = (_env: Env) =>
+	createTool({
+		id: "timetable_stop_item",
+		description: `Stop a treatment — the medicine/meal no longer appears in the timetable. Used when a finite course is done ("simeticona was 7 days, stop now") or when the vet discontinues it. Sets the item's ends_at to now (or to the provided ISO timestamp) and marks it inactive.
+
+This is reversible via timetable_set_duration if you need to extend the course later. Past doses (the history table) are NOT touched.`,
+		inputSchema: z.object({
+			episodeId: z.string(),
+			itemName: z.string(),
+			endsAt: z
+				.string()
+				.optional()
+				.describe(
+					"Optional ISO timestamp for when the treatment ends. Defaults to now.",
+				),
+		}),
+		outputSchema: z.object({
+			itemKey: z.string(),
+			endsAt: z.string().nullable(),
+			active: z.boolean(),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const ep = await getEpisode(env, context.episodeId);
+			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
+			const pet = await getPet(env, ep.petId);
+			const tz = pet?.timezone ?? "UTC";
+			const rxRows = await listPrescriptions(env, context.episodeId);
+			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
+			const key = itemKey(context.itemName);
+			const updated = await endScheduleStateItem(
+				env,
+				ep.id,
+				key,
+				context.endsAt,
+			);
+			if (!updated) {
+				throw new Error(
+					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
+				);
+			}
+			return {
+				itemKey: updated.itemKey,
+				endsAt: updated.endsAt,
+				active: updated.active,
+			};
+		},
+	});
+
+export const timetableSetDurationTool = (_env: Env) =>
+	createTool({
+		id: "timetable_set_duration",
+		description: `Adjust the treatment lifecycle bounds (startsAt / endsAt) for a scheduled item without stopping it. Use this to extend a course ("add 3 more days of antibiotic"), re-open a stopped one, or pin explicit start/end dates the vet specified.
+
+Either bound can be set to null to clear it (e.g. make a course open-ended). To stop a treatment immediately, prefer timetable_stop_item.`,
+		inputSchema: z.object({
+			episodeId: z.string(),
+			itemName: z.string(),
+			startsAt: z
+				.string()
+				.nullable()
+				.optional()
+				.describe("ISO timestamp; null to clear; omit to leave unchanged."),
+			endsAt: z
+				.string()
+				.nullable()
+				.optional()
+				.describe("ISO timestamp; null to clear; omit to leave unchanged."),
+		}),
+		outputSchema: z.object({
+			itemKey: z.string(),
+			startsAt: z.string().nullable(),
+			endsAt: z.string().nullable(),
+		}),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const ep = await getEpisode(env, context.episodeId);
+			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
+			const pet = await getPet(env, ep.petId);
+			const tz = pet?.timezone ?? "UTC";
+			const rxRows = await listPrescriptions(env, context.episodeId);
+			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
+			const key = itemKey(context.itemName);
+			const updated = await setScheduleStateBounds(env, ep.id, key, {
+				startsAt: context.startsAt ?? undefined,
+				endsAt: context.endsAt ?? undefined,
+			});
+			if (!updated) {
+				throw new Error(
+					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
+				);
+			}
+			return {
+				itemKey: updated.itemKey,
+				startsAt: updated.startsAt,
+				endsAt: updated.endsAt,
+			};
 		},
 	});
 

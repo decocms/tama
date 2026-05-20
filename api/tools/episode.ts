@@ -72,6 +72,29 @@ const DoseSchema = z.object({
 	createdAt: z.string(),
 });
 
+// Live treatment state per item — surfaced so the UI can show "Day 4 / 7",
+// "ends in 2d", or "stopped" without having to recompute from prescription
+// templates + dose history.
+const ScheduleStateSchema = z.object({
+	id: z.string(),
+	episodeId: z.string(),
+	itemKey: z.string(),
+	displayName: z.string(),
+	kind: z.enum(["medication", "meal"]),
+	dosage: z.string().nullable(),
+	route: z.string().nullable(),
+	notes: z.string().nullable(),
+	intervalHours: z.number(),
+	anchorAt: z.string(),
+	durationDays: z.number().nullable(),
+	prescriptionId: z.string().nullable(),
+	active: z.boolean(),
+	startsAt: z.string().nullable(),
+	endsAt: z.string().nullable(),
+	createdAt: z.string(),
+	updatedAt: z.string(),
+});
+
 export const episodeStartTool = (_env: Env) =>
 	createTool({
 		id: "episode_start",
@@ -111,6 +134,7 @@ export const episodeGetTool = (_env: Env) =>
 			prescriptions: z.array(PrescriptionFullSchema),
 			notes: z.array(NoteSchema),
 			doses: z.array(DoseSchema),
+			scheduleStates: z.array(ScheduleStateSchema),
 		}),
 		_meta: { ui: { resourceUri: URI.episodeGet } },
 		annotations: { readOnlyHint: true },
@@ -124,6 +148,7 @@ export const episodeGetTool = (_env: Env) =>
 					prescriptions: [],
 					notes: [],
 					doses: [],
+					scheduleStates: [],
 				};
 
 			const pet = await getPet(e, ep.petId);
@@ -169,6 +194,7 @@ export const episodeGetTool = (_env: Env) =>
 				})),
 				notes: noteRows,
 				doses: doseRows,
+				scheduleStates: states,
 			};
 		},
 	});

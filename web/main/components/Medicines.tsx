@@ -1,8 +1,33 @@
-import { ChevronDown, Pill, Repeat, Utensils } from "lucide-react";
+import {
+	CheckCircle2,
+	ChevronDown,
+	Loader2,
+	Pill,
+	Repeat,
+	StopCircle,
+	Utensils,
+} from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib/utils.ts";
-import type { Prescription, ScheduleItem } from "@/types/api.ts";
+import type {
+	Prescription,
+	ScheduleItem,
+	ScheduleState,
+} from "@/types/api.ts";
+import { useStopItem } from "../lib/queries.ts";
 
 interface MedicineCard {
 	item: ScheduleItem;
@@ -51,10 +76,20 @@ function nextUpcomingIdx(times: string[], now: Date): number {
 
 export function Medicines({
 	prescriptions,
+	scheduleStates,
+	episodeId,
 }: {
 	prescriptions: Prescription[];
+	scheduleStates: ScheduleState[];
+	episodeId: string;
 }) {
 	const cards = aggregate(prescriptions);
+	// Index live state by lowercased item name so MedicineCardView can pull
+	// the lifecycle bounds + active flag for its specific item.
+	const stateByName = new Map<string, ScheduleState>();
+	for (const s of scheduleStates) {
+		stateByName.set(s.displayName.toLowerCase(), s);
+	}
 	if (cards.length === 0) {
 		return (
 			<p className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground bg-secondary/40">
@@ -66,17 +101,33 @@ export function Medicines({
 	return (
 		<div className="grid gap-3 sm:grid-cols-2">
 			{cards.map((c) => (
-				<MedicineCardView key={`${c.prescriptionId}-${c.item.name}`} card={c} />
+				<MedicineCardView
+					key={`${c.prescriptionId}-${c.item.name}`}
+					card={c}
+					state={stateByName.get(c.item.name.toLowerCase()) ?? null}
+					episodeId={episodeId}
+				/>
 			))}
 		</div>
 	);
 }
 
-function MedicineCardView({ card }: { card: MedicineCard }) {
+function MedicineCardView({
+	card,
+	state,
+	episodeId,
+}: {
+	card: MedicineCard;
+	state: ScheduleState | null;
+	episodeId: string;
+}) {
 	const { item } = card;
 	const isMeal = item.kind === "meal";
 	const upcomingIdx = nextUpcomingIdx(item.times, new Date());
 	const [notesOpen, setNotesOpen] = useState(false);
+	const [confirmStop, setConfirmStop] = useState(false);
+	const stop = useStopItem(episodeId);
+	const stopped = state ? !state.active : false;
 
 	const accent = isMeal
 		? {
@@ -96,11 +147,19 @@ function MedicineCardView({ card }: { card: MedicineCard }) {
 	if (item.frequencyHours) metaParts.push(`every ${item.frequencyHours}h`);
 	if (item.durationDays) metaParts.push(`for ${item.durationDays}d`);
 
+	// Treatment lifecycle badge — derived from the live schedule_state row
+	// (not the prescription template). Three visual states:
+	//   • stopped:  active=false → "Stopped" pill, card de-emphasized
+	//   • ending:   active=true, endsAt set → "Day X / Y" or "ends in Nd"
+	//   • open:     active=true, no endsAt → no badge (open-ended course)
+	const lifecycle = describeLifecycle(state);
+
 	return (
 		<article
 			className={cn(
-				"rounded-2xl bg-card surface border-l-4 overflow-hidden",
+				"rounded-2xl bg-card surface border-l-4 overflow-hidden transition-opacity",
 				accent.border,
+				stopped && "opacity-55",
 			)}
 		>
 			<header className="flex items-center gap-2.5 p-3.5 pb-2.5">
@@ -116,12 +175,17 @@ function MedicineCardView({ card }: { card: MedicineCard }) {
 						<Pill className="w-4 h-4" />
 					)}
 				</div>
-				<h3 className="font-display text-lg font-semibold leading-tight truncate flex-1">
+				<h3
+					className={cn(
+						"font-display text-lg font-semibold leading-tight truncate flex-1",
+						stopped && "line-through decoration-2 decoration-muted-foreground/40",
+					)}
+				>
 					{item.name}
 				</h3>
 				<Badge
 					variant="outline"
-					className="text-[10px] uppercase tracking-wider"
+					className="text-[10px] uppercase tracking-wider shrink-0"
 				>
 					{isMeal ? "meal" : "med"}
 				</Badge>
@@ -158,6 +222,25 @@ function MedicineCardView({ card }: { card: MedicineCard }) {
 					</div>
 				) : null}
 
+				{lifecycle ? (
+					<div
+						className={cn(
+							"inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-md",
+							lifecycle.tone === "stopped" &&
+								"bg-muted text-muted-foreground",
+							lifecycle.tone === "ending-soon" &&
+								"bg-amber-500/10 text-amber-700 dark:text-amber-300",
+							lifecycle.tone === "active" &&
+								"bg-[var(--color-status-given)]/10 text-[var(--color-status-given)]",
+						)}
+					>
+						{lifecycle.tone === "stopped" ? (
+							<CheckCircle2 className="w-3 h-3" />
+						) : null}
+						{lifecycle.label}
+					</div>
+				) : null}
+
 				{item.notes ? (
 					<div>
 						<button
@@ -180,7 +263,95 @@ function MedicineCardView({ card }: { card: MedicineCard }) {
 						) : null}
 					</div>
 				) : null}
+
+				{state && !stopped ? (
+					<div className="pt-1.5 -mb-1">
+						<Button
+							size="sm"
+							variant="ghost"
+							onClick={() => setConfirmStop(true)}
+							disabled={stop.isPending}
+							className="text-xs text-muted-foreground hover:text-destructive h-7 px-2"
+						>
+							{stop.isPending ? (
+								<Loader2 className="w-3 h-3 animate-spin" />
+							) : (
+								<StopCircle className="w-3 h-3" />
+							)}
+							Stop {isMeal ? "meal" : "medicine"}
+						</Button>
+					</div>
+				) : null}
 			</div>
+
+			<AlertDialog open={confirmStop} onOpenChange={setConfirmStop}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Stop {item.name}?</AlertDialogTitle>
+						<AlertDialogDescription>
+							It will no longer appear in the timetable and reminders will stop.
+							Past doses stay in the history. You can extend it later via the
+							assistant if needed.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								stop.mutate(
+									{ itemName: item.name },
+									{
+										onSuccess: () => {
+											toast.success(`${item.name} stopped`);
+											setConfirmStop(false);
+										},
+										onError: (err) => toast.error((err as Error).message),
+									},
+								);
+							}}
+						>
+							Stop {item.name}
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</article>
 	);
+}
+
+interface Lifecycle {
+	label: string;
+	tone: "stopped" | "ending-soon" | "active";
+}
+
+function describeLifecycle(state: ScheduleState | null): Lifecycle | null {
+	if (!state) return null;
+	if (!state.active) {
+		const endedAt = state.endsAt ? new Date(state.endsAt) : null;
+		const daysAgo =
+			endedAt ?
+				Math.max(0, Math.floor((Date.now() - endedAt.getTime()) / 86400000))
+				: null;
+		return {
+			label:
+				daysAgo === null
+					? "Stopped"
+					: daysAgo === 0
+						? "Stopped today"
+						: `Stopped ${daysAgo}d ago`,
+			tone: "stopped",
+		};
+	}
+	if (!state.endsAt || !state.startsAt) return null;
+	const start = new Date(state.startsAt).getTime();
+	const end = new Date(state.endsAt).getTime();
+	const now = Date.now();
+	if (end <= now) return { label: "Course complete", tone: "stopped" };
+	const totalDays = Math.max(1, Math.round((end - start) / 86400000));
+	const dayN = Math.max(1, Math.ceil((now - start) / 86400000));
+	const daysLeft = Math.max(0, Math.ceil((end - now) / 86400000));
+	return {
+		label: `Day ${Math.min(dayN, totalDays)} / ${totalDays} · ${daysLeft}d left`,
+		tone: daysLeft <= 1 ? "ending-soon" : "active",
+	};
 }

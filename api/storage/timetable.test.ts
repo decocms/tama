@@ -18,6 +18,8 @@ function makeState(overrides: Partial<ScheduleState>): ScheduleState {
 		durationDays: null,
 		prescriptionId: "rx_1",
 		active: true,
+		startsAt: null,
+		endsAt: null,
 		createdAt: "2026-05-16T00:00:00.000Z",
 		updatedAt: "2026-05-16T00:00:00.000Z",
 		...overrides,

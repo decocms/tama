@@ -100,12 +100,33 @@ export interface Dose {
 	createdAt: string;
 }
 
+export interface ScheduleState {
+	id: string;
+	episodeId: string;
+	itemKey: string;
+	displayName: string;
+	kind: "medication" | "meal";
+	dosage: string | null;
+	route: string | null;
+	notes: string | null;
+	intervalHours: number;
+	anchorAt: string;
+	durationDays: number | null;
+	prescriptionId: string | null;
+	active: boolean;
+	startsAt: string | null;
+	endsAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
 export interface EpisodeDashboardResult {
 	episode: Episode | null;
 	timetable: TimetableEntry[];
 	prescriptions: Prescription[];
 	notes: Note[];
 	doses: Dose[];
+	scheduleStates: ScheduleState[];
 }
 
 export type RecordingStatus =

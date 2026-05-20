@@ -45,7 +45,9 @@ import {
 	doseUpdateTool,
 	timetableGetTool,
 	timetableSetAnchorTool,
+	timetableSetDurationTool,
 	timetableSnoozeTool,
+	timetableStopItemTool,
 } from "./timetable.ts";
 
 export const tools = [
@@ -72,6 +74,8 @@ export const tools = [
 	doseUpdateTool,
 	timetableSnoozeTool,
 	timetableSetAnchorTool,
+	timetableStopItemTool,
+	timetableSetDurationTool,
 	recordingCreateTool,
 	recordingAddChunkTool,
 	recordingTranscribeTool,

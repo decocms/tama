@@ -253,6 +253,31 @@ export function useSnoozeItem(episodeId: string) {
 	});
 }
 
+export function useStopItem(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { itemName: string; endsAt?: string }) =>
+			callTool(app, "timetable_stop_item", { episodeId, ...input }),
+		onSuccess: () =>
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+	});
+}
+
+export function useSetItemDuration(episodeId: string) {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			itemName: string;
+			startsAt?: string | null;
+			endsAt?: string | null;
+		}) => callTool(app, "timetable_set_duration", { episodeId, ...input }),
+		onSuccess: () =>
+			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+	});
+}
+
 export type TimetableEntryUI = TimetableEntry;
 
 export function useEpisodeInsights(episodeId: string) {
