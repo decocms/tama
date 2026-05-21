@@ -20,6 +20,26 @@ import {
 import { type ScheduleItem, ScheduleItemSchema } from "./shared.ts";
 import { URI } from "./uris.ts";
 
+// Defensive coercion for the scheduleItems input. We've seen the MCP transport
+// occasionally hand us a JSON-encoded *string* instead of an array — appears
+// to be a pipelining / frame-flushing race on the client side when two tool
+// calls fly back-to-back over the same connection. The payload is still
+// well-formed JSON, just one layer too deep ("[{...}]" instead of [{...}]).
+// Rather than fail with a cryptic "expected array, received string" we parse
+// the string and let Zod validate the inner shape, which gives the LLM a
+// useful per-item error if anything is actually malformed.
+const ScheduleItemsCoerced = z.preprocess((val) => {
+	if (typeof val !== "string") return val;
+	try {
+		return JSON.parse(val);
+	} catch {
+		// Hand the original string through so z.array() fails with its normal
+		// "expected array" message — keeps the surface area predictable instead
+		// of swallowing a malformed payload.
+		return val;
+	}
+}, z.array(ScheduleItemSchema).min(1));
+
 // Detect items whose name is suspiciously close to an existing active
 // schedule_state row, so prescription_create can warn callers BEFORE the
 // upsert silently creates a second timetable row. Three heuristics, OR'd:
@@ -213,12 +233,9 @@ Defaults to status='confirmed' so items appear on the timetable immediately. Eac
 Only fall back to prescription_upload when you truly do not have the text and need vision/OCR to extract it.`,
 		inputSchema: z.object({
 			episodeId: z.string(),
-			scheduleItems: z
-				.array(ScheduleItemSchema)
-				.min(1)
-				.describe(
-					"At least one item. Same shape as prescription_update: name, kind ('medication' | 'meal'), times[] in 'HH:mm' (pet's timezone), optional dosage/route/frequencyHours/durationDays/notes.",
-				),
+			scheduleItems: ScheduleItemsCoerced.describe(
+				"Array of items. At least one. Canonical fields per item: name (string), kind ('medication' | 'meal'), times (string[] HH:mm in pet's timezone). Optional: dosage, route, frequencyHours, durationDays, startsAt, notes. Do NOT use 'drug', 'dose', 'timing', 'scheduleDays', or 'durationWeeks' — those aren't recognized. Pass as a real JSON array; if your transport stringifies it, the server will JSON.parse defensively (no need to encode it yourself).",
+			),
 			sourceNotes: z
 				.string()
 				.optional()
@@ -302,7 +319,7 @@ export const prescriptionUpdateTool = (_env: Env) =>
 			"Update a draft prescription's schedule items, source notes, or confirm it. Confirming makes it appear on the timetable.",
 		inputSchema: z.object({
 			prescriptionId: z.string(),
-			scheduleItems: z.array(ScheduleItemSchema).optional(),
+			scheduleItems: ScheduleItemsCoerced.optional(),
 			status: z.enum(["draft", "confirmed"]).optional(),
 			sourceNotes: z.string().optional(),
 		}),
