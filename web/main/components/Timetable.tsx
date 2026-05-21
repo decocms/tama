@@ -244,25 +244,24 @@ export function Timetable({
 			) : null}
 
 			{/* Order:
-			    1. Later today — the primary action group (anything coming up in
-			       the next 3h is visually highlighted as "Coming up").
-			    2. Overdue — past-due, still unlogged. Action needed, but
-			       secondary to upcoming.
-			    3. Earlier today — given/skipped doses already recorded today.
+			    1. Overdue — past-due, still unlogged. Highest urgency.
+			    2. Later today — upcoming pending entries; anything within 3h
+			       is highlighted as "Coming up".
+			    3. Given — doses already recorded today.
 			    4. Tomorrow — heads-up only, collapsed by default. */}
 			<Group
-				groupKey="later"
-				label="Later today"
-				rows={groups.later}
+				groupKey="overdue"
+				label="Overdue"
+				rows={groups.overdue}
 				now={now}
 				onGive={give}
 				pending={log.isPending}
 				pendingId={pendingId}
 			/>
 			<Group
-				groupKey="overdue"
-				label="Overdue"
-				rows={groups.overdue}
+				groupKey="later"
+				label="Later today"
+				rows={groups.later}
 				now={now}
 				onGive={give}
 				pending={log.isPending}
