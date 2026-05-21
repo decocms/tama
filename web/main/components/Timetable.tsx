@@ -23,9 +23,10 @@ interface PendingRow {
 	kind: "pending";
 	key: string;
 	entry: TimetableEntry;
-	// Marks the single soonest pending entry in the day — gets a "Next" badge
-	// in the rendered row so users can spot it without a dedicated group.
-	isNext?: boolean;
+	// True for pending entries within the COMING_UP_MS window (default 3h).
+	// Multiple rows can be flagged at once — they all get the "Coming up"
+	// highlight + upcoming tint. Replaces the older single-row "Next" badge.
+	comingSoon?: boolean;
 }
 
 interface GivenRow {
@@ -42,6 +43,9 @@ interface GivenRow {
 type Row = PendingRow | GivenRow;
 
 const OVERDUE_GRACE_MS = 12 * 60 * 60 * 1000;
+// "Closer than this is COMING UP" — any pending entry within this many ms of
+// now (and not yet overdue) gets the highlighted tint + "Coming up" badge.
+const COMING_UP_MS = 3 * 60 * 60 * 1000;
 
 interface Groups {
 	overdue: PendingRow[];
@@ -92,19 +96,21 @@ function buildGroups(
 	const tomorrowMs = now + 24 * 60 * 60 * 1000;
 
 	// Three pending buckets: still-pending past-due (Overdue), the rest of
-	// today (Later today), and the next calendar day (Tomorrow — collapsed
-	// by default since it's a heads-up rather than something the user has
-	// to act on now). The soonest entry in Later gets `isNext` and the
-	// NowStrip above also surfaces it with action buttons.
+	// today (Later today — the primary action group, rendered first), and
+	// the next calendar day (Tomorrow — collapsed by default since it's a
+	// heads-up rather than something the user has to act on now). Within
+	// Later today, anything within COMING_UP_MS is flagged comingSoon so
+	// it gets the upcoming tint + "Coming up" badge.
 	for (const e of entries) {
 		if (e.status !== "pending") continue;
 		const t = new Date(e.scheduledAt).getTime();
+		const delta = t - now;
 		const row: PendingRow = {
 			kind: "pending",
 			key: `pending-${e.id}`,
 			entry: e,
+			comingSoon: delta >= 0 && delta <= COMING_UP_MS,
 		};
-		const delta = t - now;
 		if (delta < 0) {
 			if (delta >= -OVERDUE_GRACE_MS) overdue.push(row);
 			// else: silently drop very-stale pending entries
@@ -151,8 +157,6 @@ function buildGroups(
 	earlier.sort(
 		(a, b) => new Date(a.actualAt).getTime() - new Date(b.actualAt).getTime(),
 	);
-
-	if (later[0]) later[0].isNext = true;
 
 	return { overdue, later, earlier, tomorrow };
 }
@@ -239,6 +243,22 @@ export function Timetable({
 				<EmptyCard>Nothing scheduled or given today.</EmptyCard>
 			) : null}
 
+			{/* Order:
+			    1. Later today — the primary action group (anything coming up in
+			       the next 3h is visually highlighted as "Coming up").
+			    2. Overdue — past-due, still unlogged. Action needed, but
+			       secondary to upcoming.
+			    3. Earlier today — given/skipped doses already recorded today.
+			    4. Tomorrow — heads-up only, collapsed by default. */}
+			<Group
+				groupKey="later"
+				label="Later today"
+				rows={groups.later}
+				now={now}
+				onGive={give}
+				pending={log.isPending}
+				pendingId={pendingId}
+			/>
 			<Group
 				groupKey="overdue"
 				label="Overdue"
@@ -250,18 +270,9 @@ export function Timetable({
 			/>
 			<Group
 				groupKey="earlier"
-				label="Earlier today"
+				label="Given"
 				rows={groups.earlier}
 				now={now}
-			/>
-			<Group
-				groupKey="later"
-				label="Later today"
-				rows={groups.later}
-				now={now}
-				onGive={give}
-				pending={log.isPending}
-				pendingId={pendingId}
 			/>
 			<Group
 				groupKey="tomorrow"
@@ -361,7 +372,7 @@ function Group({
 								pending={!!pending}
 								isThisRowPending={pendingId === r.entry.id}
 								overdue={groupKey === "overdue"}
-								isNext={!!r.isNext}
+								comingSoon={!!r.comingSoon}
 							/>
 						) : (
 							<GivenRowView key={r.key} row={r} />
@@ -380,7 +391,7 @@ function PendingRowView({
 	pending,
 	isThisRowPending,
 	overdue,
-	isNext,
+	comingSoon,
 }: {
 	entry: TimetableEntry;
 	now: number;
@@ -388,7 +399,7 @@ function PendingRowView({
 	pending: boolean;
 	isThisRowPending: boolean;
 	overdue: boolean;
-	isNext: boolean;
+	comingSoon: boolean;
 }) {
 	const adjusted = entry.notes?.includes("adjusted");
 	const isMeal = entry.kind === "meal";
@@ -404,26 +415,26 @@ function PendingRowView({
 					: "border-l-[var(--color-accent-med)]/80",
 				overdue
 					? "bg-[var(--color-tint-overdue)]"
-					: isNext
+					: comingSoon
 						? "bg-[var(--color-tint-upcoming)]"
 						: "bg-secondary/45",
 			)}
 		>
 			<TimeTile
 				iso={entry.scheduledAt}
-				tone={overdue ? "overdue" : isNext ? "upcoming" : "default"}
+				tone={overdue ? "overdue" : comingSoon ? "upcoming" : "default"}
 			/>
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-1.5">
 					<span className="font-display font-semibold truncate text-base">
 						{entry.itemName}
 					</span>
-					{isNext ? (
+					{comingSoon ? (
 						<Badge
 							variant="outline"
 							className="text-[9px] py-0 px-1 h-3.5 border-[var(--color-status-upcoming)]/45 text-[var(--color-status-upcoming)] uppercase tracking-wider shrink-0"
 						>
-							Next
+							Coming up
 						</Badge>
 					) : null}
 				</div>
