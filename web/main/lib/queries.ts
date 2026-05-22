@@ -237,8 +237,73 @@ export function useLogDose(episodeId: string) {
 			status?: "given" | "skipped" | "undone";
 			note?: string;
 		}) => callTool(app, "dose_log", { episodeId, ...input }),
-		onSuccess: () =>
-			qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
+		// Optimistic update: the Give click should feel instant. We don't wait
+		// for the round-trip — locally remove the pending timetable entry and
+		// drop in a synthetic dose row, then reconcile when the server reply
+		// arrives (via invalidate on settled). If the call fails, we restore
+		// the pre-mutation snapshot.
+		onMutate: async (input) => {
+			await qc.cancelQueries({ queryKey: keys.episode(episodeId) });
+			const previous = qc.getQueryData<EpisodeDashboardResult>(
+				keys.episode(episodeId),
+			);
+			if (!previous) return { previous };
+			const targetItem = input.itemName.toLowerCase();
+			const targetPlanned = input.plannedAt;
+			const actualAt = input.actualAt ?? new Date().toISOString();
+			const status: "given" | "skipped" | "undone" = input.status ?? "given";
+			// Strip the matching pending entry from the timetable. If plannedAt
+			// is supplied we match exactly on it; otherwise we drop the soonest
+			// pending entry for that item (matches the Give-from-row UX).
+			const newTimetable = (() => {
+				if (targetPlanned) {
+					return previous.timetable.filter(
+						(e) =>
+							!(
+								e.status === "pending" &&
+								e.itemName.toLowerCase() === targetItem &&
+								e.scheduledAt === targetPlanned
+							),
+					);
+				}
+				let dropped = false;
+				return previous.timetable.filter((e) => {
+					if (
+						!dropped &&
+						e.status === "pending" &&
+						e.itemName.toLowerCase() === targetItem
+					) {
+						dropped = true;
+						return false;
+					}
+					return true;
+				});
+			})();
+			const optimisticDose = {
+				id: `temp-${Date.now()}`,
+				episodeId,
+				itemName: input.itemName,
+				kind: input.kind ?? ("medication" as const),
+				plannedAt: input.plannedAt ?? null,
+				actualAt,
+				status,
+				note: input.note ?? null,
+				adjustmentJson: null,
+				createdAt: new Date().toISOString(),
+			};
+			qc.setQueryData<EpisodeDashboardResult>(keys.episode(episodeId), {
+				...previous,
+				timetable: newTimetable,
+				doses: [...previous.doses, optimisticDose],
+			});
+			return { previous };
+		},
+		onError: (_err, _input, ctx) => {
+			if (ctx?.previous) {
+				qc.setQueryData(keys.episode(episodeId), ctx.previous);
+			}
+		},
+		onSettled: () => qc.invalidateQueries({ queryKey: keys.episode(episodeId) }),
 	});
 }
 

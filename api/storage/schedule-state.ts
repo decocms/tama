@@ -260,29 +260,82 @@ export async function ensureScheduleStateForEpisode(
 		}
 	}
 
+	const existingByKey = new Map<string, ScheduleState>();
+	for (const s of existing) existingByKey.set(s.itemKey, s);
+
 	const sorted = [...prescriptions].sort(
 		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
 	);
 	let touched = false;
+	// Build the list of writes synchronously by comparing in-memory, then fire
+	// them in parallel. Two big wins over the previous serial upsert loop:
+	//   • Steady state (the hot path on every episode_get / dose_log) hits zero
+	//     writes when nothing has drifted — previously we issued one no-op
+	//     UPDATE per item, ~7 sequential D1 round-trips for Beto.
+	//   • Real changes still apply but in parallel, not serially.
+	const writes: Promise<unknown>[] = [];
+	const nowIso = new Date().toISOString();
 	for (const rx of sorted) {
 		if (rx.status !== "confirmed") continue;
 		for (const item of parseScheduleItems(rx)) {
 			const key = itemKey(item.name);
-			await upsertScheduleState(env, {
-				episodeId,
-				item,
-				prescriptionId: rx.id,
-				timeZone,
-				latestDoseAt: latestByKey.get(key) ?? null,
-			});
-			if (!existingKeys.has(key)) touched = true;
+			const existingRow = existingByKey.get(key);
+			const intervalHours = deriveIntervalHours(item);
+			if (existingRow) {
+				// Only issue an UPDATE if any tracked field actually drifted —
+				// upsert was previously unconditional.
+				const needs =
+					existingRow.displayName !== item.name ||
+					existingRow.kind !== item.kind ||
+					existingRow.dosage !== (item.dosage ?? null) ||
+					existingRow.route !== (item.route ?? null) ||
+					existingRow.notes !== (item.notes ?? null) ||
+					existingRow.intervalHours !== intervalHours ||
+					existingRow.durationDays !== (item.durationDays ?? null) ||
+					existingRow.prescriptionId !== rx.id ||
+					!existingRow.active;
+				if (needs) {
+					writes.push(
+						db(env)
+							.update(scheduleState)
+							.set({
+								displayName: item.name,
+								kind: item.kind,
+								dosage: item.dosage ?? null,
+								route: item.route ?? null,
+								notes: item.notes ?? null,
+								intervalHours,
+								durationDays: item.durationDays ?? null,
+								prescriptionId: rx.id,
+								active: true,
+								updatedAt: nowIso,
+							})
+							.where(eq(scheduleState.id, existingRow.id)),
+					);
+					touched = true;
+				}
+			} else {
+				writes.push(
+					upsertScheduleState(env, {
+						episodeId,
+						item,
+						prescriptionId: rx.id,
+						timeZone,
+						latestDoseAt: latestByKey.get(key) ?? null,
+					}),
+				);
+				touched = true;
+			}
 		}
 	}
+	if (writes.length > 0) {
+		await Promise.all(writes);
+	}
+	void existingKeys; // retained above for clarity in the touched logic
 
 	// Auto-expire: anything whose endsAt has passed gets active=false on the
 	// next read. Cheaper to handle here (lazy) than to schedule a separate
 	// cleanup cron — every episode_get / timetable_get already calls this.
-	const nowIso = new Date().toISOString();
 	const refreshed = touched || existing.length === 0
 		? await listScheduleStates(env, episodeId)
 		: existing;
@@ -290,12 +343,14 @@ export async function ensureScheduleStateForEpisode(
 		(s) => s.active && s.endsAt && s.endsAt <= nowIso,
 	);
 	if (toExpire.length > 0) {
-		for (const s of toExpire) {
-			await db(env)
-				.update(scheduleState)
-				.set({ active: false, updatedAt: nowIso })
-				.where(eq(scheduleState.id, s.id));
-		}
+		await Promise.all(
+			toExpire.map((s) =>
+				db(env)
+					.update(scheduleState)
+					.set({ active: false, updatedAt: nowIso })
+					.where(eq(scheduleState.id, s.id)),
+			),
+		);
 		return listScheduleStates(env, episodeId);
 	}
 	if (!touched && existing.length > 0) return existing;
