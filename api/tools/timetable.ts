@@ -1,5 +1,8 @@
 import { createTool } from "@decocms/runtime/tools";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { db } from "../db/client.ts";
+import { scheduleState } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { broadcastDoseLogged } from "../notifications/broadcasts.ts";
 import {
@@ -15,10 +18,10 @@ import {
 	parseScheduleItems,
 } from "../storage/prescriptions.ts";
 import {
-	advanceAnchorAfterDose,
 	deleteScheduleState,
 	endScheduleStateItem,
 	ensureScheduleStateForEpisode,
+	getScheduleState,
 	itemKey,
 	listScheduleStates,
 	setAnchor,
@@ -110,44 +113,101 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
+			const key = itemKey(context.itemName);
 
-			const ep = await getEpisode(env, context.episodeId);
+			// Fast path: episode + the canonical schedule_state row in one
+			// parallel batch. The schedule_state row carries everything we need
+			// (display_name, kind, interval_hours) — no need to round-trip
+			// through prescriptions or call ensureScheduleStateForEpisode in
+			// the happy path. listPrescriptions / getPet are only fetched on
+			// the slow paths below (missing schedule_state, or wall-clock
+			// timestamp inputs).
+			const [ep, ssRow] = await Promise.all([
+				getEpisode(env, context.episodeId),
+				getScheduleState(env, context.episodeId, key),
+			]);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
-			const tz = pet?.timezone ?? "UTC";
 
-			const rxRows = await listPrescriptions(env, context.episodeId);
-			const knownItems = new Map<string, string>();
-			for (const r of rxRows) {
-				if (r.status !== "confirmed") continue;
-				for (const it of parseScheduleItems(r)) {
-					knownItems.set(it.name.toLowerCase(), it.name);
+			let canonical: string;
+			let canonicalKind: "medication" | "meal";
+			let intervalHours: number;
+			let petTimezone: string | null = null;
+
+			if (ssRow) {
+				canonical = ssRow.displayName;
+				canonicalKind = ssRow.kind as "medication" | "meal";
+				intervalHours = ssRow.intervalHours;
+			} else {
+				// Slow path: schedule_state missing — could be a stale episode
+				// that pre-dates the lazy backfill or an item the user is
+				// logging by free-form name. Reconcile from prescriptions and
+				// retry once.
+				const [pet, rxRows] = await Promise.all([
+					getPet(env, ep.petId),
+					listPrescriptions(env, context.episodeId),
+				]);
+				petTimezone = pet?.timezone ?? "UTC";
+				const knownItems = new Map<
+					string,
+					{ name: string; kind: "medication" | "meal" }
+				>();
+				for (const r of rxRows) {
+					if (r.status !== "confirmed") continue;
+					for (const it of parseScheduleItems(r)) {
+						knownItems.set(it.name.toLowerCase(), {
+							name: it.name,
+							kind: it.kind,
+						});
+					}
 				}
+				const found = knownItems.get(context.itemName.toLowerCase());
+				if (!found) {
+					const known =
+						Array.from(knownItems.values())
+							.map((k) => k.name)
+							.join(", ") || "(none)";
+					throw new Error(
+						`Unknown item "${context.itemName}" — not in any confirmed prescription for this episode. Known items: ${known}.`,
+					);
+				}
+				await ensureScheduleStateForEpisode(env, ep.id, rxRows, petTimezone);
+				const refreshed = await getScheduleState(env, ep.id, key);
+				if (!refreshed)
+					throw new Error(
+						`Failed to materialize schedule state for "${found.name}"`,
+					);
+				canonical = found.name;
+				canonicalKind = found.kind;
+				intervalHours = refreshed.intervalHours;
 			}
-			const canonical = knownItems.get(context.itemName.toLowerCase());
-			if (!canonical) {
-				const known = Array.from(knownItems.values()).join(", ") || "(none)";
-				throw new Error(
-					`Unknown item "${context.itemName}" — not in any confirmed prescription for this episode. Known items: ${known}.`,
-				);
+
+			// Wall-clock timestamp inputs (plannedLocal / actualLocal) require
+			// the pet's timezone. The browser Give-button path never uses these,
+			// so most calls skip the pet read entirely.
+			let plannedAt = context.plannedAt;
+			let actualAt = context.actualAt;
+			if (context.plannedLocal || context.actualLocal) {
+				if (petTimezone === null) {
+					const pet = await getPet(env, ep.petId);
+					petTimezone = pet?.timezone ?? "UTC";
+				}
+				if (context.plannedLocal)
+					plannedAt = wallClockToIso(context.plannedLocal, petTimezone);
+				if (context.actualLocal)
+					actualAt = wallClockToIso(context.actualLocal, petTimezone);
 			}
 
-			// Make sure schedule_state exists so we can advance the anchor.
-			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
-			const key = itemKey(canonical);
-
-			const plannedAt = context.plannedLocal
-				? wallClockToIso(context.plannedLocal, tz)
-				: context.plannedAt;
-			const actualAt = context.actualLocal
-				? wallClockToIso(context.actualLocal, tz)
-				: context.actualAt;
-
+			// Undone path: tombstone the most-recent matching dose, do NOT
+			// advance the anchor or broadcast (it's a correction, not a fresh
+			// administration).
 			if (context.status === "undone") {
 				const reference = plannedAt ?? actualAt;
-				const match = await findDoseForItem(env, context.episodeId, canonical, {
-					referenceIso: reference,
-				});
+				const match = await findDoseForItem(
+					env,
+					context.episodeId,
+					canonical,
+					{ referenceIso: reference },
+				);
 				if (match) {
 					const updated = await updateDose(env, match.id, {
 						status: "undone",
@@ -160,31 +220,50 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 				}
 			}
 
-			const dose = await logDose(env, {
-				episodeId: context.episodeId,
-				itemName: canonical,
-				kind: context.kind,
-				plannedAt,
-				actualAt,
-				status: context.status,
-				note: context.note,
-			});
+			// Normal given/skipped path: log the dose AND advance the anchor in
+			// parallel. Previously this was two sequential round-trips (logDose
+			// then getScheduleState + UPDATE). Now: INSERT + UPDATE run together.
+			const actualAtFinal = actualAt ?? new Date().toISOString();
+			const newAnchorIso = new Date(
+				new Date(actualAtFinal).getTime() + intervalHours * 60 * 60 * 1000,
+			).toISOString();
+			const nowIso = new Date().toISOString();
+			const advancesAnchor =
+				context.status === "given" || context.status === "skipped";
 
-			// Advance the anchor on real administrations. The cascade is what
-			// the user expects: give at 18:13, next dose is 18:13 + interval,
-			// not the original 00:00 slot.
-			if (context.status === "given" || context.status === "skipped") {
-				await advanceAnchorAfterDose(env, ep.id, key, dose.actualAt);
-				// Broadcast to every subscribed device in the BACKGROUND. We use
-				// ctx.waitUntil so the tool returns the instant the DB write is
-				// committed (~50–150ms) instead of blocking 1–3s on push services
-				// — the household sees the dose recorded with no perceptible lag,
-				// and the notifications still arrive within a second or two.
+			const [dose] = await Promise.all([
+				logDose(env, {
+					episodeId: context.episodeId,
+					itemName: canonical,
+					kind: context.kind ?? canonicalKind,
+					plannedAt,
+					actualAt,
+					status: context.status,
+					note: context.note,
+				}),
+				advancesAnchor
+					? db(env)
+							.update(scheduleState)
+							.set({ anchorAt: newAnchorIso, updatedAt: nowIso })
+							.where(
+								and(
+									eq(scheduleState.episodeId, context.episodeId),
+									eq(scheduleState.itemKey, key),
+								),
+							)
+					: Promise.resolve(),
+			]);
+
+			if (advancesAnchor) {
+				// Broadcast to every subscribed device in the BACKGROUND via
+				// ctx.waitUntil so the tool returns the moment the writes commit
+				// rather than blocking 1–3s on push services.
+				const broadcastStatus = context.status as "given" | "skipped";
 				runtimeContext.ctx.waitUntil(
 					broadcastDoseLogged(env, {
 						episodeId: ep.id,
 						itemName: canonical,
-						status: context.status,
+						status: broadcastStatus,
 						actualAt: dose.actualAt,
 						note: context.note ?? null,
 					}),

@@ -239,29 +239,53 @@ export async function syncPrescriptionToScheduleState(
 // item so the anchor lands on `last + interval` instead of restarting from
 // the prescription's first-time-of-day (which would mark already-given
 // slots as overdue after a deploy).
+//
+// Both the schedules list and the doses list can be passed in by callers
+// that have already fetched them (episode_get does this) — saves two D1
+// round-trips per read. The doses lookup is also lazy: we only fetch it
+// if at least one new item actually needs to be inserted (i.e. there's a
+// brand-new key in the prescriptions). Steady state: 1 read max, 0 writes.
 export async function ensureScheduleStateForEpisode(
 	env: Env,
 	episodeId: string,
 	prescriptions: Prescription[],
 	timeZone: string,
+	preloaded?: { schedules?: ScheduleState[]; doses?: Dose[] },
 ): Promise<ScheduleState[]> {
-	const existing = await listScheduleStates(env, episodeId);
-	const existingKeys = new Set(existing.map((s) => s.itemKey));
-
-	// Pre-compute latest dose per item for backfill purposes only.
-	const latestByKey = new Map<string, string>();
-	const doses = await listDoses(env, episodeId);
-	for (const d of doses) {
-		if (d.status === "undone") continue;
-		const k = itemKey(d.itemName);
-		const prev = latestByKey.get(k);
-		if (!prev || new Date(d.actualAt) > new Date(prev)) {
-			latestByKey.set(k, d.actualAt);
-		}
-	}
-
+	const existing =
+		preloaded?.schedules ?? (await listScheduleStates(env, episodeId));
 	const existingByKey = new Map<string, ScheduleState>();
 	for (const s of existing) existingByKey.set(s.itemKey, s);
+
+	// Look ahead at the prescriptions: are there any items whose key doesn't
+	// already exist in schedule_state? Only then do we need the doses table
+	// (to anchor the new row at last-dose + interval rather than today's
+	// first-time-of-day, which would mark already-given slots as overdue).
+	let hasNewItem = false;
+	for (const rx of prescriptions) {
+		if (rx.status !== "confirmed") continue;
+		for (const item of parseScheduleItems(rx)) {
+			if (!existingByKey.has(itemKey(item.name))) {
+				hasNewItem = true;
+				break;
+			}
+		}
+		if (hasNewItem) break;
+	}
+
+	const latestByKey = new Map<string, string>();
+	if (hasNewItem) {
+		const doses =
+			preloaded?.doses ?? (await listDoses(env, episodeId));
+		for (const d of doses) {
+			if (d.status === "undone") continue;
+			const k = itemKey(d.itemName);
+			const prev = latestByKey.get(k);
+			if (!prev || new Date(d.actualAt) > new Date(prev)) {
+				latestByKey.set(k, d.actualAt);
+			}
+		}
+	}
 
 	const sorted = [...prescriptions].sort(
 		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -331,7 +355,6 @@ export async function ensureScheduleStateForEpisode(
 	if (writes.length > 0) {
 		await Promise.all(writes);
 	}
-	void existingKeys; // retained above for clarity in the touched logic
 
 	// Auto-expire: anything whose endsAt has passed gets active=false on the
 	// next read. Cheaper to handle here (lazy) than to schedule a separate

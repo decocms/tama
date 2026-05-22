@@ -17,7 +17,10 @@ import {
 	listPrescriptions,
 	parseScheduleItems,
 } from "../storage/prescriptions.ts";
-import { ensureScheduleStateForEpisode } from "../storage/schedule-state.ts";
+import {
+	ensureScheduleStateForEpisode,
+	listScheduleStates,
+} from "../storage/schedule-state.ts";
 import {
 	deriveTimetable,
 	startOfDayInZone,
@@ -140,7 +143,19 @@ export const episodeGetTool = (_env: Env) =>
 		annotations: { readOnlyHint: true },
 		execute: async ({ context, runtimeContext }) => {
 			const e = runtimeContext.env as Env;
-			const ep = await getEpisode(e, context.episodeId);
+			// All independent reads in one batch — episode, the four lists, and
+			// schedule_states up front. getPet is conditional: skip it entirely
+			// when the caller already supplied a timezone (every browser call
+			// does, since the React client passes Intl.DateTimeFormat().tz). MCP
+			// callers that omit it fall back to a pet lookup.
+			const [ep, rxRows, doseRows, noteRows, scheduleStatesRaw] =
+				await Promise.all([
+					getEpisode(e, context.episodeId),
+					listPrescriptions(e, context.episodeId),
+					listDoses(e, context.episodeId),
+					listNotes(e, context.episodeId),
+					listScheduleStates(e, context.episodeId),
+				]);
 			if (!ep)
 				return {
 					episode: null,
@@ -151,8 +166,11 @@ export const episodeGetTool = (_env: Env) =>
 					scheduleStates: [],
 				};
 
-			const pet = await getPet(e, ep.petId);
-			const tz = pet?.timezone ?? context.timeZone ?? "UTC";
+			let tz = context.timeZone;
+			if (!tz) {
+				const pet = await getPet(e, ep.petId);
+				tz = pet?.timezone ?? "UTC";
+			}
 
 			const window = context.windowHours ?? 48;
 			// Anchor the window to "midnight today in the pet's tz" so the
@@ -160,15 +178,15 @@ export const episodeGetTool = (_env: Env) =>
 			const from = startOfDayInZone(new Date(), tz);
 			const to = new Date(from.getTime() + window * 60 * 60 * 1000);
 
-			const [rxRows, doseRows, noteRows] = await Promise.all([
-				listPrescriptions(e, ep.id),
-				listDoses(e, ep.id),
-				listNotes(e, ep.id),
-			]);
-
-			// Lazy-backfill: ensures schedule_state rows exist for every confirmed
-			// rx item (idempotent — existing rows keep their drifted anchors).
-			const states = await ensureScheduleStateForEpisode(e, ep.id, rxRows, tz);
+			// Lazy-backfill: existing rows + doses are already in hand, so no
+			// additional reads inside ensure unless a brand-new item drops in.
+			const states = await ensureScheduleStateForEpisode(
+				e,
+				ep.id,
+				rxRows,
+				tz,
+				{ schedules: scheduleStatesRaw, doses: doseRows },
+			);
 
 			const timetable = deriveTimetable({
 				scheduleStates: states,
