@@ -42,26 +42,26 @@ interface Props {
 
 type WhenMode = "now" | "past";
 
-function todayHHmm(): string {
-	const d = new Date();
-	const h = String(d.getHours()).padStart(2, "0");
-	const m = String(d.getMinutes()).padStart(2, "0");
-	return `${h}:${m}`;
+// "YYYY-MM-DDTHH:mm" in LOCAL time for the <input type="datetime-local"> value.
+// The browser interprets it as local, so toISOString() then converts to UTC
+// cleanly — no day-rollover heuristics, no timezone math we have to do
+// ourselves. Eliminates the entire class of "picked 01:04, got yesterday's
+// 01:04" bugs the HH:mm-only picker had.
+function nowLocalDateTime(offsetMinutes = 0): string {
+	const d = new Date(Date.now() + offsetMinutes * 60_000);
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+		d.getDate(),
+	)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Build today's date + an HH:mm in the local timezone, return ISO. If the
-// resulting time would be in the future, roll back a day — "Given at 23:50"
-// at 00:10 means yesterday, not tonight.
-function localHHmmToIso(hhmm: string): string {
-	const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
-	if (!match) return new Date().toISOString();
-	const hh = Number(match[1]);
-	const mm = Number(match[2]);
-	const d = new Date();
-	d.setHours(hh, mm, 0, 0);
-	if (d.getTime() > Date.now() + 60_000) {
-		d.setDate(d.getDate() - 1);
-	}
+// "2026-05-29T01:04" (local) → ISO UTC. Returns null if the value is empty
+// or unparsable so the caller can surface a precise error rather than
+// silently logging at "now".
+function localDateTimeToIso(value: string): string | null {
+	if (!value) return null;
+	const d = new Date(value);
+	if (Number.isNaN(d.getTime())) return null;
 	return d.toISOString();
 }
 
@@ -84,7 +84,9 @@ export function LogDoseDialog({
 		// the whole point of the button. Ad-hoc opens with "now" as default.
 		isFixedItem ? "past" : "now",
 	);
-	const [pastTime, setPastTime] = useState(todayHHmm);
+	const [pastDateTime, setPastDateTime] = useState(() =>
+		nowLocalDateTime(-30),
+	);
 	const [status, setStatus] = useState<"given" | "skipped">("given");
 	const [note, setNote] = useState("");
 
@@ -95,7 +97,9 @@ export function LogDoseDialog({
 		setItemName(defaultItem?.name ?? "");
 		setKind(defaultItem?.kind ?? "medication");
 		setWhenMode(isFixedItem ? "past" : "now");
-		setPastTime(todayHHmm());
+		// Default to 30 min ago — a reasonable "I just gave it" pre-fill that
+		// the user can adjust either direction.
+		setPastDateTime(nowLocalDateTime(-30));
 		setStatus("given");
 		setNote("");
 	}, [open, defaultItem, isFixedItem]);
@@ -119,10 +123,17 @@ export function LogDoseDialog({
 			toast.error("Pick or type an item name");
 			return;
 		}
-		const actualAt =
-			whenMode === "now"
-				? new Date().toISOString()
-				: localHHmmToIso(pastTime);
+		let actualAt: string;
+		if (whenMode === "now") {
+			actualAt = new Date().toISOString();
+		} else {
+			const parsed = localDateTimeToIso(pastDateTime);
+			if (!parsed) {
+				toast.error("Pick a valid date and time");
+				return;
+			}
+			actualAt = parsed;
+		}
 		log.mutate(
 			{ itemName: trimmed, kind, actualAt, status, note: note || undefined },
 			{
@@ -224,16 +235,29 @@ export function LogDoseDialog({
 							</label>
 						</RadioGroup>
 						{whenMode === "past" ? (
-							<div className="pt-1">
-								<Input
-									type="time"
-									value={pastTime}
-									onChange={(e) => setPastTime(e.target.value)}
-									className="w-32"
-								/>
-								<p className="text-[11px] text-muted-foreground mt-1">
-									Today, in your local time. If the time is later than now,
-									it's interpreted as yesterday.
+							<div className="pt-1 space-y-1">
+								<div className="flex items-center gap-2">
+									<Input
+										type="datetime-local"
+										value={pastDateTime}
+										onChange={(e) => setPastDateTime(e.target.value)}
+										max={nowLocalDateTime(0)}
+										className="w-auto flex-1"
+									/>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										onClick={() => setPastDateTime(nowLocalDateTime(0))}
+										className="h-9 shrink-0"
+									>
+										Now
+									</Button>
+								</div>
+								<p className="text-[11px] text-muted-foreground">
+									In your local time (
+									{Intl.DateTimeFormat().resolvedOptions().timeZone}
+									).
 								</p>
 							</div>
 						) : null}
