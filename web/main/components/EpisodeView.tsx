@@ -74,6 +74,7 @@ export function EpisodeView({ episodeId }: { episodeId: string }) {
 					episodeId={episodeId}
 					entries={data.timetable}
 					doses={data.doses ?? []}
+					scheduleStates={data.scheduleStates ?? []}
 				/>
 			</Section>
 

@@ -3,6 +3,7 @@ import {
 	Check,
 	ChevronDown,
 	ChevronRight,
+	Clock,
 	Loader2,
 	Pill,
 	Utensils,
@@ -14,8 +15,9 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { formatTime, relativeTime } from "@/lib/format.ts";
 import { cn } from "@/lib/utils.ts";
-import type { Dose, TimetableEntry } from "@/types/api.ts";
+import type { Dose, ScheduleState, TimetableEntry } from "@/types/api.ts";
 import { useLogDose } from "../lib/queries.ts";
+import { LogDoseDialog } from "./LogDoseDialog.tsx";
 
 type GroupKey = "overdue" | "later" | "earlier" | "tomorrow";
 
@@ -182,16 +184,24 @@ export function Timetable({
 	episodeId,
 	entries,
 	doses,
+	scheduleStates,
 }: {
 	episodeId: string;
 	entries: TimetableEntry[];
 	doses: Dose[];
+	scheduleStates: ScheduleState[];
 }) {
 	const log = useLogDose(episodeId);
 	const [now, setNow] = useState(() => Date.now());
 	// Per-row pending tracking so clicking Give on one row only spins that
 	// button, not every Give in the list (mutation hook is shared).
 	const [pendingId, setPendingId] = useState<string | null>(null);
+	// Either null (closed) or the dialog's default item. defaultItem === null
+	// for the ad-hoc "Log dose" entry point; an object pre-fills item + kind
+	// for the "Given at" per-row button.
+	const [dialogItem, setDialogItem] = useState<
+		{ name: string; kind: "medication" | "meal" } | null | "ad-hoc"
+	>(null);
 
 	useEffect(() => {
 		const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -243,6 +253,29 @@ export function Timetable({
 				<EmptyCard>Nothing scheduled or given today.</EmptyCard>
 			) : null}
 
+			<div>
+				<button
+					type="button"
+					onClick={() => setDialogItem("ad-hoc")}
+					className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 px-1 py-1"
+				>
+					<Clock className="w-3.5 h-3.5" />
+					Log a one-off dose
+				</button>
+			</div>
+
+			<LogDoseDialog
+				open={dialogItem !== null}
+				onOpenChange={(o) => {
+					if (!o) setDialogItem(null);
+				}}
+				episodeId={episodeId}
+				scheduleStates={scheduleStates}
+				defaultItem={
+					dialogItem && dialogItem !== "ad-hoc" ? dialogItem : null
+				}
+			/>
+
 			{/* Order:
 			    1. Overdue — past-due, still unlogged. Highest urgency.
 			    2. Later today — upcoming pending entries; anything within 3h
@@ -255,6 +288,9 @@ export function Timetable({
 				rows={groups.overdue}
 				now={now}
 				onGive={give}
+				onGivenAt={(e) =>
+					setDialogItem({ name: e.itemName, kind: e.kind })
+				}
 				pending={log.isPending}
 				pendingId={pendingId}
 			/>
@@ -264,6 +300,9 @@ export function Timetable({
 				rows={groups.later}
 				now={now}
 				onGive={give}
+				onGivenAt={(e) =>
+					setDialogItem({ name: e.itemName, kind: e.kind })
+				}
 				pending={log.isPending}
 				pendingId={pendingId}
 			/>
@@ -279,6 +318,9 @@ export function Timetable({
 				rows={groups.tomorrow}
 				now={now}
 				onGive={give}
+				onGivenAt={(e) =>
+					setDialogItem({ name: e.itemName, kind: e.kind })
+				}
 				pending={log.isPending}
 				pendingId={pendingId}
 				collapsedByDefault
@@ -314,6 +356,7 @@ function Group({
 	rows,
 	now,
 	onGive,
+	onGivenAt,
 	pending,
 	pendingId,
 	collapsedByDefault,
@@ -323,6 +366,7 @@ function Group({
 	rows: Row[];
 	now: number;
 	onGive?: (e: TimetableEntry) => void;
+	onGivenAt?: (e: TimetableEntry) => void;
 	pending?: boolean;
 	pendingId?: string | null;
 	collapsedByDefault?: boolean;
@@ -368,6 +412,7 @@ function Group({
 								entry={r.entry}
 								now={now}
 								onGive={() => onGive?.(r.entry)}
+								onGivenAt={() => onGivenAt?.(r.entry)}
 								pending={!!pending}
 								isThisRowPending={pendingId === r.entry.id}
 								overdue={groupKey === "overdue"}
@@ -387,6 +432,7 @@ function PendingRowView({
 	entry,
 	now,
 	onGive,
+	onGivenAt,
 	pending,
 	isThisRowPending,
 	overdue,
@@ -395,6 +441,7 @@ function PendingRowView({
 	entry: TimetableEntry;
 	now: number;
 	onGive: () => void;
+	onGivenAt: () => void;
 	pending: boolean;
 	isThisRowPending: boolean;
 	overdue: boolean;
@@ -456,19 +503,34 @@ function PendingRowView({
 					) : null}
 				</div>
 			</div>
-			<Button
-				size="sm"
-				onClick={onGive}
-				disabled={pending}
-				className="shrink-0 h-9 px-3.5 font-semibold"
-			>
-				{isThisRowPending ? (
-					<Loader2 className="w-3.5 h-3.5 animate-spin" />
-				) : (
-					<Check className="w-3.5 h-3.5" />
-				)}
-				{isThisRowPending ? "Logging…" : "Give"}
-			</Button>
+			<div className="flex items-center gap-1 shrink-0">
+				<Button
+					size="sm"
+					onClick={onGive}
+					disabled={pending}
+					className="h-9 px-3 font-semibold"
+					aria-label="Give now"
+					title="Give now"
+				>
+					{isThisRowPending ? (
+						<Loader2 className="w-3.5 h-3.5 animate-spin" />
+					) : (
+						<Check className="w-3.5 h-3.5" />
+					)}
+					{isThisRowPending ? "…" : "Now"}
+				</Button>
+				<Button
+					size="sm"
+					variant="outline"
+					onClick={onGivenAt}
+					disabled={pending}
+					className="h-9 px-2"
+					aria-label="Given at — pick time"
+					title="Given at — pick time"
+				>
+					<Clock className="w-3.5 h-3.5" />
+				</Button>
+			</div>
 		</li>
 	);
 }

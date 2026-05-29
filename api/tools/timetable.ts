@@ -92,7 +92,10 @@ Behavior:
 - status=skipped: inserts a skipped row AND advances the anchor by one full interval (jump over the missed slot).
 - status=undone: tombstones the most recent matching prior dose (case-insensitive itemName, near plannedLocal/plannedAt within ±2h). Does NOT rewind the anchor — use timetable_snooze or dose_update if you need the schedule to move back.
 
-Item validation: itemName MUST match an item in a confirmed prescription for this episode.
+Item matching:
+- Scheduled item (recurring on the timetable): pass its existing display_name. Anchor advances.
+- One-off / ad-hoc dose ("gave Luftal for gas", not part of any prescription): pass the item name as-is. The dose is recorded normally with the supplied name + kind, but no anchor is advanced (nothing recurring to update). Use this freely for unscheduled meds and meals.
+
 Times: when the user mentions a time WITHOUT a timezone, use plannedLocal/actualLocal in "HH:mm" or "YYYY-MM-DD HH:mm" — the server resolves to UTC via the pet's timezone.
 
 For correcting a previously-logged dose's time, use dose_update. For postponing a future dose without recording an administration, use timetable_snooze.`,
@@ -133,15 +136,22 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 			let intervalHours: number;
 			let petTimezone: string | null = null;
 
+			// intervalHours is null for ad-hoc / one-off doses where we have no
+			// schedule_state row to advance. The dose is still recorded normally.
+			let intervalHoursOrNull: number | null = null;
+
 			if (ssRow) {
 				canonical = ssRow.displayName;
 				canonicalKind = ssRow.kind as "medication" | "meal";
-				intervalHours = ssRow.intervalHours;
+				intervalHoursOrNull = ssRow.intervalHours;
 			} else {
-				// Slow path: schedule_state missing — could be a stale episode
-				// that pre-dates the lazy backfill or an item the user is
-				// logging by free-form name. Reconcile from prescriptions and
-				// retry once.
+				// Slow path: no schedule_state row. Could be (a) a stale episode
+				// pre-dating the lazy backfill, (b) the LLM passed the item name
+				// in a variant that didn't normalize the same way, or (c) a
+				// genuine ad-hoc dose the user wants to record ("gave Luftal
+				// for gas"). Try to reconcile from confirmed prescriptions
+				// first; if still no match, accept it as a one-off log with
+				// the user-supplied name + kind and skip anchor advancement.
 				const [pet, rxRows] = await Promise.all([
 					getPet(env, ep.petId),
 					listPrescriptions(env, context.episodeId),
@@ -161,24 +171,20 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 					}
 				}
 				const found = knownItems.get(context.itemName.toLowerCase());
-				if (!found) {
-					const known =
-						Array.from(knownItems.values())
-							.map((k) => k.name)
-							.join(", ") || "(none)";
-					throw new Error(
-						`Unknown item "${context.itemName}" — not in any confirmed prescription for this episode. Known items: ${known}.`,
-					);
+				if (found) {
+					await ensureScheduleStateForEpisode(env, ep.id, rxRows, petTimezone);
+					const refreshed = await getScheduleState(env, ep.id, key);
+					canonical = found.name;
+					canonicalKind = found.kind;
+					intervalHoursOrNull = refreshed?.intervalHours ?? null;
+				} else {
+					// Ad-hoc: log it under the name the user gave, without
+					// touching schedule_state. Preserves the dose in history
+					// but doesn't put it on the recurring timetable.
+					canonical = context.itemName;
+					canonicalKind = context.kind ?? "medication";
+					intervalHoursOrNull = null;
 				}
-				await ensureScheduleStateForEpisode(env, ep.id, rxRows, petTimezone);
-				const refreshed = await getScheduleState(env, ep.id, key);
-				if (!refreshed)
-					throw new Error(
-						`Failed to materialize schedule state for "${found.name}"`,
-					);
-				canonical = found.name;
-				canonicalKind = found.kind;
-				intervalHours = refreshed.intervalHours;
 			}
 
 			// Wall-clock timestamp inputs (plannedLocal / actualLocal) require
@@ -220,16 +226,21 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 				}
 			}
 
-			// Normal given/skipped path: log the dose AND advance the anchor in
-			// parallel. Previously this was two sequential round-trips (logDose
-			// then getScheduleState + UPDATE). Now: INSERT + UPDATE run together.
+			// Normal given/skipped path: log the dose AND, when we have a
+			// schedule_state row to update, advance its anchor — in parallel.
+			// Ad-hoc doses (intervalHoursOrNull === null) just log; nothing to
+			// advance.
 			const actualAtFinal = actualAt ?? new Date().toISOString();
-			const newAnchorIso = new Date(
-				new Date(actualAtFinal).getTime() + intervalHours * 60 * 60 * 1000,
-			).toISOString();
 			const nowIso = new Date().toISOString();
 			const advancesAnchor =
-				context.status === "given" || context.status === "skipped";
+				(context.status === "given" || context.status === "skipped") &&
+				intervalHoursOrNull !== null;
+			const newAnchorIso = advancesAnchor
+				? new Date(
+						new Date(actualAtFinal).getTime() +
+							(intervalHoursOrNull as number) * 60 * 60 * 1000,
+					).toISOString()
+				: null;
 
 			const [dose] = await Promise.all([
 				logDose(env, {
@@ -241,7 +252,7 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 					status: context.status,
 					note: context.note,
 				}),
-				advancesAnchor
+				advancesAnchor && newAnchorIso
 					? db(env)
 							.update(scheduleState)
 							.set({ anchorAt: newAnchorIso, updatedAt: nowIso })
@@ -254,10 +265,10 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 					: Promise.resolve(),
 			]);
 
-			if (advancesAnchor) {
-				// Broadcast to every subscribed device in the BACKGROUND via
-				// ctx.waitUntil so the tool returns the moment the writes commit
-				// rather than blocking 1–3s on push services.
+			// Broadcast on every given/skipped, including ad-hoc one-offs — the
+			// household still wants to know "Luftal given at 14:30". Skipped
+			// undone (handled above) doesn't reach here.
+			if (context.status === "given" || context.status === "skipped") {
 				const broadcastStatus = context.status as "given" | "skipped";
 				runtimeContext.ctx.waitUntil(
 					broadcastDoseLogged(env, {
