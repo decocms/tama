@@ -4,6 +4,10 @@ import type {
 	Episode,
 	EpisodeDashboardResult,
 	EpisodeInsightsResult,
+	Exam,
+	ExamMetric,
+	ExamMetricInput,
+	ExamMetricSeriesPoint,
 	Pet,
 	Prescription,
 	Recording,
@@ -20,6 +24,11 @@ export const keys = {
 	timetable: (id: string) => ["timetable", id] as const,
 	prescriptions: (epId: string) => ["prescriptions", epId] as const,
 	insights: (epId: string) => ["episode-insights", epId] as const,
+	examsByPet: (petId: string) => ["exams", "pet", petId] as const,
+	examsByEpisode: (epId: string) => ["exams", "episode", epId] as const,
+	exam: (examId: string) => ["exam", examId] as const,
+	metricSeries: (petId: string, keysCsv: string) =>
+		["metric-series", petId, keysCsv] as const,
 };
 
 export function usePets() {
@@ -576,5 +585,142 @@ export function useApplyRecording() {
 			qc.invalidateQueries({ queryKey: keys.episode(rec.episodeId) });
 			qc.invalidateQueries({ queryKey: keys.pets });
 		},
+	});
+}
+
+// ---------- Exams ----------
+
+export function useExamsForPet(petId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.examsByPet(petId ?? ""),
+		queryFn: () =>
+			callTool<{ exams: Exam[] }>(app, "exam_list", { petId }).then(
+				(r) => r.exams,
+			),
+		enabled: !!app && !!petId,
+	});
+}
+
+export function useExamsForEpisode(episodeId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.examsByEpisode(episodeId ?? ""),
+		queryFn: () =>
+			callTool<{ exams: Exam[] }>(app, "exam_list", { episodeId }).then(
+				(r) => r.exams,
+			),
+		enabled: !!app && !!episodeId,
+	});
+}
+
+export function useExam(examId: string | undefined) {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.exam(examId ?? ""),
+		queryFn: () =>
+			callTool<{ exam: Exam | null; metrics: ExamMetric[] }>(app, "exam_get", {
+				examId,
+			}),
+		enabled: !!app && !!examId,
+	});
+}
+
+export function useMetricSeries(petId: string | undefined, keys_: string[]) {
+	const app = useMcpApp();
+	const keysCsv = [...keys_].sort().join(",");
+	return useQuery({
+		queryKey: keys.metricSeries(petId ?? "", keysCsv),
+		queryFn: () =>
+			callTool<{ series: ExamMetricSeriesPoint[] }>(
+				app,
+				"exam_metric_series",
+				{ petId, canonicalKeys: keys_.length > 0 ? keys_ : undefined },
+			).then((r) => r.series),
+		enabled: !!app && !!petId,
+	});
+}
+
+function invalidateAfterExamMutation(
+	qc: ReturnType<typeof useQueryClient>,
+	episodeId: string | null | undefined,
+	petLookup?: { petId?: string | null },
+) {
+	qc.invalidateQueries({ queryKey: ["exams"] });
+	qc.invalidateQueries({ queryKey: ["exam"] });
+	qc.invalidateQueries({ queryKey: ["metric-series"] });
+	if (episodeId) qc.invalidateQueries({ queryKey: keys.episode(episodeId) });
+	if (petLookup?.petId)
+		qc.invalidateQueries({ queryKey: keys.examsByPet(petLookup.petId) });
+}
+
+export function useUploadExam() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			episodeId: string;
+			imageBase64: string;
+			mimeType: string;
+			originalName?: string;
+			sourceNotes?: string;
+		}) =>
+			callTool<{
+				exam: Exam;
+				metrics: ExamMetric[];
+				pendingReviewCount: number;
+			}>(app, "exam_upload", input),
+		onSuccess: (data) => invalidateAfterExamMutation(qc, data.exam.episodeId),
+	});
+}
+
+export function usePasteExam() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			episodeId: string;
+			text: string;
+			sourceNotes?: string;
+		}) =>
+			callTool<{
+				exam: Exam;
+				metrics: ExamMetric[];
+				pendingReviewCount: number;
+			}>(app, "exam_paste", input),
+		onSuccess: (data) => invalidateAfterExamMutation(qc, data.exam.episodeId),
+	});
+}
+
+export function useUpdateExam() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			examId: string;
+			performedAt?: string | null;
+			labName?: string | null;
+			requestId?: string | null;
+			sourceNotes?: string | null;
+			status?: "draft" | "confirmed";
+			metrics?: ExamMetricInput[];
+		}) =>
+			callTool<{ exam: Exam | null; metrics: ExamMetric[] }>(
+				app,
+				"exam_update",
+				input,
+			),
+		onSuccess: (data) =>
+			invalidateAfterExamMutation(qc, data.exam?.episodeId ?? null),
+	});
+}
+
+export function useDeleteExam() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (examId: string) =>
+			callTool<{ deleted: boolean }>(app, "exam_delete", { examId }),
+		onSuccess: () => invalidateAfterExamMutation(qc, null),
 	});
 }

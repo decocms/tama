@@ -169,6 +169,67 @@ export interface EpisodeInsightsResult {
 	cached: boolean;
 }
 
+export type ExamStatus = "draft" | "confirmed";
+export type MetricStatus = "normal" | "low" | "high" | "abnormal" | "unknown";
+
+export interface Exam {
+	id: string;
+	episodeId: string;
+	fileId: string | null;
+	status: ExamStatus;
+	performedAt: string | null;
+	labName: string | null;
+	requestId: string | null;
+	rawAiText: string | null;
+	sourceNotes: string | null;
+	createdAt: string;
+}
+
+export interface ExamMetric {
+	id: string;
+	examId: string;
+	canonicalKey: string | null;
+	displayName: string;
+	valueNum: number | null;
+	valueText: string | null;
+	unit: string | null;
+	refLow: number | null;
+	refHigh: number | null;
+	refText: string | null;
+	status: MetricStatus;
+	pendingReview: boolean;
+	createdAt: string;
+}
+
+export interface ExamMetricSeriesPoint {
+	canonicalKey: string;
+	performedAt: string;
+	valueNum: number | null;
+	valueText: string | null;
+	unit: string | null;
+	refLow: number | null;
+	refHigh: number | null;
+	refText: string | null;
+	status: MetricStatus;
+	examId: string;
+	displayName: string;
+}
+
+// Mirror of api/storage/exams.ts ExamMetricInput — used for exam_update
+// when the user edits a metric in the review drawer.
+export interface ExamMetricInput {
+	canonicalKey: string | null;
+	displayName: string;
+	valueNum?: number | null;
+	valueText?: string | null;
+	unit?: string | null;
+	refLow?: number | null;
+	refHigh?: number | null;
+	refText?: string | null;
+	status?: MetricStatus;
+	pendingReview?: boolean;
+}
+
 export interface RecordingChunk {
 	id: string;
 	recordingId: string;

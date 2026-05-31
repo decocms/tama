@@ -15,6 +15,8 @@ import {
 	registerServiceWorker,
 } from "./lib/push.ts";
 import { EpisodePage } from "./pages/Episode.tsx";
+import { ExamsPage } from "./pages/Exams.tsx";
+import { ExamsDetailPage } from "./pages/ExamsDetail.tsx";
 import { HomePage } from "./pages/Home.tsx";
 import { PetPage } from "./pages/Pet.tsx";
 import { SubscribePage } from "./pages/Subscribe.tsx";
@@ -37,6 +39,21 @@ const pet = createRoute({
 	component: PetPage,
 });
 
+const exams = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/pet/$petId/exams",
+	component: ExamsPage,
+});
+
+const examsDetail = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/pet/$petId/exams/detail",
+	component: ExamsDetailPage,
+	validateSearch: (search: Record<string, unknown>) => ({
+		keys: typeof search.keys === "string" ? search.keys : undefined,
+	}),
+});
+
 const episode = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/episode/$episodeId",
@@ -54,7 +71,14 @@ const subscribe = createRoute({
 	component: SubscribePage,
 });
 
-const routeTree = rootRoute.addChildren([home, pet, episode, subscribe]);
+const routeTree = rootRoute.addChildren([
+	home,
+	pet,
+	exams,
+	examsDetail,
+	episode,
+	subscribe,
+]);
 
 const router = createRouter({
 	routeTree,

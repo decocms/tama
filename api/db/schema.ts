@@ -192,6 +192,70 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
+// Lab exams (CBC / biochem / etc.). One row per uploaded or pasted lab
+// report. Mirrors the prescriptions shape: optional R2 file, raw AI output
+// stored for provenance, draft → confirmed lifecycle. The structured payload
+// lives in exam_metrics; the document-level metadata (lab name, request id,
+// date the blood was drawn) lives here.
+export const exams = sqliteTable("exams", {
+	id: text("id").primaryKey(),
+	episodeId: text("episode_id")
+		.notNull()
+		.references(() => episodes.id, { onDelete: "cascade" }),
+	fileId: text("file_id").references(() => files.id, { onDelete: "set null" }),
+	status: text("status", { enum: ["draft", "confirmed"] })
+		.notNull()
+		.default("draft"),
+	performedAt: text("performed_at"),
+	labName: text("lab_name"),
+	requestId: text("request_id"),
+	rawAiText: text("raw_ai_text"),
+	sourceNotes: text("source_notes"),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// One row per lab parameter on an exam. canonicalKey is what we plot — when
+// the LLM cannot map a parameter into the curated taxonomy it proposes a
+// snake_case key and we flag pendingReview=true so the UI can surface it
+// for the owner to accept or remap.
+export const examMetrics = sqliteTable("exam_metrics", {
+	id: text("id").primaryKey(),
+	examId: text("exam_id")
+		.notNull()
+		.references(() => exams.id, { onDelete: "cascade" }),
+	canonicalKey: text("canonical_key"),
+	displayName: text("display_name").notNull(),
+	valueNum: real("value_num"),
+	valueText: text("value_text"),
+	unit: text("unit"),
+	refLow: real("ref_low"),
+	refHigh: real("ref_high"),
+	refText: text("ref_text"),
+	status: text("status", {
+		enum: ["normal", "low", "high", "abnormal", "unknown"],
+	})
+		.notNull()
+		.default("unknown"),
+	pendingReview: integer("pending_review", { mode: "boolean" })
+		.notNull()
+		.default(false),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// Audit log of LLM-proposed canonical keys that weren't in the taxonomy. We
+// still save the metric with the proposed key; this table lets us review and
+// either approve (add to the taxonomy code) or remap to an existing key.
+export const metricAliases = sqliteTable("metric_aliases", {
+	id: text("id").primaryKey(),
+	proposedKey: text("proposed_key").notNull(),
+	displayName: text("display_name").notNull(),
+	unitSeen: text("unit_seen"),
+	examId: text("exam_id").references(() => exams.id, { onDelete: "set null" }),
+	approved: integer("approved", { mode: "boolean" }).notNull().default(false),
+	mappedToKey: text("mapped_to_key"),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
 // Idempotency log for the reminder cron. (scheduleStateId, plannedAt) is the
 // primary key — INSERT OR IGNORE guarantees a single send per dose slot even
 // if cron ticks overlap or retry.
@@ -225,3 +289,9 @@ export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 export type NewPushSubscriptionRow = typeof pushSubscriptions.$inferInsert;
 export type NotificationSentRow = typeof notificationsSent.$inferSelect;
 export type NewNotificationSentRow = typeof notificationsSent.$inferInsert;
+export type Exam = typeof exams.$inferSelect;
+export type NewExam = typeof exams.$inferInsert;
+export type ExamMetric = typeof examMetrics.$inferSelect;
+export type NewExamMetric = typeof examMetrics.$inferInsert;
+export type MetricAlias = typeof metricAliases.$inferSelect;
+export type NewMetricAlias = typeof metricAliases.$inferInsert;

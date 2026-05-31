@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Plus, Sparkles } from "lucide-react";
+import { ChevronRight, FlaskConical, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
@@ -15,6 +15,7 @@ import {
 	useDeleteEpisode,
 	useEnrichPet,
 	useEpisodes,
+	useExamsForPet,
 	usePet,
 	useStartEpisode,
 } from "../lib/queries.ts";
@@ -24,6 +25,7 @@ export function PetPage() {
 	const navigate = useNavigate();
 	const { data: pet, isLoading } = usePet(petId);
 	const { data: episodes } = useEpisodes(petId);
+	const { data: exams } = useExamsForPet(petId);
 	const enrich = useEnrichPet(petId);
 	const startEp = useStartEpisode();
 	const delEp = useDeleteEpisode();
@@ -77,6 +79,22 @@ export function PetPage() {
 							<EnrichmentCard enrichment={pet.enrichment} />
 						) : null}
 
+						<ExamsCard
+							petId={petId}
+							confirmedCount={
+								(exams ?? []).filter((e) => e.status === "confirmed").length
+							}
+							draftCount={
+								(exams ?? []).filter((e) => e.status === "draft").length
+							}
+							latestPerformedAt={
+								(exams ?? [])
+									.map((e) => e.performedAt ?? e.createdAt)
+									.sort()
+									.reverse()[0] ?? null
+							}
+						/>
+
 						<Section
 							title="Episodes"
 							eyebrow="Care history"
@@ -118,6 +136,50 @@ export function PetPage() {
 				)}
 			</div>
 		</Layout>
+	);
+}
+
+function ExamsCard({
+	petId,
+	confirmedCount,
+	draftCount,
+	latestPerformedAt,
+}: {
+	petId: string;
+	confirmedCount: number;
+	draftCount: number;
+	latestPerformedAt: string | null;
+}) {
+	const total = confirmedCount + draftCount;
+	return (
+		<Link
+			to="/pet/$petId/exams"
+			params={{ petId }}
+			className="block rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors"
+		>
+			<div className="flex items-center gap-3">
+				<div className="w-9 h-9 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+					<FlaskConical className="w-4 h-4" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<div className="font-display text-base font-semibold leading-tight">
+						Lab exams
+					</div>
+					<div className="text-xs text-muted-foreground">
+						{total === 0
+							? "No exams uploaded yet — track blood panels and chart evolution."
+							: `${confirmedCount} confirmed${
+									draftCount > 0 ? ` · ${draftCount} draft` : ""
+								}${
+									latestPerformedAt
+										? ` · latest ${formatDateTime(latestPerformedAt)}`
+										: ""
+								}`}
+					</div>
+				</div>
+				<ChevronRight className="w-4 h-4 text-muted-foreground" />
+			</div>
+		</Link>
 	);
 }
 

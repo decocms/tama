@@ -8,6 +8,15 @@ import {
 	episodeStartTool,
 	episodeUpdateTool,
 } from "./episode.ts";
+import {
+	examDeleteTool,
+	examGetTool,
+	examListTool,
+	examMetricSeriesTool,
+	examPasteTool,
+	examUpdateTool,
+	examUploadTool,
+} from "./exam.ts";
 import { episodeInsightsTool } from "./insights.ts";
 import {
 	petCreateTool,
@@ -73,6 +82,13 @@ export const tools = [
 	prescriptionUpdateTool,
 	prescriptionListTool,
 	prescriptionDeleteTool,
+	examUploadTool,
+	examPasteTool,
+	examUpdateTool,
+	examDeleteTool,
+	examGetTool,
+	examListTool,
+	examMetricSeriesTool,
 	timetableGetTool,
 	scheduleStateListTool,
 	scheduleStateDeleteTool,
