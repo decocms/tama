@@ -4,7 +4,8 @@ import { vetResearch } from "../ai/vet-research.ts";
 import type { Env } from "../env.ts";
 import { listDoses } from "../storage/doses.ts";
 import { getEpisode, listNotes } from "../storage/episodes.ts";
-import { getPet, parseEnrichment } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
+import { parseEnrichment } from "../storage/pets.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
@@ -27,7 +28,7 @@ Use this tool whenever the user asks something that needs grounded clinical cont
 - "Is it safe to combine these meds with probiotics?"
 - "How long until omeprazole takes effect?"
 
-Best practice: pass petId and/or episodeId so the tool auto-loads pet profile, active prescriptions, and recent notes — this dramatically improves answer quality. The agent should then summarize the result back to the user in chat, and optionally call episode_add_note to persist key findings.
+Best practice: pass episodeId so the tool auto-loads the active prescriptions + recent notes from that episode — pet profile is always auto-attached because there's only one pet on this deployment. The agent should then summarize the result back to the user in chat, and optionally call episode_add_note to persist key findings.
 
 Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-flag bullets), citations (urls). The tool does NOT replace a vet — present results as research to support the user's conversation with their veterinarian.`,
 		inputSchema: z.object({
@@ -37,17 +38,11 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 				.describe(
 					"The specific question to research. Be concrete — 'Will X and Y interact?' beats 'Tell me about X'.",
 				),
-			petId: z
-				.string()
-				.optional()
-				.describe(
-					"If provided, pet profile + AI enrichment are auto-attached as context.",
-				),
 			episodeId: z
 				.string()
 				.optional()
 				.describe(
-					"If provided, the episode's active medications + recent notes are auto-attached as context. Implies petId from the episode.",
+					"If provided, the episode's active medications + recent notes are auto-attached as context.",
 				),
 			extraContext: z
 				.string()
@@ -67,17 +62,14 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
 
-			// Resolve pet/episode context. Episode wins if both passed — petId is
-			// derived from it. Either may be absent, in which case the tool just
-			// runs on the raw question.
-			let petId = context.petId ?? null;
+			// Pet context is always auto-attached (single-pet deploy). Episode is
+			// optional and brings in active meds + recent notes.
 			let episode: Awaited<ReturnType<typeof getEpisode>> = null;
 			if (context.episodeId) {
 				episode = await getEpisode(env, context.episodeId);
-				if (episode) petId = episode.petId;
 			}
 
-			const pet = petId ? await getPet(env, petId) : null;
+			const pet = await getSelfPet(env);
 			const enrichment = pet ? parseEnrichment(pet) : null;
 			const conditionsParts: string[] = [];
 			if (pet?.ownerNotes) conditionsParts.push(pet.ownerNotes);

@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRight, FlaskConical, Plus, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -15,18 +15,20 @@ import {
 	useDeleteEpisode,
 	useEnrichPet,
 	useEpisodes,
-	useExamsForPet,
+	useExams,
 	usePet,
 	useStartEpisode,
 } from "../lib/queries.ts";
 
-export function PetPage() {
-	const { petId } = useParams({ from: "/pet/$petId" });
+// The dashboard. There is only ONE pet on this deploy — no picker, no
+// petId in the URL, no "which pet" question to ask anyone. Forking the
+// repo and running the claim flow is how you set up a different pet.
+export function DashboardPage() {
 	const navigate = useNavigate();
-	const { data: pet, isLoading } = usePet(petId);
-	const { data: episodes } = useEpisodes(petId);
-	const { data: exams } = useExamsForPet(petId);
-	const enrich = useEnrichPet(petId);
+	const { data: pet, isLoading } = usePet();
+	const { data: episodes } = useEpisodes();
+	const { data: exams } = useExams();
+	const enrich = useEnrichPet();
 	const startEp = useStartEpisode();
 	const delEp = useDeleteEpisode();
 	const [showForm, setShowForm] = useState(false);
@@ -46,13 +48,7 @@ export function PetPage() {
 	};
 
 	return (
-		<Layout
-			breadcrumb={
-				<Link to="/" className="hover:underline">
-					{pet?.name ?? "pet"}
-				</Link>
-			}
-		>
+		<Layout breadcrumb={<span>{pet?.name ?? "pet"}</span>}>
 			<div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
 				{isLoading || !pet ? (
 					<>
@@ -80,7 +76,6 @@ export function PetPage() {
 						) : null}
 
 						<ExamsCard
-							petId={petId}
 							confirmedCount={
 								(exams ?? []).filter((e) => e.status === "confirmed").length
 							}
@@ -109,7 +104,7 @@ export function PetPage() {
 									pending={startEp.isPending}
 									onCancel={() => setShowForm(false)}
 									onSubmit={async (input) => {
-										const ep = await startEp.mutateAsync({ petId, ...input });
+										const ep = await startEp.mutateAsync(input);
 										setShowForm(false);
 										toast.success(`Started "${ep.title}"`);
 										navigate({
@@ -140,12 +135,10 @@ export function PetPage() {
 }
 
 function ExamsCard({
-	petId,
 	confirmedCount,
 	draftCount,
 	latestPerformedAt,
 }: {
-	petId: string;
 	confirmedCount: number;
 	draftCount: number;
 	latestPerformedAt: string | null;
@@ -153,8 +146,7 @@ function ExamsCard({
 	const total = confirmedCount + draftCount;
 	return (
 		<Link
-			to="/pet/$petId/exams"
-			params={{ petId }}
+			to="/exams"
 			className="block rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors"
 		>
 			<div className="flex items-center gap-3">

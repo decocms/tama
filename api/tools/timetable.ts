@@ -12,7 +12,7 @@ import {
 	updateDose,
 } from "../storage/doses.ts";
 import { getEpisode } from "../storage/episodes.ts";
-import { getPet } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
@@ -58,7 +58,7 @@ export const timetableGetTool = (_env: Env) =>
 			const e = runtimeContext.env as Env;
 			const ep = await getEpisode(e, context.episodeId);
 			if (!ep) return { entries: [] };
-			const pet = await getPet(e, ep.petId);
+			const pet = await getSelfPet(e);
 			const tz = pet?.timezone ?? context.timeZone ?? "UTC";
 
 			const window = context.windowHours ?? 48;
@@ -153,7 +153,7 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 				// first; if still no match, accept it as a one-off log with
 				// the user-supplied name + kind and skip anchor advancement.
 				const [pet, rxRows] = await Promise.all([
-					getPet(env, ep.petId),
+					getSelfPet(env),
 					listPrescriptions(env, context.episodeId),
 				]);
 				petTimezone = pet?.timezone ?? "UTC";
@@ -194,7 +194,7 @@ For correcting a previously-logged dose's time, use dose_update. For postponing 
 			let actualAt = context.actualAt;
 			if (context.plannedLocal || context.actualLocal) {
 				if (petTimezone === null) {
-					const pet = await getPet(env, ep.petId);
+					const pet = await getSelfPet(env);
 					petTimezone = pet?.timezone ?? "UTC";
 				}
 				if (context.plannedLocal)
@@ -311,7 +311,7 @@ export const doseUpdateTool = (_env: Env) =>
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 
 			let targetId = context.doseId;
@@ -384,7 +384,7 @@ export const timetableSnoozeTool = (_env: Env) =>
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 
 			const rxRows = await listPrescriptions(env, context.episodeId);
@@ -510,7 +510,7 @@ This is reversible via timetable_set_duration if you need to extend the course l
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 			const rxRows = await listPrescriptions(env, context.episodeId);
 			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
@@ -563,7 +563,7 @@ Either bound can be set to null to clear it (e.g. make a course open-ended). To 
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 			const rxRows = await listPrescriptions(env, context.episodeId);
 			await ensureScheduleStateForEpisode(env, ep.id, rxRows, tz);
@@ -613,7 +613,7 @@ Example: itemName="PAPA", nextLocal="14:00" → next PAPA at 14:00 in São Paulo
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 
 			const rxRows = await listPrescriptions(env, context.episodeId);

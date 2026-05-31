@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ExternalLink, FileText, FlaskConical } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ import { Section } from "../components/Section.tsx";
 import {
 	useEpisodes,
 	useExam,
-	useExamsForPet,
+	useExams,
 	useMetricSeries,
 	usePasteExam,
 	usePet,
@@ -38,12 +38,11 @@ import {
 } from "../lib/taxonomy.ts";
 
 export function ExamsPage() {
-	const { petId } = useParams({ from: "/pet/$petId/exams" });
 	const navigate = useNavigate();
-	const { data: pet } = usePet(petId);
-	const { data: episodes } = useEpisodes(petId);
-	const { data: exams, isLoading } = useExamsForPet(petId);
-	const { data: series } = useMetricSeries(petId, []);
+	const { data: pet } = usePet();
+	const { data: episodes } = useEpisodes();
+	const { data: exams, isLoading } = useExams();
+	const { data: series } = useMetricSeries([]);
 	const [reviewingId, setReviewingId] = useState<string | null>(null);
 
 	const openEpisodeId = useMemo(
@@ -55,11 +54,7 @@ export function ExamsPage() {
 		<Layout
 			breadcrumb={
 				<span className="flex items-center gap-2">
-					<Link
-						to="/pet/$petId"
-						params={{ petId }}
-						className="hover:underline"
-					>
+					<Link to="/" className="hover:underline">
 						{pet?.name ?? "pet"}
 					</Link>
 					<span>/</span>
@@ -98,8 +93,7 @@ export function ExamsPage() {
 							variant="outline"
 							onClick={() =>
 								navigate({
-									to: "/pet/$petId/exams/detail",
-									params: { petId },
+									to: "/exams/detail",
 									search: { keys: undefined },
 								})
 							}
@@ -112,8 +106,7 @@ export function ExamsPage() {
 						series={series ?? []}
 						onSelectPanel={(panel) =>
 							navigate({
-								to: "/pet/$petId/exams/detail",
-								params: { petId },
+								to: "/exams/detail",
 								search: { keys: PANEL_DEFAULT_KEYS[panel].join(",") },
 							})
 						}

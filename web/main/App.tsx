@@ -14,11 +14,10 @@ import {
 	isStandalone,
 	registerServiceWorker,
 } from "./lib/push.ts";
+import { DashboardPage } from "./pages/Dashboard.tsx";
 import { EpisodePage } from "./pages/Episode.tsx";
 import { ExamsPage } from "./pages/Exams.tsx";
 import { ExamsDetailPage } from "./pages/ExamsDetail.tsx";
-import { HomePage } from "./pages/Home.tsx";
-import { PetPage } from "./pages/Pet.tsx";
 import { SubscribePage } from "./pages/Subscribe.tsx";
 
 const queryClient = new QueryClient({
@@ -27,27 +26,21 @@ const queryClient = new QueryClient({
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
 
-const home = createRoute({
+const dashboard = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
-	component: HomePage,
-});
-
-const pet = createRoute({
-	getParentRoute: () => rootRoute,
-	path: "/pet/$petId",
-	component: PetPage,
+	component: DashboardPage,
 });
 
 const exams = createRoute({
 	getParentRoute: () => rootRoute,
-	path: "/pet/$petId/exams",
+	path: "/exams",
 	component: ExamsPage,
 });
 
 const examsDetail = createRoute({
 	getParentRoute: () => rootRoute,
-	path: "/pet/$petId/exams/detail",
+	path: "/exams/detail",
 	component: ExamsDetailPage,
 	validateSearch: (search: Record<string, unknown>) => ({
 		keys: typeof search.keys === "string" ? search.keys : undefined,
@@ -72,8 +65,7 @@ const subscribe = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-	home,
-	pet,
+	dashboard,
 	exams,
 	examsDetail,
 	episode,

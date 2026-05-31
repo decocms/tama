@@ -14,6 +14,7 @@ import {
 	listExamsForPet,
 	updateExam,
 } from "../storage/exams.ts";
+import { PET_SELF_ID } from "../storage/pet-self.ts";
 
 const MetricStatusEnum = z.enum([
 	"normal",
@@ -239,10 +240,9 @@ export const examListTool = (_env: Env) =>
 	createTool({
 		id: "exam_list",
 		description:
-			"List exams scoped to a single episode OR to all episodes of a pet. Pass exactly one of episodeId / petId. Returns exams without metrics — call exam_get for the full payload.",
+			"List exams. Pass episodeId to scope to a single episode; omit it to list every exam this pet has ever had.",
 		inputSchema: z.object({
 			episodeId: z.string().optional(),
-			petId: z.string().optional(),
 		}),
 		outputSchema: z.object({ exams: z.array(ExamSchema) }),
 		annotations: { readOnlyHint: true },
@@ -251,10 +251,7 @@ export const examListTool = (_env: Env) =>
 			if (context.episodeId) {
 				return { exams: await listExamsForEpisode(env, context.episodeId) };
 			}
-			if (context.petId) {
-				return { exams: await listExamsForPet(env, context.petId) };
-			}
-			throw new Error("exam_list: must pass episodeId or petId");
+			return { exams: await listExamsForPet(env, PET_SELF_ID) };
 		},
 	});
 
@@ -262,9 +259,8 @@ export const examMetricSeriesTool = (_env: Env) =>
 	createTool({
 		id: "exam_metric_series",
 		description:
-			"Time-series points for the evolution chart. Pass a petId and an optional list of canonical metric keys (e.g. ['hemoglobin','albumin']). Returns every confirmed exam's value for those metrics, ordered chronologically. Omit canonicalKeys to get every metric ever recorded for the pet.",
+			"Time-series points for the evolution chart. Optionally filter to specific canonical metric keys (e.g. ['hemoglobin','albumin']). Returns every confirmed exam's value for those metrics, ordered chronologically. Omit canonicalKeys to get every metric ever recorded.",
 		inputSchema: z.object({
-			petId: z.string(),
 			canonicalKeys: z.array(z.string()).optional(),
 		}),
 		outputSchema: z.object({
@@ -288,7 +284,7 @@ export const examMetricSeriesTool = (_env: Env) =>
 		execute: async ({ context, runtimeContext }) => {
 			const series = await getMetricSeriesForPet(
 				runtimeContext.env as Env,
-				context.petId,
+				PET_SELF_ID,
 				context.canonicalKeys,
 			);
 			return { series };

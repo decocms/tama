@@ -13,7 +13,8 @@ import {
 	isFreshAgainst,
 	saveInsights,
 } from "../storage/insights.ts";
-import { getPet, parseEnrichment } from "../storage/pets.ts";
+import { parseEnrichment } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
@@ -57,7 +58,7 @@ export const episodeInsightsTool = (_env: Env) =>
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
 
 			const [pet, rxRows, doseRows, noteRows, recordings] = await Promise.all([
-				getPet(env, ep.petId),
+				getSelfPet(env),
 				listPrescriptions(env, ep.id),
 				listDoses(env, ep.id),
 				listNotes(env, ep.id),

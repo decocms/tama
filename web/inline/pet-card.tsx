@@ -11,7 +11,7 @@ interface PetResult {
 
 function PetCardInner({ pet }: { pet: Pet }) {
 	const app = useMcpApp();
-	const enrich = useEnrichPet(pet.id);
+	const enrich = useEnrichPet();
 
 	return (
 		<PetCard
@@ -30,7 +30,7 @@ function PetCardInner({ pet }: { pet: Pet }) {
 							content: [
 								{
 									type: "text",
-									text: `Start a new care episode for ${pet.name} (petId="${pet.id}"). Ask me for the title and a brief summary first.`,
+									text: `Start a new care episode for ${pet.name}. Ask me for the title and a brief summary first.`,
 								},
 							],
 						})
@@ -47,7 +47,7 @@ function PetCardInner({ pet }: { pet: Pet }) {
 							content: [
 								{
 									type: "text",
-									text: `Show me ${pet.name}'s episodes (call episode_list with petId="${pet.id}").`,
+									text: `Show me ${pet.name}'s episodes (call episode_list).`,
 								},
 							],
 						})

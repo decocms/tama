@@ -36,8 +36,7 @@ export function EpisodeHero({
 			<div className="flex items-center gap-2.5 min-w-0">
 				{pet ? (
 					<Link
-						to="/pet/$petId"
-						params={{ petId: pet.id }}
+						to="/"
 						className="shrink-0 hover:opacity-80 transition-opacity"
 					>
 						<Avatar name={pet.name} size="sm" />
@@ -47,8 +46,7 @@ export function EpisodeHero({
 					{pet ? (
 						<>
 							<Link
-								to="/pet/$petId"
-								params={{ petId: pet.id }}
+								to="/"
 								className="font-semibold text-foreground hover:underline truncate"
 							>
 								{pet.name}

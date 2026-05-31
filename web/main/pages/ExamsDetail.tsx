@@ -1,4 +1,4 @@
-import { Link, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -20,12 +20,11 @@ interface ExamsDetailSearch {
 }
 
 export function ExamsDetailPage() {
-	const { petId } = useParams({ from: "/pet/$petId/exams/detail" });
-	const search = useSearch({ from: "/pet/$petId/exams/detail" }) as
+	const search = useSearch({ from: "/exams/detail" }) as
 		| ExamsDetailSearch
 		| undefined;
-	const { data: pet } = usePet(petId);
-	const { data: series, isLoading } = useMetricSeries(petId, []);
+	const { data: pet } = usePet();
+	const { data: series, isLoading } = useMetricSeries([]);
 
 	const selectedKeys = useMemo(() => {
 		const raw = search?.keys?.split(",").filter(Boolean) ?? [];
@@ -55,19 +54,11 @@ export function ExamsDetailPage() {
 		<Layout
 			breadcrumb={
 				<span className="flex items-center gap-2">
-					<Link
-						to="/pet/$petId"
-						params={{ petId }}
-						className="hover:underline"
-					>
+					<Link to="/" className="hover:underline">
 						{pet?.name ?? "pet"}
 					</Link>
 					<span>/</span>
-					<Link
-						to="/pet/$petId/exams"
-						params={{ petId }}
-						className="hover:underline"
-					>
+					<Link to="/exams" className="hover:underline">
 						exams
 					</Link>
 					<span>/</span>

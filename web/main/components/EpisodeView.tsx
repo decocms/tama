@@ -19,7 +19,7 @@ import { Timetable } from "./Timetable.tsx";
 export function EpisodeView({ episodeId }: { episodeId: string }) {
 	const { data, isLoading } = useEpisode(episodeId);
 	const ep = data?.episode;
-	const { data: pet } = usePet(ep?.petId);
+	const { data: pet } = usePet();
 
 	const [draftRx, setDraftRx] = useState<Prescription | null>(null);
 

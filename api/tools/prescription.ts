@@ -4,7 +4,7 @@ import { extractPrescription } from "../ai/extract-prescription.ts";
 import type { Env } from "../env.ts";
 import { getEpisode } from "../storage/episodes.ts";
 import { saveFile } from "../storage/files.ts";
-import { getPet } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import {
 	createPrescription,
 	deletePrescription,
@@ -117,7 +117,7 @@ async function syncRxIfConfirmed(
 	if (rx.status !== "confirmed") return;
 	const ep = await getEpisode(env, rx.episodeId);
 	if (!ep) return;
-	const pet = await getPet(env, ep.petId);
+	const pet = await getSelfPet(env);
 	const tz = pet?.timezone ?? "UTC";
 	await syncPrescriptionToScheduleState(env, rx as never, tz);
 }

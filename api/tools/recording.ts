@@ -8,7 +8,8 @@ import { whisperTranscribe } from "../ai/whisper.ts";
 import type { Env } from "../env.ts";
 import { addNote, getEpisode, listNotes } from "../storage/episodes.ts";
 import { getFile, readFileBytes, saveFile } from "../storage/files.ts";
-import { getPet, updatePet } from "../storage/pets.ts";
+import { updatePet } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import {
 	addChunk,
 	createRecording,
@@ -229,7 +230,7 @@ export const recordingSummarizeTool = (_env: Env) =>
 			}
 			const ep = await getEpisode(env, rec.episodeId);
 			if (!ep) throw new Error("Episode not found");
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
 			const notesRows = await listNotes(env, ep.id);
@@ -290,7 +291,7 @@ export const recordingApplyTool = (_env: Env) =>
 			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
 			const ep = await getEpisode(env, rec.episodeId);
 			if (!ep) throw new Error("Episode not found");
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
 			const history =
@@ -357,7 +358,7 @@ export const recordingApplyGroupTool = (_env: Env) =>
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
 			// Load each recording, validate it belongs to the episode and has a

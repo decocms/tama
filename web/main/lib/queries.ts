@@ -17,52 +17,39 @@ import type {
 import { callTool } from "./mcp.ts";
 
 export const keys = {
-	pets: ["pets"] as const,
-	pet: (id: string) => ["pet", id] as const,
-	episodes: (petId?: string) => ["episodes", petId ?? "all"] as const,
+	pet: ["pet"] as const,
+	episodes: ["episodes"] as const,
 	episode: (id: string) => ["episode", id] as const,
 	timetable: (id: string) => ["timetable", id] as const,
 	prescriptions: (epId: string) => ["prescriptions", epId] as const,
 	insights: (epId: string) => ["episode-insights", epId] as const,
-	examsByPet: (petId: string) => ["exams", "pet", petId] as const,
+	exams: ["exams"] as const,
 	examsByEpisode: (epId: string) => ["exams", "episode", epId] as const,
 	exam: (examId: string) => ["exam", examId] as const,
-	metricSeries: (petId: string, keysCsv: string) =>
-		["metric-series", petId, keysCsv] as const,
+	metricSeries: (keysCsv: string) => ["metric-series", keysCsv] as const,
 };
 
-export function usePets() {
+// Fetch the singleton pet for this deployment. No petId arg — there's only
+// one pet, and the backend always returns it. This used to be usePets() +
+// usePet(id) when the app was multi-tenant.
+export function usePet() {
 	const app = useMcpApp();
 	return useQuery({
-		queryKey: keys.pets,
+		queryKey: keys.pet,
 		queryFn: () =>
-			callTool<{ pets: Pet[] }>(app, "pet_list").then((r) => r.pets),
+			callTool<{ pet: Pet | null }>(app, "pet_profile", {}).then((r) => r.pet),
 		enabled: !!app,
 	});
 }
 
-export function usePet(petId: string | undefined) {
+export function useEpisodes() {
 	const app = useMcpApp();
 	return useQuery({
-		queryKey: keys.pet(petId ?? ""),
+		queryKey: keys.episodes,
 		queryFn: () =>
-			callTool<{ pet: Pet | null }>(app, "pet_get", { petId }).then(
-				(r) => r.pet,
+			callTool<{ episodes: Episode[] }>(app, "episode_list", {}).then(
+				(r) => r.episodes,
 			),
-		enabled: !!app && !!petId,
-	});
-}
-
-export function useEpisodes(petId?: string) {
-	const app = useMcpApp();
-	return useQuery({
-		queryKey: keys.episodes(petId),
-		queryFn: () =>
-			callTool<{ episodes: Episode[] }>(
-				app,
-				"episode_list",
-				petId ? { petId } : {},
-			).then((r) => r.episodes),
 		enabled: !!app,
 	});
 }
@@ -89,29 +76,11 @@ export function useEpisode(episodeId: string | undefined) {
 	});
 }
 
-export function useCreatePet() {
-	const app = useMcpApp();
-	const qc = useQueryClient();
-	return useMutation({
-		mutationFn: (input: {
-			name: string;
-			species?: string;
-			breed?: string;
-			dob?: string;
-			weightKg?: number;
-			ownerNotes?: string;
-			timezone?: string;
-		}) => callTool<{ pet: Pet }>(app, "pet_create", input).then((r) => r.pet),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pets }),
-	});
-}
-
 export function useUpdatePet() {
 	const app = useMcpApp();
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (input: {
-			petId: string;
 			name?: string;
 			breed?: string | null;
 			dob?: string | null;
@@ -122,20 +91,9 @@ export function useUpdatePet() {
 			callTool<{ pet: Pet | null }>(app, "pet_update", input).then(
 				(r) => r.pet,
 			),
-		onSuccess: (_, vars) => {
-			qc.invalidateQueries({ queryKey: keys.pet(vars.petId) });
-			qc.invalidateQueries({ queryKey: keys.pets });
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: keys.pet });
 		},
-	});
-}
-
-export function useDeletePet() {
-	const app = useMcpApp();
-	const qc = useQueryClient();
-	return useMutation({
-		mutationFn: (petId: string) =>
-			callTool<{ deleted: boolean }>(app, "pet_delete", { petId }),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pets }),
 	});
 }
 
@@ -146,20 +104,19 @@ export function useDeleteEpisode() {
 		mutationFn: (episodeId: string) =>
 			callTool<{ deleted: boolean }>(app, "episode_delete", { episodeId }),
 		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: keys.episodes() });
+			qc.invalidateQueries({ queryKey: keys.episodes });
 		},
 	});
 }
 
-export function useEnrichPet(petId: string) {
+export function useEnrichPet() {
 	const app = useMcpApp();
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: () =>
-			callTool<{ pet: Pet }>(app, "pet_enrich", { petId }).then((r) => r.pet),
+			callTool<{ pet: Pet }>(app, "pet_enrich", {}).then((r) => r.pet),
 		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: keys.pet(petId) });
-			qc.invalidateQueries({ queryKey: keys.pets });
+			qc.invalidateQueries({ queryKey: keys.pet });
 		},
 	});
 }
@@ -168,13 +125,12 @@ export function useStartEpisode() {
 	const app = useMcpApp();
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: (input: { petId: string; title: string; summary?: string }) =>
+		mutationFn: (input: { title: string; summary?: string }) =>
 			callTool<{ episode: Episode }>(app, "episode_start", input).then(
 				(r) => r.episode,
 			),
-		onSuccess: (_, vars) => {
-			qc.invalidateQueries({ queryKey: keys.episodes(vars.petId) });
-			qc.invalidateQueries({ queryKey: keys.episodes() });
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: keys.episodes });
 		},
 	});
 }
@@ -559,7 +515,7 @@ export function useApplyRecordingGroup() {
 				queryKey: recordingKeys.list(vars.episodeId),
 			});
 			qc.invalidateQueries({ queryKey: keys.episode(vars.episodeId) });
-			qc.invalidateQueries({ queryKey: keys.pets });
+			qc.invalidateQueries({ queryKey: keys.pet });
 			for (const rec of data.recordings) {
 				qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
 			}
@@ -583,22 +539,20 @@ export function useApplyRecording() {
 			qc.invalidateQueries({ queryKey: recordingKeys.one(rec.id) });
 			qc.invalidateQueries({ queryKey: recordingKeys.list(rec.episodeId) });
 			qc.invalidateQueries({ queryKey: keys.episode(rec.episodeId) });
-			qc.invalidateQueries({ queryKey: keys.pets });
+			qc.invalidateQueries({ queryKey: keys.pet });
 		},
 	});
 }
 
 // ---------- Exams ----------
 
-export function useExamsForPet(petId: string | undefined) {
+export function useExams() {
 	const app = useMcpApp();
 	return useQuery({
-		queryKey: keys.examsByPet(petId ?? ""),
+		queryKey: keys.exams,
 		queryFn: () =>
-			callTool<{ exams: Exam[] }>(app, "exam_list", { petId }).then(
-				(r) => r.exams,
-			),
-		enabled: !!app && !!petId,
+			callTool<{ exams: Exam[] }>(app, "exam_list", {}).then((r) => r.exams),
+		enabled: !!app,
 	});
 }
 
@@ -626,32 +580,29 @@ export function useExam(examId: string | undefined) {
 	});
 }
 
-export function useMetricSeries(petId: string | undefined, keys_: string[]) {
+export function useMetricSeries(keys_: string[]) {
 	const app = useMcpApp();
 	const keysCsv = [...keys_].sort().join(",");
 	return useQuery({
-		queryKey: keys.metricSeries(petId ?? "", keysCsv),
+		queryKey: keys.metricSeries(keysCsv),
 		queryFn: () =>
 			callTool<{ series: ExamMetricSeriesPoint[] }>(
 				app,
 				"exam_metric_series",
-				{ petId, canonicalKeys: keys_.length > 0 ? keys_ : undefined },
+				{ canonicalKeys: keys_.length > 0 ? keys_ : undefined },
 			).then((r) => r.series),
-		enabled: !!app && !!petId,
+		enabled: !!app,
 	});
 }
 
 function invalidateAfterExamMutation(
 	qc: ReturnType<typeof useQueryClient>,
 	episodeId: string | null | undefined,
-	petLookup?: { petId?: string | null },
 ) {
 	qc.invalidateQueries({ queryKey: ["exams"] });
 	qc.invalidateQueries({ queryKey: ["exam"] });
 	qc.invalidateQueries({ queryKey: ["metric-series"] });
 	if (episodeId) qc.invalidateQueries({ queryKey: keys.episode(episodeId) });
-	if (petLookup?.petId)
-		qc.invalidateQueries({ queryKey: keys.examsByPet(petLookup.petId) });
 }
 
 export function useUploadExam() {

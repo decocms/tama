@@ -12,7 +12,7 @@ import {
 	startEpisode,
 	updateEpisode,
 } from "../storage/episodes.ts";
-import { getPet } from "../storage/pets.ts";
+import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
@@ -102,16 +102,19 @@ export const episodeStartTool = (_env: Env) =>
 	createTool({
 		id: "episode_start",
 		description:
-			"Start a new care episode for a pet (illness, treatment cycle, etc.).",
+			"Start a new care episode (illness, treatment cycle, etc.) for the pet this deployment is for.",
 		inputSchema: z.object({
-			petId: z.string(),
 			title: z.string(),
 			summary: z.string().optional(),
 		}),
 		outputSchema: z.object({ episode: EpisodeSchema }),
 		_meta: { ui: { resourceUri: URI.episodeStart } },
 		execute: async ({ context, runtimeContext }) => {
-			const ep = await startEpisode(runtimeContext.env as Env, context);
+			const ep = await startEpisode(runtimeContext.env as Env, {
+				petId: PET_SELF_ID,
+				title: context.title,
+				summary: context.summary,
+			});
 			return { episode: ep };
 		},
 	});
@@ -168,7 +171,7 @@ export const episodeGetTool = (_env: Env) =>
 
 			let tz = context.timeZone;
 			if (!tz) {
-				const pet = await getPet(e, ep.petId);
+				const pet = await getSelfPet(e);
 				tz = pet?.timezone ?? "UTC";
 			}
 
@@ -220,13 +223,13 @@ export const episodeGetTool = (_env: Env) =>
 export const episodeListTool = (_env: Env) =>
 	createTool({
 		id: "episode_list",
-		description: "List episodes (optionally filtered by pet).",
-		inputSchema: z.object({ petId: z.string().optional() }),
+		description: "List episodes for the pet this deployment is for.",
+		inputSchema: z.object({}),
 		outputSchema: z.object({ episodes: z.array(EpisodeSchema) }),
 		_meta: { ui: { resourceUri: URI.episodeList } },
 		annotations: { readOnlyHint: true },
-		execute: async ({ context, runtimeContext }) => {
-			const eps = await listEpisodes(runtimeContext.env as Env, context.petId);
+		execute: async ({ runtimeContext }) => {
+			const eps = await listEpisodes(runtimeContext.env as Env, PET_SELF_ID);
 			return { episodes: eps };
 		},
 	});
@@ -308,7 +311,7 @@ export const episodeUpdateTool = (_env: Env) =>
 			const env = runtimeContext.env as Env;
 			const ep = await getEpisode(env, context.episodeId);
 			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
-			const pet = await getPet(env, ep.petId);
+			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 
 			let startedAt = context.startedAt;

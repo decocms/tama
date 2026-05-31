@@ -12,17 +12,9 @@ export function EpisodePage() {
 		<Layout
 			breadcrumb={
 				<span className="flex items-center gap-2">
-					{ep ? (
-						<Link
-							to="/pet/$petId"
-							params={{ petId: ep.petId }}
-							className="hover:underline"
-						>
-							pet
-						</Link>
-					) : (
-						<span>pet</span>
-					)}
+					<Link to="/" className="hover:underline">
+						pet
+					</Link>
 					<span>/</span>
 					<span>{ep?.title ?? "episode"}</span>
 				</span>

@@ -18,14 +18,7 @@ import {
 	examUploadTool,
 } from "./exam.ts";
 import { episodeInsightsTool } from "./insights.ts";
-import {
-	petCreateTool,
-	petDeleteTool,
-	petEnrichTool,
-	petGetTool,
-	petListTool,
-	petUpdateTool,
-} from "./pet.ts";
+import { petEnrichTool, petProfileTool, petUpdateTool } from "./pet.ts";
 import {
 	prescriptionCreateTool,
 	prescriptionDeleteTool,
@@ -64,12 +57,9 @@ import {
 
 export const tools = [
 	dashboardTool,
-	petCreateTool,
+	petProfileTool,
 	petUpdateTool,
-	petDeleteTool,
 	petEnrichTool,
-	petGetTool,
-	petListTool,
 	episodeStartTool,
 	episodeGetTool,
 	episodeListTool,

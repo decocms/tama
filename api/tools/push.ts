@@ -2,6 +2,7 @@ import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import type { Env } from "../env.ts";
 import { sendPush } from "../notifications/webpush.ts";
+import { PET_SELF_ID } from "../storage/pet-self.ts";
 import {
 	deletePushSubscriptionByEndpoint,
 	listPushSubscriptions,
@@ -48,7 +49,6 @@ export const pushSubscribeTool = (_env: Env) =>
 				.describe(
 					"base64url-encoded auth secret (from PushSubscription.getKey('auth'))",
 				),
-			petId: z.string().optional().nullable(),
 			userAgent: z.string().optional().nullable(),
 		}),
 		outputSchema: z.object({
@@ -61,7 +61,7 @@ export const pushSubscribeTool = (_env: Env) =>
 				endpoint: context.endpoint,
 				p256dh: context.p256dh,
 				auth: context.auth,
-				petId: context.petId ?? null,
+				petId: PET_SELF_ID,
 				userAgent: context.userAgent ?? null,
 			});
 			return { id: row.id, endpoint: row.endpoint };

@@ -3,6 +3,7 @@ import { type Env, StateSchema } from "./env.ts";
 import { prompts } from "./prompts/index.ts";
 import { uiResources } from "./resources/ui.ts";
 import { getFile, readFileBytes } from "./storage/files.ts";
+import { PET_SELF_ID } from "./storage/pet-self.ts";
 import { upsertPushSubscription } from "./storage/push-subscriptions.ts";
 import { tools } from "./tools/index.ts";
 
@@ -70,7 +71,6 @@ function withAssetsAndMcpRoutes(fetcher: Fetcher): Fetcher {
 					endpoint?: string;
 					p256dh?: string;
 					auth?: string;
-					petId?: string | null;
 					userAgent?: string | null;
 				};
 				if (!body.endpoint || !body.p256dh || !body.auth) {
@@ -83,7 +83,7 @@ function withAssetsAndMcpRoutes(fetcher: Fetcher): Fetcher {
 					endpoint: body.endpoint,
 					p256dh: body.p256dh,
 					auth: body.auth,
-					petId: body.petId ?? null,
+					petId: PET_SELF_ID,
 					userAgent: body.userAgent ?? null,
 				});
 				return jsonResponse({ id: row.id, endpoint: row.endpoint });
