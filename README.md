@@ -1,113 +1,164 @@
-# myvet
+# Tama
 
-Veterinary care MCP for deco studio — pet profile, AI breed/condition research, illness episodes, prescription photo → live medicine + meal timetable.
+A tamagotchi for your real pet. One pet, one agent, one deploy.
 
-Built for **Beto**, my dog, but works for any pet.
+This repo is a **template**. You fork it, ask a coding-agent (Studio,
+Claude Code, …) to claim it for *your* pet, and deploy it to your own
+Cloudflare account. The deployed worker is the agent: dashboard at `/`,
+ambient tamagotchi at `/companion`, MCP server at `/mcp`. Free, MIT,
+your data lives in your account — we never see it.
 
-## What the MVP does
+→ Landing: <https://tama.deco-ceo.workers.dev> *(coming soon)*
+→ Demo: <https://tama-example.deco-ceo.workers.dev> *(coming soon)*
 
-1. **Add animal** — name, breed, age, weight, notes.
-2. **AI enrich profile** — Perplexity researches breed traits, age-appropriate care, and current conditions; saves findings + citations to the pet.
-3. **Start an episode** — title + optional description; attach `chatlog` notes (pasted message history).
-4. **Upload prescription photos** — Anthropic vision extracts each scheduled item, tagging it as `medication` or `meal` (e.g. PAPA on the whiteboard → meal).
-5. **Live timetable** — derived from confirmed prescriptions; "Give now" / "Skip" logs a dose; doses given early/late shift the next dose to preserve the interval. Editable from UI and chat.
+## What you get
+
+- **Medical log** — upload exams (PDF or photo); Claude vision extracts every
+  parameter, maps each to a canonical taxonomy (so "TGP" and "ALT" land in
+  the same bucket), and charts evolution over time. Prescription photos
+  become a live timetable with dose logging and push reminders.
+- **An agent for your pet** — `/mcp` exposes the whole surface as MCP tools.
+  Studio imports it and chat becomes admin: "Did I give Beto his Prelone?"
+  "What was his hemoglobin trend?" "Look up Sucralfate side effects."
+- **A tamagotchi** — `/companion` is a tiny pixel face that lives on your
+  home screen (PWA). Generated from a photo via a two-pass img2img pipeline:
+  Claude reads the photo and builds a character sheet, then Workers AI
+  generates 6 emotion variants (idle, happy, hungry, pill-time, sad,
+  sleeping) that hold the same identity. Reacts ambient to dose schedule.
+
+## How to claim this for your pet
+
+The intended path is **inside Studio**: studio.decocms.com → Import from
+GitHub → paste the URL of your fork. Studio's coding-agent reads
+`AGENTS.md` and walks you through customize → commit → deploy → operate.
+No terminal needed.
+
+If you prefer a local IDE, the same flow works in Claude Code (invoke the
+[`/claim-pet`](./.claude/skills/claim-pet.md) skill), Cursor, or anything
+else that honors `AGENTS.md`. Or read [AGENTS.md](./AGENTS.md) yourself
+and do it by hand — every step is a real shell command.
 
 ## Architecture
 
-- **Cloudflare Worker** (`api/main.cf.ts`) serves the MCP at `/api/mcp` and the UI at all other paths via the Workers Assets binding.
-- **D1** for structured data (`api/db/schema.ts`), accessed via Drizzle ORM.
-- **R2** for prescription image blobs.
-- **Cloudflare AI Gateway** routes both Anthropic (vision extraction) and Perplexity (breed research) — no API keys live in the Worker, only the gateway URL.
-- **React UI** (`web/`) bundled to a single HTML file by Vite, dispatched per tool via the `TOOL_PAGES` map in `web/router.tsx`.
+- **Cloudflare Worker** (`api/main.cf.ts`) — MCP server, REST endpoints,
+  cron-driven push notifications, static asset serving.
+- **D1** (`api/db/schema.ts`) — singleton `pets` row + episodes / notes /
+  prescriptions / doses / schedule_state / recordings / exams / metrics.
+  Accessed via Drizzle ORM.
+- **R2** — uploaded files (prescription photos, exam PDFs, audio chunks,
+  per-pet sprite pack).
+- **Cloudflare AI Gateway** — routes Anthropic (vision extraction, exam
+  parsing, character sheet) and Perplexity (vet research). No API keys
+  live in the Worker; the gateway holds BYOK.
+- **Workers AI** — img2img for the sprite pipeline. Free tier covers a
+  one-time claim run.
+- **React UI** (`web/`) — bundled to a single HTML by Vite. Dashboard,
+  exams page, episode dashboard, companion view all served from the
+  same Worker.
 
-## One-time setup
+The repo is single-pet by design — every history table is keyed on
+`episode_id`; episodes hang off the singleton `pet_self`. No multi-tenant
+plumbing, no pet picker, no "which pet" question to ever ask.
 
-1. **Cloudflare AI Gateway**: in the dashboard, create a gateway named `myvet`. Under *Settings → Authentication / Providers*, add your Anthropic and Perplexity API keys (BYOK). Note your account id.
+## Local development
 
-2. **Fill in `wrangler.toml`**:
-   ```toml
-   [vars]
-   AI_GATEWAY_ACCOUNT_ID = "<your-cf-account-id>"
-   AI_GATEWAY_NAME       = "myvet"
-   ```
-
-3. **Create D1 + R2**:
-   ```bash
-   bun install
-   bunx wrangler d1 create myvet
-   # paste the returned database_id into wrangler.toml
-   bunx wrangler r2 bucket create myvet-files
-   bunx wrangler r2 bucket create myvet-files-dev
-   ```
-
-4. **Apply migrations locally**:
-   ```bash
-   bun run db:migrate:local
-   ```
-
-## Run locally
+After running the claim flow:
 
 ```bash
+bun install
+bun run db:migrate:local
 bun run dev
 ```
 
-This runs `vite build --watch` (rebuilds `dist/client/index.html` on changes) alongside `wrangler dev` (serves the Worker at `http://localhost:8787`). Miniflare emulates D1 + R2 with persistence by default.
-
-## Connect from deco studio
-
-In studio, create an HTTP connection pointing at:
-
-```
-http://localhost:8787/api/mcp
-```
-
-Add the connection to a Virtual MCP / agent. All 12 tools become available. Use the `myvet_care_guide` prompt for a guided flow.
+`vite build --watch` rebuilds the UI; `wrangler dev` serves the worker
+at `http://localhost:8787`. Miniflare emulates D1 + R2 with persistence.
 
 ## Deploy
 
 ```bash
-bunx wrangler d1 migrations apply myvet --remote
+# Provision (once)
+wrangler d1 create tama-<petslug>          # patch wrangler.toml database_id
+wrangler r2 bucket create tama-<petslug>-files
+
+# Secrets (once)
+bun run scripts/generate-vapid.ts          # generate VAPID keypair
+wrangler secret put VAPID_PUBLIC_KEY
+wrangler secret put VAPID_PRIVATE_KEY
+wrangler secret put VAPID_SUBJECT          # mailto:you@example.com
+wrangler secret put ANTHROPIC_API_KEY
+
+# Deploy (every time)
+bun run db:migrate:remote
 bun run deploy
 ```
 
-Update the studio connection URL to your `*.workers.dev` address.
+## Migrating from the legacy `myvet` shape
 
-## Tools
+If you ran the pre-tama version of this repo on a Cloudflare account and
+want to bring its data forward:
 
-| Tool                  | What it does                                                  |
-| --------------------- | ------------------------------------------------------------- |
-| `pet_create`          | Add a pet                                                     |
-| `pet_enrich`          | Perplexity research → enrichmentJson                          |
-| `pet_get` / `pet_list`| Read                                                          |
-| `episode_start`       | Start a care episode                                          |
-| `episode_get`         | Dashboard: timetable + Rx + notes                             |
-| `episode_list`        | List episodes                                                 |
-| `episode_end`         | Close an episode                                              |
-| `episode_add_note`    | Add text or chatlog note                                      |
-| `prescription_upload` | Vision-extract a photo → draft prescription                   |
-| `prescription_update` | Edit / confirm a prescription                                 |
-| `prescription_list`   | List prescriptions for an episode                             |
-| `timetable_get`       | Derived live timetable                                        |
-| `dose_log`            | Log dose given / skipped, with optional adjustment            |
-| `timetable_adjust`    | Shift the next dose of an item by N hours                     |
+```bash
+SOURCE_DB=myvet TARGET_DB=tama-<petslug> \
+SOURCE_BUCKET=myvet-files TARGET_BUCKET=tama-<petslug>-files \
+BETO_PET_ID=pet_xxxxx \
+bun scripts/migrate-beto.ts
+```
 
-## Data layout
+The script snapshots the source D1, filters to one pet's subtree,
+rewrites `pet_id` values to `pet_self`, mirrors R2 files, and
+sanity-checks row counts. See [`scripts/migrate-beto.ts`](./scripts/migrate-beto.ts).
 
-D1 tables: `pets`, `episodes`, `notes`, `files`, `prescriptions`, `doses`.
-R2 keys: `prescriptions/<fileId>.<ext>`. Originals are immutable — re-uploading "the same" image creates a new file row + R2 key.
+## MCP tools
+
+Every tool acts on **the** pet (no `petId` argument anywhere).
+
+| Tool                        | What it does                                  |
+| --------------------------- | --------------------------------------------- |
+| `pet_profile`               | Read the singleton pet                        |
+| `pet_update`                | Patch pet fields                              |
+| `pet_enrich`                | Perplexity research → enrichmentJson          |
+| `pet_sprite_generate`       | Two-pass img2img → 6-state sprite pack in R2  |
+| `episode_start` / `_end`    | Lifecycle for a care episode                  |
+| `episode_get` / `_list`     | Read                                          |
+| `episode_add_note`          | Free-text or chatlog note                     |
+| `episode_update` / `_delete`| Patch / soft-delete                           |
+| `prescription_upload`       | Vision-extract a photo → draft prescription   |
+| `prescription_create`       | Structured (no OCR) prescription              |
+| `prescription_update`       | Edit / confirm / drop schedule items          |
+| `prescription_list` / `_delete` | Read / hard-delete (cascades to schedule)|
+| `timetable_get`             | Derived live timetable for next N hours       |
+| `dose_log` / `dose_update`  | Log given / skipped / undone                  |
+| `schedule_state_list` / `_delete` | Read / remove live item state           |
+| `timetable_snooze` / `_set_anchor` / `_set_duration` / `_stop_item` | Per-item adjustments |
+| `recording_*`               | Audio chunked upload → whisper → summary      |
+| `exam_upload` / `_paste`    | PDF/photo/text → AI-extracted metrics         |
+| `exam_get` / `_list` / `_update` / `_delete` | Exam CRUD                    |
+| `exam_metric_series`        | Chart-shaped per-metric time series           |
+| `episode_insights`          | LLM-generated bullet summary of the episode   |
+| `vet_research`              | Perplexity with auto-attached pet + episode context |
+| `push_*`                    | VAPID key, subscribe, unsubscribe, test       |
+| `dashboard`                 | Studio inline dashboard surface               |
 
 ## Tests
 
 ```bash
-bun test          # unit tests for timetable derivation
+bun test          # unit tests (timetable + exam-metric chunking + state)
 bun run check     # tsc --noEmit
 bun run ci:check  # biome
 ```
 
-## Roadmap (not in MVP)
+## Non-goals
 
-- Vaccine calendar
-- Exam OCR + history
-- Appointment recorder
-- Reminders / push notifications
-- Multi-user / auth
+- Multi-pet households on one deploy. Two pets → two forks → two deploys.
+  See [the plan doc](./docs/) for the rationale.
+- Selling this as a managed service. The deployment story is fork-and-run.
+- Native iOS/Android apps. PWA only.
+
+## Acknowledgements
+
+Built on [deco studio](https://studio.decocms.com). The MCP runtime, the
+agent surface, and the "Studio is the full lifecycle IDE" thesis come
+from there. Tama is the personal-use side of the same primitives.
+
+[See AGENTS.md](./AGENTS.md) for the claim lifecycle.
+[See docs/](./docs/) for the open feature requests to the Studio team.
