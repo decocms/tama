@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+	--cream: #fff8ee;
+	--peach: #ffbd8e;
+	--mint: #b6e3c8;
+	--lavender: #c9b6f0;
+	--ink: #2a1f17;
+	--shade: #b88858;
+}
+
+/* Brutalist hard drop-shadow on cards + buttons */
+.brut {
+	box-shadow: 6px 6px 0 var(--ink);
+	transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.brut:hover {
+	transform: translate(-2px, -2px);
+	box-shadow: 8px 8px 0 var(--ink);
+}
+.brut:active {
+	transform: translate(2px, 2px);
+	box-shadow: 2px 2px 0 var(--ink);
+}
+
+.headline {
+	font-family:
+		"Bricolage Grotesque",
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		"Segoe UI",
+		Roboto,
+		sans-serif;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	line-height: 0.95;
+}
+
+@keyframes breathe {
+	0%, 100% { transform: translateY(0) scaleY(1); }
+	50% { transform: translateY(-3px) scaleY(1.02); }
+}
+
+@keyframes blink {
+	0%, 92%, 100% { transform: scaleY(1); }
+	95% { transform: scaleY(0.1); }
+}
+
+.sprite {
+	image-rendering: pixelated;
+	animation: breathe 2.6s ease-in-out infinite;
+}
+
+/* The sprite-sheet hero face animates through the 6 cells on a loop */
+@keyframes face-cycle {
+	0%, 12% { background-position: 0 0; }
+	14%, 26% { background-position: -384px 0; }   /* happy */
+	28%, 40% { background-position: -768px 0; }   /* hungry */
+	42%, 54% { background-position: -1152px 0; }  /* pill-time */
+	56%, 68% { background-position: -1536px 0; }  /* sad */
+	70%, 88% { background-position: -1920px 0; }  /* sleeping */
+	90%, 100% { background-position: 0 0; }
+}
+.face-cycle {
+	background-image: url("/companion-sprite.svg");
+	background-size: 2304px 384px;
+	background-position: 0 0;
+	animation: face-cycle 14s steps(1, end) infinite, breathe 2.6s ease-in-out infinite;
+}
