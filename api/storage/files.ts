@@ -33,6 +33,36 @@ export interface SaveFileInput {
 	kind?: "prescription" | "exam" | "other";
 }
 
+// Save raw bytes (e.g. an in-Worker generated PNG from Workers AI) to R2 +
+// the files table. Same shape as saveFile but skips the base64 decode.
+export async function saveFileFromBytes(
+	env: Env,
+	input: {
+		bytes: Uint8Array;
+		mimeType: string;
+		originalName?: string;
+		kind?: "prescription" | "exam" | "other";
+	},
+): Promise<FileRow> {
+	const id = newId("file");
+	const ext = extFor(input.mimeType);
+	const r2Key = `${input.kind ?? "other"}/${id}.${ext}`;
+	await env.FILES.put(r2Key, input.bytes, {
+		httpMetadata: { contentType: input.mimeType },
+	});
+	const [row] = await db(env)
+		.insert(files)
+		.values({
+			id,
+			r2Key,
+			mimeType: input.mimeType,
+			originalName: input.originalName,
+			kind: input.kind ?? "other",
+		})
+		.returning();
+	return row;
+}
+
 export async function saveFile(
 	env: Env,
 	input: SaveFileInput,

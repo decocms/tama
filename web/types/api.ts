@@ -9,6 +9,16 @@ export interface Enrichment {
 	sourceQuery: string;
 }
 
+export interface SpritePack {
+	idle: string;
+	happy: string;
+	hungry: string;
+	"pill-time": string;
+	sad: string;
+	sleeping: string;
+	size?: number;
+}
+
 export interface Pet {
 	id: string;
 	name: string;
@@ -19,6 +29,7 @@ export interface Pet {
 	ownerNotes: string | null;
 	timezone: string | null;
 	enrichment: Enrichment | null;
+	spritePack?: SpritePack | null;
 	createdAt: string;
 }
 

@@ -5,6 +5,7 @@ import {
 	type CompanionState,
 	deriveCompanionStatus,
 } from "@/companion/state.ts";
+import type { SpritePack } from "@/types/api.ts";
 import { useEpisode, useEpisodes, usePet } from "../lib/queries.ts";
 
 // Tiny tamagotchi-style companion view. The PWA manifest points `start_url`
@@ -18,6 +19,15 @@ const STATE_TO_CELL: Record<CompanionState, number> = {
 	"pill-time": 3,
 	sad: 4,
 	sleeping: 5,
+};
+
+const STATE_TO_PACK_KEY: Record<CompanionState, keyof SpritePack> = {
+	idle: "idle",
+	happy: "happy",
+	hungry: "hungry",
+	"pill-time": "pill-time",
+	sad: "sad",
+	sleeping: "sleeping",
 };
 
 const STATE_BG: Record<CompanionState, string> = {
@@ -98,7 +108,7 @@ export function CompanionPage() {
 			onDoubleClick={openFullDashboard}
 		>
 			<div className="flex flex-col items-center gap-5 px-6 text-center">
-				<CreatureFace state={status.state} />
+				<CreatureFace state={status.state} pack={pet?.spritePack ?? null} />
 				<div className="space-y-1 max-w-xs">
 					<div
 						className="font-display text-lg font-semibold leading-tight"
@@ -129,8 +139,29 @@ export function CompanionPage() {
 	);
 }
 
-function CreatureFace({ state }: { state: CompanionState }) {
+function CreatureFace({
+	state,
+	pack,
+}: {
+	state: CompanionState;
+	pack: SpritePack | null;
+}) {
 	const cell = STATE_TO_CELL[state];
+	// Prefer the AI-generated per-pet pack when available, fall back to the
+	// static 6-cell placeholder sheet baked into public/.
+	const usingPack = pack != null && pack[STATE_TO_PACK_KEY[state]];
+	const bgStyle = usingPack
+		? {
+				backgroundImage: `url(${pack[STATE_TO_PACK_KEY[state]]})`,
+				backgroundSize: "256px 256px",
+				backgroundPosition: "0 0",
+				backgroundRepeat: "no-repeat" as const,
+			}
+		: {
+				backgroundImage: `url(${SPRITE_URL})`,
+				backgroundSize: "1536px 256px",
+				backgroundPosition: `${-cell * 256}px 0`,
+			};
 	return (
 		<div
 			className="relative"
@@ -138,9 +169,7 @@ function CreatureFace({ state }: { state: CompanionState }) {
 			style={{
 				width: 256,
 				height: 256,
-				backgroundImage: `url(${SPRITE_URL})`,
-				backgroundSize: "1536px 256px",
-				backgroundPosition: `${-cell * 256}px 0`,
+				...bgStyle,
 				imageRendering: "pixelated",
 				animation: "tama-breathe 2.4s ease-in-out infinite",
 			}}

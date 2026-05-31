@@ -120,3 +120,50 @@ export function parseEnrichment(pet: Pet): Enrichment | null {
 		return null;
 	}
 }
+
+export interface SpritePack {
+	idle: string;
+	happy: string;
+	hungry: string;
+	"pill-time": string;
+	sad: string;
+	sleeping: string;
+	// Cell size in CSS pixels (companion view scales 4x).
+	size?: number;
+}
+
+export function parseSpritePack(pet: Pet): SpritePack | null {
+	if (!pet.spritePackJson) return null;
+	try {
+		const obj = JSON.parse(pet.spritePackJson);
+		if (
+			typeof obj?.idle === "string" &&
+			typeof obj?.happy === "string" &&
+			typeof obj?.hungry === "string"
+		) {
+			return obj as SpritePack;
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+export async function setSpritePack(
+	env: Env,
+	petId: string,
+	pack: SpritePack,
+	characterJson: string,
+	photoFileId: string,
+): Promise<Pet | null> {
+	const [row] = await db(env)
+		.update(pets)
+		.set({
+			spritePackJson: JSON.stringify(pack),
+			characterJson,
+			photoFileId,
+		})
+		.where(eq(pets.id, petId))
+		.returning();
+	return row ?? null;
+}

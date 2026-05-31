@@ -13,6 +13,13 @@ export const pets = sqliteTable("pets", {
 	ownerNotes: text("owner_notes"),
 	enrichmentJson: text("enrichment_json"),
 	timezone: text("timezone"),
+	// Per-pet pixel sprite pack — JSON map of {idle, happy, ...} → R2 URL.
+	// Populated by pet_sprite_generate. NULL until claim flow runs.
+	spritePackJson: text("sprite_pack_json"),
+	// Structured character description (colors, ear shape, markings) extracted
+	// from the source photo. Cached so re-renders stay on-model.
+	characterJson: text("character_json"),
+	photoFileId: text("photo_file_id"),
 	createdAt: text("created_at").notNull().default(nowSql),
 	deletedAt: text("deleted_at"),
 });

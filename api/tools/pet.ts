@@ -5,11 +5,22 @@ import type { Env } from "../env.ts";
 import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
 import {
 	parseEnrichment,
+	parseSpritePack,
 	setEnrichment,
 	updatePet,
 } from "../storage/pets.ts";
 import { EnrichmentSchema } from "./shared.ts";
 import { URI } from "./uris.ts";
+
+const SpritePackSchema = z.object({
+	idle: z.string(),
+	happy: z.string(),
+	hungry: z.string(),
+	"pill-time": z.string(),
+	sad: z.string(),
+	sleeping: z.string(),
+	size: z.number().optional(),
+});
 
 const PetSchema = z.object({
 	id: z.string(),
@@ -21,6 +32,7 @@ const PetSchema = z.object({
 	ownerNotes: z.string().nullable(),
 	timezone: z.string().nullable(),
 	enrichment: EnrichmentSchema.nullable(),
+	spritePack: SpritePackSchema.nullable(),
 	createdAt: z.string(),
 });
 
@@ -35,6 +47,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		ownerNotes: p.ownerNotes,
 		timezone: p.timezone,
 		enrichment: parseEnrichment(p),
+		spritePack: parseSpritePack(p),
 		createdAt: p.createdAt,
 	};
 }
