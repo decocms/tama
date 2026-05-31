@@ -1,13 +1,14 @@
 {
-	"name": "MyVet",
-	"short_name": "MyVet",
-	"description": "Pet health timetable and medicine reminders.",
-	"start_url": "/",
+	"name": "Tama",
+	"short_name": "Tama",
+	"description": "Your pet's life, in your pocket. A tamagotchi for the one creature that matters.",
+	"start_url": "/#/companion",
 	"scope": "/",
 	"display": "standalone",
+	"display_override": ["window-controls-overlay", "standalone"],
 	"orientation": "portrait",
-	"background_color": "#0f1417",
-	"theme_color": "#0f1417",
+	"background_color": "#fff8ee",
+	"theme_color": "#fff8ee",
 	"icons": [
 		{
 			"src": "/icons/icon-192.png",

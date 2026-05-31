@@ -14,6 +14,7 @@ import {
 	isStandalone,
 	registerServiceWorker,
 } from "./lib/push.ts";
+import { CompanionPage } from "./pages/Companion.tsx";
 import { DashboardPage } from "./pages/Dashboard.tsx";
 import { EpisodePage } from "./pages/Episode.tsx";
 import { ExamsPage } from "./pages/Exams.tsx";
@@ -53,6 +54,12 @@ const episode = createRoute({
 	component: EpisodePage,
 });
 
+const companion = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/companion",
+	component: CompanionPage,
+});
+
 // Standalone push-setup surface. Reached two ways:
 //   1. A button in the in-studio RemindersToggle opens this page in a new tab
 //      (because iframed contexts can't reliably prompt for notifications).
@@ -69,6 +76,7 @@ const routeTree = rootRoute.addChildren([
 	exams,
 	examsDetail,
 	episode,
+	companion,
 	subscribe,
 ]);
 
