@@ -10,7 +10,7 @@ export const dashboardTool = (_env: Env) =>
 	createTool({
 		id: "dashboard",
 		description:
-			"Open the myvet admin dashboard (browse pets, episodes, timetable). The user usually opens this directly — only call if they explicitly ask.",
+			"Open the Tama admin dashboard (pet profile, episodes, timetable, exams). The user usually opens this directly — only call if they explicitly ask.",
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.main } },

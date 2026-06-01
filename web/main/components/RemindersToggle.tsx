@@ -35,11 +35,16 @@ interface Props {
 	petId?: string;
 }
 
-// Deco studio proxies the MyVet bundle into an iframe on its own origin
+// Deco studio proxies the Tama bundle into an iframe on its own origin
 // (studio.decocms.com), so `window.location.origin` from inside the iframe
 // is studio's domain — not our worker. We hardcode the worker origin so the
-// /subscribe popup actually loads the MyVet page rather than a studio route.
-const WORKER_ORIGIN = "https://myvet.deco-ceo.workers.dev";
+// /subscribe popup actually loads the Tama page rather than a studio route.
+//
+// THE ADOPT FLOW REPLACES THIS — see AGENTS.md step 1 ("CUSTOMIZE"). After
+// deploy, set it to the real worker URL (something like
+// "https://tama-<petslug>.workers.dev"). The placeholder below points at
+// the public example demo and is harmless until the real adopt runs.
+const WORKER_ORIGIN = "https://tama-example.deco-ceo.workers.dev";
 
 // Two render paths, split into separate components so neither leaks hook
 // requirements to the other:
@@ -271,12 +276,12 @@ function EnableDialog({
 						<div className="rounded-lg border border-dashed p-3 bg-secondary/40">
 							<p className="font-semibold flex items-center gap-1.5">
 								<Share className="w-3.5 h-3.5" />
-								Install MyVet first
+								Install Tama first
 							</p>
 							<p className="text-muted-foreground mt-1">
 								iPhone/iPad only delivers push notifications to home-screen
 								apps. Tap the <strong>Share</strong> button in Safari, choose{" "}
-								<strong>Add to Home Screen</strong>, then open MyVet from your
+								<strong>Add to Home Screen</strong>, then open Tama from your
 								home screen and try again.
 							</p>
 						</div>

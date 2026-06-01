@@ -31,8 +31,8 @@ function htmlResource(uri: string, name: string, description: string) {
 export const uiResources = [
 	htmlResource(
 		URI.main,
-		"myvet",
-		"Main admin dashboard: pets, episodes, timetable.",
+		"Tama",
+		"Main admin dashboard: pet profile, episodes, timetable.",
 	),
 	htmlResource(
 		URI.petCreate,

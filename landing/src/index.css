@@ -37,6 +37,23 @@
 	line-height: 0.95;
 }
 
+/* Highlighter-pen mark — a horizontal band painted only across the lower
+   half of the text. Stays tight to the glyphs, never bleeds vertically
+   into adjacent lines. Wraps cleanly thanks to box-decoration-break. */
+.headline-mark {
+	background-image: linear-gradient(
+		180deg,
+		transparent 0%,
+		transparent 48%,
+		var(--peach) 48%,
+		var(--peach) 92%,
+		transparent 92%
+	);
+	padding-inline: 0.08em;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+
 @keyframes breathe {
 	0%, 100% { transform: translateY(0) scaleY(1); }
 	50% { transform: translateY(-3px) scaleY(1.02); }

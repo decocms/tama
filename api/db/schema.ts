@@ -14,8 +14,13 @@ export const pets = sqliteTable("pets", {
 	enrichmentJson: text("enrichment_json"),
 	timezone: text("timezone"),
 	// Per-pet pixel sprite pack — JSON map of {idle, happy, ...} → R2 URL.
-	// Populated by pet_sprite_generate. NULL until claim flow runs.
+	// Populated by pet_sprite_generate (raster img2img). NULL until the
+	// adopt flow runs.
 	spritePackJson: text("sprite_pack_json"),
+	// Parallel SVG sprite pack — JSON map of {idle, happy, ...} → SVG
+	// string. Populated by pet_sprite_svg_generate (procedural). Crisp at
+	// any size, instant, free; trade-off vs the raster pack.
+	svgPackJson: text("svg_pack_json"),
 	// Structured character description (colors, ear shape, markings) extracted
 	// from the source photo. Cached so re-renders stay on-model.
 	characterJson: text("character_json"),

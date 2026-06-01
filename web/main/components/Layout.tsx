@@ -31,7 +31,7 @@ export function Layout({
 							<PawPrint className="w-4 h-4" />
 						</span>
 						<span className="font-display font-semibold text-lg leading-none">
-							myvet
+							Tama
 						</span>
 					</Link>
 					{breadcrumb ? (

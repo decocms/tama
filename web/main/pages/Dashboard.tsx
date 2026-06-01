@@ -28,7 +28,7 @@ import {
 
 // The dashboard. There is only ONE pet on this deploy — no picker, no
 // petId in the URL, no "which pet" question to ask anyone. Forking the
-// repo and running the claim flow is how you set up a different pet.
+// repo and adopting it for that pet is how you set up a different pet.
 export function DashboardPage() {
 	const navigate = useNavigate();
 	const { data: pet, isLoading } = usePet();

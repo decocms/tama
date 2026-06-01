@@ -160,7 +160,7 @@ export async function subscribeToPush({
 	}
 	if (isIOS() && !isStandalone()) {
 		throw new Error(
-			"On iPhone/iPad, install MyVet to your Home Screen first (Share → Add to Home Screen), then open it from there.",
+			"On iPhone/iPad, install Tama to your Home Screen first (Share → Add to Home Screen), then open it from there.",
 		);
 	}
 	const perm = await Notification.requestPermission();
@@ -201,7 +201,7 @@ export async function subscribeStandalone({
 	}
 	if (isIOS() && !isStandalone()) {
 		throw new Error(
-			"On iPhone/iPad, install MyVet to your Home Screen first (Share → Add to Home Screen), then open it from there.",
+			"On iPhone/iPad, install Tama to your Home Screen first (Share → Add to Home Screen), then open it from there.",
 		);
 	}
 	const perm = await Notification.requestPermission();

@@ -116,7 +116,7 @@ export const pushTestTool = (_env: Env) =>
 				? all.filter((s) => s.endpoint === context.endpoint)
 				: all;
 			const payload = {
-				title: context.title ?? "MyVet test",
+				title: context.title ?? "Tama test",
 				body: context.body ?? "If you see this, push notifications work.",
 				url: "/",
 				tag: "push-test",

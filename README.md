@@ -1,11 +1,11 @@
 # Tama
 
-A tamagotchi for your real pet. One pet, one agent, one deploy.
+An agent for your pet to live a better life. One pet, one agent, one deploy.
 
 This repo is a **template**. You fork it, ask a coding-agent (Studio,
-Claude Code, …) to claim it for *your* pet, and deploy it to your own
+Claude Code, …) to adopt it for *your* pet, and deploy it to your own
 Cloudflare account. The deployed worker is the agent: dashboard at `/`,
-ambient tamagotchi at `/companion`, MCP server at `/mcp`. Free, MIT,
+an ambient pixel companion at `/companion`, MCP server at `/mcp`. Free, MIT,
 your data lives in your account — we never see it.
 
 → Landing: <https://tama.deco-ceo.workers.dev> *(coming soon)*
@@ -20,13 +20,13 @@ your data lives in your account — we never see it.
 - **An agent for your pet** — `/mcp` exposes the whole surface as MCP tools.
   Studio imports it and chat becomes admin: "Did I give Beto his Prelone?"
   "What was his hemoglobin trend?" "Look up Sucralfate side effects."
-- **A tamagotchi** — `/companion` is a tiny pixel face that lives on your
+- **A pixel companion** — `/companion` is a tiny pixel face that lives on your
   home screen (PWA). Generated from a photo via a two-pass img2img pipeline:
   Claude reads the photo and builds a character sheet, then Workers AI
   generates 6 emotion variants (idle, happy, hungry, pill-time, sad,
   sleeping) that hold the same identity. Reacts ambient to dose schedule.
 
-## How to claim this for your pet
+## How to adopt this for your pet
 
 The intended path is **inside Studio**: studio.decocms.com → Import from
 GitHub → paste the URL of your fork. Studio's coding-agent reads
@@ -34,7 +34,7 @@ GitHub → paste the URL of your fork. Studio's coding-agent reads
 No terminal needed.
 
 If you prefer a local IDE, the same flow works in Claude Code (invoke the
-[`/claim-pet`](./.claude/skills/claim-pet.md) skill), Cursor, or anything
+[`/adopt-pet`](./.claude/skills/adopt-pet.md) skill), Cursor, or anything
 else that honors `AGENTS.md`. Or read [AGENTS.md](./AGENTS.md) yourself
 and do it by hand — every step is a real shell command.
 
@@ -51,7 +51,7 @@ and do it by hand — every step is a real shell command.
   parsing, character sheet) and Perplexity (vet research). No API keys
   live in the Worker; the gateway holds BYOK.
 - **Workers AI** — img2img for the sprite pipeline. Free tier covers a
-  one-time claim run.
+  one-time adopt run.
 - **React UI** (`web/`) — bundled to a single HTML by Vite. Dashboard,
   exams page, episode dashboard, companion view all served from the
   same Worker.
@@ -62,7 +62,7 @@ plumbing, no pet picker, no "which pet" question to ever ask.
 
 ## Local development
 
-After running the claim flow:
+After adopting the template for your pet:
 
 ```bash
 bun install
@@ -160,5 +160,5 @@ Built on [deco studio](https://studio.decocms.com). The MCP runtime, the
 agent surface, and the "Studio is the full lifecycle IDE" thesis come
 from there. Tama is the personal-use side of the same primitives.
 
-[See AGENTS.md](./AGENTS.md) for the claim lifecycle.
+[See AGENTS.md](./AGENTS.md) for the adopt lifecycle.
 [See docs/](./docs/) for the open feature requests to the Studio team.

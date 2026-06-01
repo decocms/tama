@@ -55,7 +55,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 // Single-pet shape: every tool that used to take `petId` now operates on the
 // well-known singleton at PET_SELF_ID. There is no pet_create / pet_list /
 // pet_delete — this deployment IS the pet. To onboard a different pet, fork
-// the repo and run the claim flow (see AGENTS.md).
+// the repo and adopt it for that pet (see AGENTS.md).
 
 export const petProfileTool = (_env: Env) =>
 	createTool({

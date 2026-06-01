@@ -18,7 +18,7 @@ import {
 const MODEL = "@cf/runwayml/stable-diffusion-v1-5-img2img";
 
 const STYLE_PREFIX =
-	"pixel art tamagotchi creature face, front-facing, 64x64 native resolution, soft pastel palette, transparent background, clean outlines, cute kawaii style";
+	"pixel art kawaii virtual-pet creature face, front-facing, 64x64 native resolution, soft pastel palette, transparent background, clean outlines, cute style";
 const NEGATIVE =
 	"realistic photo, 3d render, blurry, low detail, multiple characters, text, watermark, anti-aliased, smooth gradients, dark moody";
 

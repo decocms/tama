@@ -34,7 +34,7 @@ import { setSpritePack, type SpritePack } from "../storage/pets.ts";
 //   - Quality varies. The prompts in api/ai/generate-sprite.ts are a
 //     starting point; expect to iterate on strength/guidance/steps.
 //   - Cost: 6 model calls plus 1 vision call. ~30-60s end-to-end on a
-//     warm Workers AI region. Acceptable as a one-time claim step.
+//     warm Workers AI region. Acceptable as a one-time adopt step.
 //   - Identity drift: the base sprite is the anchor for variants. If
 //     variants don't resemble the base, raise strength on the base pass
 //     or lower it on the variants.
@@ -42,11 +42,11 @@ import { setSpritePack, type SpritePack } from "../storage/pets.ts";
 export const petSpriteGenerateTool = (_env: Env) =>
 	createTool({
 		id: "pet_sprite_generate",
-		description: `Generate the pet's 6-state pixel sprite pack from a photo. Runs Claude vision (character extraction) → Workers AI img2img base pass → 5 expression variants. The result is the per-pet identity sprite the companion (tamagotchi) view uses for {idle, happy, hungry, pill-time, sad, sleeping}.
+		description: `Generate the pet's 6-state pixel sprite pack from a photo. Runs Claude vision (character extraction) → Workers AI img2img base pass → 5 expression variants. The result is the per-pet identity sprite the companion view uses for {idle, happy, hungry, pill-time, sad, sleeping}.
 
 Idempotent unless regenerate=true; otherwise re-running with the same photo will overwrite the existing pack.
 
-This is what the claim skill calls after collecting the pet's photo. Can also be re-invoked later (e.g. the pet got a haircut, or the first render looked off).`,
+This is what the adopt skill calls after collecting the pet's photo. Can also be re-invoked later (e.g. the pet got a haircut, or the first render looked off).`,
 		inputSchema: z.object({
 			imageBase64: z.string().describe("Base64 PNG/JPEG/WebP of the pet."),
 			mimeType: z.string().describe("image/jpeg, image/png, image/webp."),

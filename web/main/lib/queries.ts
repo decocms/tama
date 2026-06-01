@@ -38,7 +38,7 @@ export function usePet() {
 		queryKey: keys.pet,
 		queryFn: () =>
 			callTool<{ pet: Pet | null }>(app, "pet_profile", {}).then((r) => r.pet),
-		enabled: !!app,
+		enabled: true,
 	});
 }
 
@@ -50,7 +50,7 @@ export function useEpisodes() {
 			callTool<{ episodes: Episode[] }>(app, "episode_list", {}).then(
 				(r) => r.episodes,
 			),
-		enabled: !!app,
+		enabled: true,
 	});
 }
 
@@ -71,7 +71,7 @@ export function useEpisode(episodeId: string | undefined) {
 				episodeId,
 				timeZone: browserTimeZone(),
 			}),
-		enabled: !!app && !!episodeId,
+		enabled: !!episodeId,
 		refetchInterval: 30_000,
 	});
 }
@@ -316,7 +316,7 @@ export function useEpisodeInsights(episodeId: string) {
 		queryKey: keys.insights(episodeId),
 		queryFn: () =>
 			callTool<EpisodeInsightsResult>(app, "episode_insights", { episodeId }),
-		enabled: !!app && !!episodeId,
+		enabled: !!episodeId,
 		staleTime: 60_000,
 	});
 }
@@ -361,7 +361,7 @@ export function usePushSubscription() {
 				? { endpoint: sub.endpoint, subscribed: true as const }
 				: { endpoint: null, subscribed: false as const };
 		},
-		enabled: !!app,
+		enabled: true,
 		// Subscription state doesn't change without a user gesture, so we can
 		// keep this fresh for a while.
 		staleTime: 60_000,
@@ -414,7 +414,7 @@ export function useRecordings(episodeId: string) {
 			callTool<{ recordings: Recording[] }>(app, "recording_list", {
 				episodeId,
 			}).then((r) => r.recordings),
-		enabled: !!app && !!episodeId,
+		enabled: !!episodeId,
 	});
 }
 
@@ -428,7 +428,7 @@ export function useRecording(recordingId: string | undefined) {
 				"recording_get",
 				{ recordingId },
 			),
-		enabled: !!app && !!recordingId,
+		enabled: !!recordingId,
 		refetchInterval: 5_000,
 	});
 }
@@ -552,7 +552,7 @@ export function useExams() {
 		queryKey: keys.exams,
 		queryFn: () =>
 			callTool<{ exams: Exam[] }>(app, "exam_list", {}).then((r) => r.exams),
-		enabled: !!app,
+		enabled: true,
 	});
 }
 
@@ -564,7 +564,7 @@ export function useExamsForEpisode(episodeId: string | undefined) {
 			callTool<{ exams: Exam[] }>(app, "exam_list", { episodeId }).then(
 				(r) => r.exams,
 			),
-		enabled: !!app && !!episodeId,
+		enabled: !!episodeId,
 	});
 }
 
@@ -576,7 +576,7 @@ export function useExam(examId: string | undefined) {
 			callTool<{ exam: Exam | null; metrics: ExamMetric[] }>(app, "exam_get", {
 				examId,
 			}),
-		enabled: !!app && !!examId,
+		enabled: !!examId,
 	});
 }
 
@@ -591,7 +591,7 @@ export function useMetricSeries(keys_: string[]) {
 				"exam_metric_series",
 				{ canonicalKeys: keys_.length > 0 ? keys_ : undefined },
 			).then((r) => r.series),
-		enabled: !!app,
+		enabled: true,
 	});
 }
 

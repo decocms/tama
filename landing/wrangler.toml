@@ -1,0 +1,19 @@
+name = "tama-landing"
+compatibility_date = "2026-05-01"
+
+# Static-only Worker — assets served directly from dist/. No JS entrypoint
+# needed; the runtime returns the matching file (or index.html for SPA-
+# style 404 routing if we ever add client-side routes).
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+
+# Custom domain. UNCOMMENT once tama.vet is an active zone on this
+# Cloudflare account (Dashboard → Add a domain → update nameservers at the
+# registrar). Then `wrangler deploy` provisions the cert + routes the apex
+# automatically. Until the zone is active, deploying with this enabled
+# fails, so it stays commented.
+# routes = [
+#   { pattern = "tama.vet", custom_domain = true },
+#   { pattern = "www.tama.vet", custom_domain = true },
+# ]

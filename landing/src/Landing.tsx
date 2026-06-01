@@ -1,7 +1,9 @@
-// One-scroll landing page for Tama. Brutalist bones (oversized type, hard
-// shadows, chunky cards, raw HTML semantics) wrapped in a warm pastel
-// palette so it doesn't feel cold. Plain React, no router, no fetches —
-// just a manifesto. Ships to Cloudflare Pages as static HTML+JS.
+// One-scroll landing page for Tama. Two registers, deliberately: warm
+// brutalist pastel for most of it, and one dark high-contrast band (ink
+// #16110c + electric lime #c4e538) that reassures a non-technical pet
+// owner that setup is genuinely easy. Friendly, inviting, no jargon.
+// Plain React, no router, no fetches. Ships to Cloudflare Pages as static
+// HTML+JS.
 
 const REPO_URL = "https://github.com/deco-cx/tama"; // update on first publish
 const STUDIO_IMPORT_URL = `https://studio.decocms.com/import?repo=${encodeURIComponent(
@@ -13,6 +15,7 @@ export function Landing() {
 	return (
 		<main className="min-h-dvh">
 			<Hero />
+			<TwoPaths />
 			<WhatIsTama />
 			<HowItWorks />
 			<LiveDemo />
@@ -49,28 +52,33 @@ function Hero() {
 						href={STUDIO_IMPORT_URL}
 						className="brut bg-[#2a1f17] text-[#fff8ee] px-4 py-2 font-bold inline-flex items-center gap-2 border-2 border-[#2a1f17]"
 					>
-						Deploy yours →
+						Adopt yours →
 					</a>
 				</div>
 			</nav>
 
 			<div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
 				<div>
+					<div className="inline-block mb-5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#2a1f17]/55">
+						Free · Private · Set up in minutes
+					</div>
 					<h1 className="headline text-5xl md:text-7xl mb-6">
-						A tamagotchi for your <span className="bg-[#ffbd8e] px-2">real</span>{" "}
-						pet.
+						An agent for{" "}
+						<span className="headline-mark">your pet</span> to live a
+						better life.
 					</h1>
 					<p className="text-lg md:text-xl text-[#2a1f17]/80 leading-snug mb-8 max-w-md">
-						One pet, one agent, one deploy. Track meds, log doses, chart exam
-						evolution — and keep a tiny pixel version of them on your home
-						screen.
+						Keep your pet's exams, medicines, and vet notes in one place —
+						and just talk to it like you'd text a friend who's great with
+						animals. It's free, it's yours, and the agent sets it all up
+						for you.
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<a
 							href={STUDIO_IMPORT_URL}
 							className="brut bg-[#ffbd8e] text-[#2a1f17] px-6 py-4 font-bold text-lg border-2 border-[#2a1f17] inline-flex items-center gap-2"
 						>
-							Deploy your Tama, free →
+							Adopt your Tama, free →
 						</a>
 						<a
 							href={DEMO_URL}
@@ -101,35 +109,137 @@ function Hero() {
 	);
 }
 
+// Dark high-contrast band that splits cleanly into the two ways in:
+// developers fork-and-vibecode, everyone else lets deco studio do it.
+// Same bold register (ink + electric lime); the two-door framing makes
+// the page feel "there's a path for me" no matter who's reading.
+function TwoPaths() {
+	return (
+		<section className="bg-[#16110c] text-[#fff8ee] px-6 md:px-12 py-24 md:py-36 border-b-4 border-[#16110c] overflow-hidden">
+			<div className="max-w-5xl mx-auto">
+				<div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#c4e538] mb-8">
+					Two ways in
+				</div>
+				<h2 className="headline text-4xl md:text-6xl leading-[0.98] mb-12">
+					Set it up <span className="text-[#c4e538]">your</span> way.
+				</h2>
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<div className="border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
+						<div className="text-3xl mb-3" aria-hidden>
+							👩‍💻
+						</div>
+						<h3 className="headline text-2xl mb-3">You write code</h3>
+						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed">
+							Fork the repo and vibecode it with Claude. There's an{" "}
+							<code className="text-[#c4e538] font-mono text-[0.9em]">
+								AGENTS.md
+							</code>{" "}
+							that tells your agent exactly what to do — adopt it for your
+							pet, then deploy to your own Cloudflare. You're in your
+							terminal, you know the drill.
+						</p>
+					</div>
+					<div className="border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
+						<div className="text-3xl mb-3" aria-hidden>
+							🐾
+						</div>
+						<h3 className="headline text-2xl mb-3">You don't? No problem</h3>
+						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed">
+							Use{" "}
+							<span className="text-[#fff8ee] font-semibold">deco studio</span>.
+							Paste the Tama link and the agent walks you through
+							everything — even making your GitHub and Cloudflare accounts,
+							setting up your pet, and going live. No terminal, no code, no
+							stress.
+						</p>
+					</div>
+				</div>
+				<p className="mt-10 text-lg md:text-xl text-[#fff8ee]/70 max-w-3xl">
+					Either way, you bring the pet — Tama brings everything else.
+				</p>
+			</div>
+		</section>
+	);
+}
+
+const FEATURES = [
+	{
+		emoji: "💊",
+		color: "#ffbd8e",
+		title: "Medicine timetable",
+		body: "Confirmed prescriptions drive a live timetable. Doses given early or late shift the schedule to keep the interval — no math required.",
+	},
+	{
+		emoji: "📈",
+		color: "#b6e3c8",
+		title: "Lab exam graphs",
+		body: "Upload exam PDFs or photos. Claude vision extracts every parameter, maps them to a canonical taxonomy, and charts evolution over time.",
+	},
+	{
+		emoji: "📋",
+		color: "#c9b6f0",
+		title: "Prescription extraction",
+		body: "Snap a photo of a vet whiteboard or upload a PDF. Vision extracts medications + meals with dosing into a draft you review and confirm.",
+	},
+	{
+		emoji: "🎙",
+		color: "#fde0e0",
+		title: "Voice notes → transcripts",
+		body: "Record audio in chat, get a transcript and an AI summary. Apply the summary to episode history with one click.",
+	},
+	{
+		emoji: "🔔",
+		color: "#fff1d6",
+		title: "Push reminders",
+		body: "When a dose is due, your phone or laptop buzzes. Cron-driven, idempotent, works from the PWA on iOS + Android.",
+	},
+	{
+		emoji: "🔬",
+		color: "#dff5dc",
+		title: "Grounded vet research",
+		body: "Ask drug interaction, side effect, or treatment questions in plain English. Perplexity searches the literature with your pet's active meds attached as context.",
+	},
+	{
+		emoji: "🧠",
+		color: "#ffbd8e",
+		title: "Episode insights",
+		body: "Each care episode gets an AI-generated bullet summary: status, what's working, what to watch for. Regenerate any time.",
+	},
+	{
+		emoji: "✨",
+		color: "#c9b6f0",
+		title: "AI breed research",
+		body: "When you adopt, the agent looks up your pet's breed, age, and known conditions. Saves findings + citations to the profile, used to ground every other tool.",
+	},
+	{
+		emoji: "🐣",
+		color: "#b6e3c8",
+		title: "Pixel companion",
+		body: "Add /companion to your home screen. A tiny pixel face of your pet that reacts to the schedule — sleeping at night, looking concerned when meds are late.",
+	},
+];
+
 function WhatIsTama() {
 	return (
 		<section className="px-6 md:px-12 py-20 md:py-28 border-b-4 border-[#2a1f17]">
 			<div className="max-w-6xl mx-auto">
 				<h2 className="headline text-4xl md:text-6xl mb-3">
-					Three things in one.
+					What's inside.
 				</h2>
 				<p className="text-lg text-[#2a1f17]/70 mb-12 max-w-xl">
-					Not a SaaS. Not a tracker. A small, lovable, self-deployed thing.
+					Nine things, one place — all working together because they're all
+					about the same pet.
 				</p>
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-					<FeatureCard
-						emoji="🩺"
-						color="#b6e3c8"
-						title="A medical log"
-						body="Upload exams as PDF or photo — the agent extracts every parameter, charts evolution over time, and links each result to a care episode. Doses logged on the timetable, late ones nudge you. Vet research grounded in your pet's history."
-					/>
-					<FeatureCard
-						emoji="🤖"
-						color="#ffbd8e"
-						title="An agent for your pet"
-						body="The deployed worker is an MCP server. Studio imports it, and the same chat becomes admin: 'Did I give Beto his Prelone?' 'What was his hemoglobin trend?' 'Look up Sucralfate side effects.' Context is sharp because there's only one pet."
-					/>
-					<FeatureCard
-						emoji="🐣"
-						color="#c9b6f0"
-						title="A tamagotchi"
-						body="Add /companion to your home screen as a PWA. A small pixel version of your pet sits in your dock or on your phone, blinking, sleeping, looking hungry when a meal's late. Tap to expand into the full dashboard."
-					/>
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+					{FEATURES.map((f) => (
+						<FeatureCard
+							key={f.title}
+							emoji={f.emoji}
+							color={f.color}
+							title={f.title}
+							body={f.body}
+						/>
+					))}
 				</div>
 			</div>
 		</section>
@@ -149,13 +259,13 @@ function FeatureCard({
 }) {
 	return (
 		<div
-			className="brut p-6 border-2 border-[#2a1f17]"
+			className="brut p-5 border-2 border-[#2a1f17]"
 			style={{ backgroundColor: color }}
 		>
-			<div className="text-4xl mb-3" aria-hidden>
+			<div className="text-3xl mb-2" aria-hidden>
 				{emoji}
 			</div>
-			<h3 className="headline text-2xl mb-2">{title}</h3>
+			<h3 className="headline text-xl mb-2">{title}</h3>
 			<p className="text-sm text-[#2a1f17]/85 leading-relaxed">{body}</p>
 		</div>
 	);
@@ -165,23 +275,23 @@ function HowItWorks() {
 	const steps = [
 		{
 			n: "01",
-			title: "Fork",
-			body: "Click Import in Studio. Or fork the GitHub repo the old-fashioned way.",
+			title: "Open it",
+			body: "Go to deco studio and point it at Tama. One click — no downloads, nothing to install.",
 		},
 		{
 			n: "02",
-			title: "Claim",
-			body: "Studio's coding-agent reads AGENTS.md and walks you through a conversation: name, breed, photo, timezone. Edits the config, generates a 6-state pixel sprite from your photo, commits.",
+			title: "Introduce your pet",
+			body: "The agent asks a few friendly questions — name, breed, a photo, your vet's notes. It even draws a little pixel version of them from the photo.",
 		},
 		{
 			n: "03",
-			title: "Deploy",
-			body: "Same Studio session creates the D1 database, R2 bucket, VAPID push keys, and runs wrangler deploy. Ends with a URL.",
+			title: "Go live",
+			body: "Connect a free Cloudflare account when it asks. The agent handles all the setup and hands you a link to your pet's page.",
 		},
 		{
 			n: "04",
-			title: "Operate",
-			body: "The deployed worker exposes /mcp. Studio imports it as an MCP server, and the same chat becomes your day-to-day admin panel.",
+			title: "Use it every day",
+			body: "Add it to your phone's home screen. From then on, just talk to it — upload an exam, log a medicine, ask a question.",
 		},
 	];
 	return (
@@ -191,8 +301,8 @@ function HowItWorks() {
 					How it works.
 				</h2>
 				<p className="text-lg text-[#2a1f17]/70 mb-12 max-w-xl">
-					Four steps. The agent does the boring parts. You answer questions
-					about your pet.
+					Four steps, mostly just answering questions. The agent does
+					everything technical for you.
 				</p>
 				<ol className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 					{steps.map((s) => (
@@ -250,17 +360,17 @@ function Privacy() {
 		{
 			emoji: "🔒",
 			title: "Your data, your account",
-			body: "The D1 database, the R2 files, the push subscriptions — everything lives in your own Cloudflare account. We never see a byte of it.",
+			body: "Everything — exams, photos, your pet's whole history — lives in your own free Cloudflare account. We never see a single byte of it.",
 		},
 		{
 			emoji: "🆓",
 			title: "Free forever",
-			body: "Cloudflare's free tier handles a single-pet deploy without breaking a sweat. No subscription, no usage metering, no surprise bills.",
+			body: "Cloudflare's free tier covers one pet easily. No subscription, no monthly fee, no surprise bills. You'll likely never pay a cent.",
 		},
 		{
 			emoji: "🛠️",
-			title: "Fork and customize",
-			body: "The repo is yours. Want different metrics on the dashboard? A weight-only tracker? A goldfish edition? Edit the code or ask Studio to.",
+			title: "Make it yours",
+			body: "Want to track something specific, or change how it looks? Just ask the agent in plain words. It's your Tama — it bends to your pet.",
 		},
 	];
 	return (
@@ -303,9 +413,9 @@ function BuiltOnStudio() {
 					Built on deco studio.
 				</h2>
 				<p className="text-lg text-[#2a1f17]/80 mb-6 max-w-2xl mx-auto">
-					Studio is the agentic dev environment Tama runs on — code, deploy,
-					and operate from one chat. Tama is the personal-use side of the same
-					primitives that ship in production at scale.
+					Studio is the friendly chat where you set Tama up and talk to it
+					afterward. It's the same platform companies use to build real
+					software — Tama is the cuddly, personal corner of it.
 				</p>
 				<a
 					href="https://studio.decocms.com"
@@ -322,23 +432,23 @@ function FAQ() {
 	const items = [
 		{
 			q: "Do I need to be a developer?",
-			a: "Not really. The Studio coding-agent walks you through every step — claiming, deploying, hooking up notifications. You'll need a free Cloudflare account; the agent handles the rest. If you've never used wrangler, that's fine.",
+			a: "No. If you can make a free online account and answer questions about your pet, you're good. The agent does all the technical parts and explains anything it needs from you along the way.",
 		},
 		{
-			q: "What does it cost on Cloudflare?",
-			a: "Almost certainly $0. Workers + D1 + R2 free tiers cover a single-pet deploy with room to spare. Workers AI (for the sprite generation) has a generous free tier too. If your pet somehow becomes the world's most-watched animal, you might need to add a credit card.",
+			q: "Is it really free?",
+			a: "Yes — for one pet you'll almost certainly never pay anything. It runs on Cloudflare's free tier. No subscription, no monthly fee. (If you somehow outgrow it, you'd just add a card to Cloudflare — but that's rare.)",
 		},
 		{
-			q: "Can I have multiple pets?",
-			a: "Each pet gets its own deploy — fork the repo twice, run the claim flow twice. The thesis is one agent per pet so context stays sharp. (We thought hard about this; it's deliberate, not a missing feature.)",
+			q: "How long does setup take?",
+			a: "A few minutes. Most of it is just you answering questions about your pet and picking a photo. The agent handles the rest while you watch.",
 		},
 		{
-			q: "What if my pet looks weird in the sprite?",
-			a: "The companion has a 're-render Tama' button — upload a different photo, get a new sprite pack. The pipeline is two-pass (character extraction → image generation × 6 expressions) so identity stays consistent across moods, but model quality varies.",
+			q: "Can I track more than one pet?",
+			a: "Each pet gets its own Tama — so you'd set one up per pet. They stay completely separate, which keeps each one simple and personal. The agent can set up another one the same easy way.",
 		},
 		{
-			q: "What if I want to change the schema or add a feature?",
-			a: "The repo is MIT-licensed, ~50 files of TypeScript. Open it in Studio and describe what you want — or read CLAUDE.md and dive in directly. There's nothing magic in here.",
+			q: "What if my pet's pixel face looks off?",
+			a: "Just give it another photo and ask for a new one. You can re-do it as many times as you like until it feels like them.",
 		},
 	];
 	return (

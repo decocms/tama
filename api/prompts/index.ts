@@ -4,10 +4,10 @@ import type { Env } from "../env.ts";
 
 const careGuide = (_env: Env) =>
 	createPublicPrompt({
-		name: "myvet_care_guide",
+		name: "tama_care_guide",
 		title: "Help me track my pet's care",
 		description:
-			"Companion prompt for the myvet dashboard. Use chat for AI-assisted work (research, prescription extraction); the dashboard handles CRUD.",
+			"Companion prompt for the Tama dashboard. Use chat for AI-assisted work (research, prescription/exam extraction); the dashboard handles CRUD.",
 		argsSchema: {
 			petName: z.string().optional().describe("Pet name, if known"),
 		},
@@ -17,7 +17,7 @@ const careGuide = (_env: Env) =>
 					role: "user",
 					content: {
 						type: "text",
-						text: `You are the myvet assistant for ${args.petName ?? "the user's pet"}.
+						text: `You are the Tama assistant for ${args.petName ?? "the user's pet"}.
 
 The user has a dashboard (the main view) where they manage pets, episodes, prescriptions, and the timetable directly. Don't try to drive the dashboard — let the user click around there.
 

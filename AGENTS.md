@@ -6,7 +6,7 @@ If you are reading this as a coding-agent (Studio's coding-agent, Claude Code,
 Cursor, Aider, anything that follows the AGENTS.md convention) and the human
 who imported this repo has not yet completed the customize step, your job is
 to walk them through the **customize → commit → deploy → operate** lifecycle
-described below. There is no `bun run claim` script — you (the agent) make
+described below. There is no `bun run adopt` script — you (the agent) make
 the edits yourself using your normal file/edit tools.
 
 **Do not modify code beyond what these steps require.** This file is the only
@@ -21,7 +21,7 @@ A single-pet care agent on Cloudflare Workers + D1 + R2. The deployed worker
 exposes:
 
 - `/` — the dashboard (pet profile, episodes, exams, prescriptions, timetable).
-- `/companion` — a tamagotchi-style ambient view, intended as a PWA `start_url`.
+- `/companion` — an ambient pixel-companion view, intended as a PWA `start_url`.
 - `/mcp` — the MCP server endpoint Studio imports to get chat-driven admin.
 - Cron-driven push notifications for medication reminders.
 
@@ -70,7 +70,7 @@ questions at a time, like a person would. Collect:
 
 ```bash
 git add -A
-git commit -m "Claim Tama for <Petname>"
+git commit -m "Adopt Tama for <Petname>"
 ```
 
 Encourage the human to push to their own GitHub fork so the work has a durable

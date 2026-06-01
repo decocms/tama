@@ -148,7 +148,7 @@ createTool({
 
 When this lands, the Tama agent should be installable as follows:
 
-1. Owner finishes the claim flow and deploys their tama worker.
+1. Owner finishes the adopt flow and deploys their tama worker.
 2. They register the deployed `/mcp` endpoint as an agent in Studio.
 3. They visit `studio.decocms.com/agents/<their-tama-id>`.
 4. They see an Install button (or use iOS share sheet → Add to Home).
@@ -173,5 +173,5 @@ When this lands, the Tama agent should be installable as follows:
 This request is paired with `docs/studio-agents-md-convention.md` — a
 proposal that Studio's "Import from GitHub" flow should look for an
 `AGENTS.md` at the repo root and treat it as setup instructions for the
-coding agent. The two together would close the loop: import → claim →
+coding agent. The two together would close the loop: import → adopt →
 deploy → install as PWA, all driven from inside Studio.

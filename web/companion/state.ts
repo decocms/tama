@@ -1,4 +1,4 @@
-// Pure state derivation for the companion (tamagotchi) view. Given the
+// Pure state derivation for the companion (pixel-pet) view. Given the
 // episode dashboard data, decide which expression sprite the creature face
 // should show and what the status copy reads.
 //

@@ -1,6 +1,6 @@
 // Standalone landing page for enabling push reminders.
 //
-// Why it exists: MyVet's main UI runs inside a cross-origin iframe in deco
+// Why it exists: Tama's main UI runs inside a cross-origin iframe in deco
 // studio, where browsers refuse to grant notification permission (iOS Safari
 // blocks outright; Chrome requires permissions-policy on the iframe). iOS
 // additionally needs the app to be Added-to-Home-Screen before Web Push
@@ -36,7 +36,7 @@ import {
 	subscribeStandalone,
 } from "../lib/push.ts";
 
-// The deco studio host where the embedded MyVet runs day-to-day. Once the
+// The deco studio host where the embedded Tama runs day-to-day. Once the
 // user is subscribed on this device, they can return there for everything
 // else — push delivery is independent of which surface is open.
 const STUDIO_URL = "https://studio.decocms.com";
@@ -115,7 +115,7 @@ export function SubscribePage() {
 						<BellRing className="w-8 h-8" />
 					</div>
 					<h1 className="font-display text-2xl font-semibold">
-						MyVet reminders
+						Tama reminders
 					</h1>
 					<p className="text-sm text-muted-foreground">
 						Push notifications ~10 minutes before each scheduled dose.
@@ -148,7 +148,7 @@ export function SubscribePage() {
 // Launcher view: the steady-state PWA home screen after the user has
 // subscribed. Single huge CTA into studio (external Safari for session) +
 // a small reminders-on badge. No "subscribe" framing — this screen is the
-// MyVet launcher, not a setup wizard.
+// Tama launcher, not a setup wizard.
 //
 // iOS PWA caveat: WebKit may route the studio link through SFSafariViewController
 // or its own WKWebView instead of the real Safari app. Both have a different
@@ -171,7 +171,7 @@ function LauncherView() {
 					<BellRing className="w-12 h-12" />
 				</div>
 				<div className="space-y-1.5">
-					<h1 className="font-display text-3xl font-semibold">MyVet</h1>
+					<h1 className="font-display text-3xl font-semibold">Tama</h1>
 					<p className="text-sm text-muted-foreground">
 						Open the app in deco studio.
 					</p>
@@ -183,7 +183,7 @@ function LauncherView() {
 					className="block w-full"
 				>
 					<Button size="lg" className="w-full h-14 text-base font-semibold">
-						Open MyVet
+						Open Tama
 						<ExternalLink className="w-4 h-4" />
 					</Button>
 				</a>
@@ -279,11 +279,11 @@ function NeedsInstallState() {
 			<div className="flex items-start gap-2">
 				<Share className="w-4 h-4 mt-0.5 shrink-0" />
 				<div>
-					<p className="font-semibold">Install MyVet first</p>
+					<p className="font-semibold">Install Tama first</p>
 					<p className="text-muted-foreground mt-1">
 						iPhone/iPad only delivers push notifications to home-screen apps. In
 						Safari, tap the <strong>Share</strong> button, then choose{" "}
-						<strong>Add to Home Screen</strong>. Open MyVet from your home
+						<strong>Add to Home Screen</strong>. Open Tama from your home
 						screen and you'll come back to this page.
 					</p>
 				</div>
@@ -373,7 +373,7 @@ function OpenStudioButton({
 			className="block"
 		>
 			<Button variant={variant} className="w-full">
-				Open MyVet in deco studio
+				Open Tama in deco studio
 				<ExternalLink className="w-3.5 h-3.5" />
 			</Button>
 		</a>

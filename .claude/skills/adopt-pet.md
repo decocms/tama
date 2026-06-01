@@ -1,13 +1,13 @@
 ---
-name: claim-pet
+name: adopt-pet
 description: Customize the Tama template for a specific pet — conversation, edits, sprite generation, optional deploy.
 ---
 
-# Claim this Tama for a pet
+# Adopt this Tama for a pet
 
 You're customizing a fresh fork of the Tama template (a single-pet care
 agent on Cloudflare Workers). This is the same lifecycle described in
-`/AGENTS.md`, but as a Claude Code skill — `/claim-pet` is a one-tap way
+`/AGENTS.md`, but as a Claude Code skill — `/adopt-pet` is a one-tap way
 into it.
 
 ## Conversation, not a form
@@ -48,7 +48,7 @@ Using your normal file/edit tools:
 
 ```bash
 git add -A
-git commit -m "Claim Tama for <Petname>"
+git commit -m "Adopt Tama for <Petname>"
 ```
 
 Suggest they push to their own GitHub fork.

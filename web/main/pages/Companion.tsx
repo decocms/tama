@@ -8,7 +8,7 @@ import {
 import type { SpritePack } from "@/types/api.ts";
 import { useEpisode, useEpisodes, usePet } from "../lib/queries.ts";
 
-// Tiny tamagotchi-style companion view. The PWA manifest points `start_url`
+// Tiny pixel-companion view. The PWA manifest points `start_url`
 // here so when the app is launched from the dock/home-screen it lands in
 // the ambient view rather than the full dashboard.
 
