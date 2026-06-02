@@ -8,7 +8,7 @@ Cloudflare account. The deployed worker is the agent: dashboard at `/`,
 an ambient pixel companion at `/companion`, MCP server at `/mcp`. Free, MIT,
 your data lives in your account — we never see it.
 
-→ Landing: <https://tama.deco-ceo.workers.dev> *(coming soon)*
+→ Landing: <https://tama.vet>
 → Demo: <https://tama-example.deco-ceo.workers.dev> *(coming soon)*
 
 ## What you get
