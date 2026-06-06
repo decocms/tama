@@ -1,8 +1,8 @@
 {
 	"scopeName": "deco",
-	"name": "myvet",
-	"friendlyName": "myvet",
-	"description": "Veterinary care for your pet: profile, illness episodes, medicine timetable.",
+	"name": "tama",
+	"friendlyName": "Tama",
+	"description": "A complete health record for your pet: one timeline, a medicine timetable, and assets intake.",
 	"icon": "",
 	"connection": {
 		"type": "HTTP",

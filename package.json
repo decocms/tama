@@ -1,7 +1,7 @@
 {
-	"name": "myvet",
+	"name": "tama",
 	"version": "0.1.0",
-	"description": "Veterinary care MCP — pet profile, illness episodes, medicine timetable.",
+	"description": "A health-record agent for your pet — one timeline, a medicine timetable, and assets intake. Cloudflare Workers + D1 + R2.",
 	"private": true,
 	"type": "module",
 	"scripts": {
