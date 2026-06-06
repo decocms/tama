@@ -19,6 +19,8 @@ const TOOL_TO_ROUTE: Record<string, string> = {
 	timetable_get: "/timetable",
 	recording_list: "/recordings",
 	recording_create: "/recordings",
+	research_list: "/research",
+	vet_research: "/research",
 };
 
 function Root() {

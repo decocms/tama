@@ -52,6 +52,7 @@ export function Layout({
 								["/timeline", "Timeline"],
 								["/timetable", "Timetable"],
 								["/exams", "Exams"],
+								["/research", "Research"],
 								["/recordings", "Recordings"],
 							] as const
 						).map(([to, label]) => (

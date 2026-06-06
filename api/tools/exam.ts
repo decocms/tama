@@ -7,6 +7,8 @@ import type { Env } from "../env.ts";
 import { saveFile } from "../storage/files.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
 import { parseProfile } from "../storage/pets.ts";
+import { addResearch } from "../storage/researches.ts";
+import { addNote } from "../storage/timeline.ts";
 import {
 	createExamDraft,
 	deleteExam,
@@ -304,6 +306,25 @@ export const examExplainTool = (_env: Env) =>
 				? petContextBlock(pet, parseProfile(pet))
 				: "Unknown pet.";
 			const insights = await explainExams(env, { petContext, series });
+
+			// Persist the analysis so it's tracked: as a Research entry (shows in
+			// the Research history) and as a timeline note (shows in the timeline).
+			const label =
+				context.canonicalKeys && context.canonicalKeys.length
+					? `Lab analysis: ${context.canonicalKeys.join(", ")}`
+					: "Lab analysis: all panels";
+			await addResearch(env, {
+				question: label,
+				answer: insights,
+				keyPoints: [],
+				cautions: [],
+				citations: [],
+			});
+			await addNote(env, {
+				kind: "ai-summary",
+				content: `${label}\n\n${insights}`,
+			});
+
 			return { insights };
 		},
 	});
