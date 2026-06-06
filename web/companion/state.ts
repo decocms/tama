@@ -1,7 +1,7 @@
 // Pure state derivation for the companion (pixel-pet) view. Driven by the
 // live timetable entries + the pet's rolling summary — no episode container.
 //
-// Priority (highest wins): sad > pill-time > hungry > happy > sleeping > idle.
+// Priority (highest wins): pill-time > hungry > happy > sleeping > idle.
 
 import type { TimetableEntry } from "@/types/api.ts";
 
@@ -10,8 +10,7 @@ export type CompanionState =
 	| "sleeping"
 	| "happy"
 	| "hungry"
-	| "pill-time"
-	| "sad";
+	| "pill-time";
 
 export interface CompanionStatus {
 	state: CompanionState;
@@ -66,20 +65,20 @@ export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
 		(e) => new Date(e.scheduledAt).getTime() < now.getTime(),
 	).length;
 
-	// SAD — summary flags illness, or doses piling up overdue.
+	// CONCERNED (pill-time face) — summary flags illness, or doses piling up.
 	const sick = /vomit|lethargic|diarrh|seizur|emergency|not eating|crash/i.test(
 		summary ?? "",
 	);
 	if (sick) {
 		return {
-			state: "sad",
+			state: "pill-time",
 			headline: `${name} isn't feeling great`,
 			subline: "Check the summary on the Pet page",
 		};
 	}
 	if (overdueCount >= 2) {
 		return {
-			state: "sad",
+			state: "pill-time",
 			headline: `${name} is waiting on you`,
 			subline: `${overdueCount} doses overdue`,
 		};

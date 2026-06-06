@@ -54,6 +54,18 @@
 	box-decoration-break: clone;
 }
 
+/* Solid highlight for dark backgrounds: a full peach block with dark ink, so
+   the marked word keeps high contrast (the half-band version would leave light
+   text over light peach on a dark section). */
+.headline-mark-solid {
+	background: var(--peach);
+	color: #16110c;
+	padding: 0.02em 0.14em;
+	border-radius: 0.1em;
+	-webkit-box-decoration-break: clone;
+	box-decoration-break: clone;
+}
+
 @keyframes breathe {
 	0%, 100% { transform: translateY(0) scaleY(1); }
 	50% { transform: translateY(-3px) scaleY(1.02); }

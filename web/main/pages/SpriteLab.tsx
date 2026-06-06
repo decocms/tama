@@ -14,7 +14,6 @@ const STATES: (keyof SpritePackFull)[] = [
 	"happy",
 	"hungry",
 	"pill-time",
-	"sad",
 	"sleeping",
 ];
 

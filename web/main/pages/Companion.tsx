@@ -17,8 +17,7 @@ const STATE_TO_CELL: Record<CompanionState, number> = {
 	happy: 1,
 	hungry: 2,
 	"pill-time": 3,
-	sad: 4,
-	sleeping: 5,
+	sleeping: 4,
 };
 
 const STATE_TO_PACK_KEY: Record<CompanionState, keyof SpritePack> = {
@@ -26,7 +25,6 @@ const STATE_TO_PACK_KEY: Record<CompanionState, keyof SpritePack> = {
 	happy: "happy",
 	hungry: "hungry",
 	"pill-time": "pill-time",
-	sad: "sad",
 	sleeping: "sleeping",
 };
 
@@ -35,7 +33,6 @@ const STATE_BG: Record<CompanionState, string> = {
 	happy: "#dff5dc",
 	hungry: "#fff1d6",
 	"pill-time": "#ffe6cf",
-	sad: "#fde0e0",
 	sleeping: "#e6e0f5",
 };
 

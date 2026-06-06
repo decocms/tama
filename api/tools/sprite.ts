@@ -11,7 +11,6 @@ const SvgPackSchema = z.object({
 	happy: z.string(),
 	hungry: z.string(),
 	"pill-time": z.string(),
-	sad: z.string(),
 	sleeping: z.string(),
 });
 

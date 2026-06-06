@@ -14,7 +14,6 @@ export interface SpritePack {
 	happy: string;
 	hungry: string;
 	"pill-time": string;
-	sad: string;
 	sleeping: string;
 	size?: number;
 }
@@ -96,7 +95,6 @@ export interface SpritePackFull {
 	happy: string;
 	hungry: string;
 	"pill-time": string;
-	sad: string;
 	sleeping: string;
 }
 

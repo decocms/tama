@@ -18,7 +18,6 @@ export type SpriteState =
 	| "happy"
 	| "hungry"
 	| "pill-time"
-	| "sad"
 	| "sleeping";
 
 const STATES: SpriteState[] = [
@@ -26,7 +25,6 @@ const STATES: SpriteState[] = [
 	"happy",
 	"hungry",
 	"pill-time",
-	"sad",
 	"sleeping",
 ];
 
@@ -335,11 +333,15 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	// those strokes in a light ink whenever the cap is dark.
 	const capDark = !!p.patch && luma(p.patch) < 110;
 	const arc = capDark ? "#f4ece0" : p.feat;
+	// A solid dark eye with an OPAQUE cream rim just behind it: the rim makes
+	// the eye pop on the dark cap, and is invisible on light fur — so the eye
+	// always reads clearly (the old semi-transparent white sclera turned into a
+	// murky blob on the dark cap).
 	const open = (ex: number) => `
-		<ellipse cx="${ex}" cy="${y}" rx="4" ry="4.6" fill="#fff" opacity="0.55"/>
-		<ellipse cx="${ex}" cy="${y}" rx="3.5" ry="4.2" fill="${ink}"/>
-		<circle cx="${ex + 1.2}" cy="${y - 1.4}" r="1.25" fill="#fff"/>
-		<circle cx="${ex - 1}" cy="${y + 1.3}" r="0.6" fill="#fff" opacity="0.6"/>
+		<ellipse cx="${ex}" cy="${y}" rx="4.3" ry="4.9" fill="#f4ece0"/>
+		<ellipse cx="${ex}" cy="${y}" rx="3.3" ry="4" fill="${ink}"/>
+		<circle cx="${ex + 1.1}" cy="${y - 1.5}" r="1.2" fill="#fff"/>
+		<circle cx="${ex - 1}" cy="${y + 1.4}" r="0.55" fill="#fff" opacity="0.6"/>
 	`;
 	switch (state) {
 		case "happy":
@@ -353,20 +355,14 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 				<circle cx="${rx + 1.8}" cy="${y - 2}" r="0.8" fill="#fff"/>`;
 		case "pill-time":
 			return `
-				<path d="M ${lx - 4} ${y - 3.5} Q ${lx} ${y - 6} ${lx + 4} ${y - 4}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 4} ${y - 4} Q ${rx} ${y - 6} ${rx + 4} ${y - 3.5}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-				<ellipse cx="${lx}" cy="${y + 0.5}" rx="3.3" ry="3.9" fill="#fff" opacity="0.55"/>
-				<ellipse cx="${rx}" cy="${y + 0.5}" rx="3.3" ry="3.9" fill="#fff" opacity="0.55"/>
-				<ellipse cx="${lx}" cy="${y + 0.5}" rx="2.8" ry="3.4" fill="${ink}"/>
-				<ellipse cx="${rx}" cy="${y + 0.5}" rx="2.8" ry="3.4" fill="${ink}"/>
-				<circle cx="${lx + 1}" cy="${y - 0.6}" r="0.9" fill="#fff"/>
-				<circle cx="${rx + 1}" cy="${y - 0.6}" r="0.9" fill="#fff"/>
-			`;
-		case "sad":
-			return `
-				<path d="M ${lx - 3.5} ${y - 1.5} Q ${lx} ${y + 3} ${lx + 3.5} ${y - 1}" stroke="${arc}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 3.5} ${y - 1} Q ${rx} ${y + 3} ${rx + 3.5} ${y - 1.5}" stroke="${arc}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-				<ellipse cx="${lx - 1}" cy="${y + 5}" rx="1.7" ry="2.8" fill="#7ec0e0" opacity="0.9"/>
+				<path d="M ${lx - 4} ${y - 4} Q ${lx} ${y - 6.2} ${lx + 4} ${y - 4.2}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				<path d="M ${rx - 4} ${y - 4.2} Q ${rx} ${y - 6.2} ${rx + 4} ${y - 4}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				<ellipse cx="${lx}" cy="${y + 0.6}" rx="3.6" ry="4" fill="#f4ece0"/>
+				<ellipse cx="${rx}" cy="${y + 0.6}" rx="3.6" ry="4" fill="#f4ece0"/>
+				<ellipse cx="${lx}" cy="${y + 0.8}" rx="2.6" ry="3.1" fill="${ink}"/>
+				<ellipse cx="${rx}" cy="${y + 0.8}" rx="2.6" ry="3.1" fill="${ink}"/>
+				<circle cx="${lx + 0.9}" cy="${y - 0.4}" r="0.8" fill="#fff"/>
+				<circle cx="${rx + 0.9}" cy="${y - 0.4}" r="0.8" fill="#fff"/>
 			`;
 		case "sleeping":
 			return `
@@ -402,10 +398,6 @@ function muzzleFeatures(state: SpriteState, p: Parts, g: Geom): string {
 			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 2}" stroke="${p.feat}" stroke-width="1.5" stroke-linecap="round"/>
 				<path d="M ${cx - 4} ${my} Q ${cx} ${my - 1.5} ${cx + 4} ${my}" stroke="${p.feat}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
 			break;
-		case "sad":
-			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 2}" stroke="${p.feat}" stroke-width="1.5" stroke-linecap="round"/>
-				<path d="M ${cx - 4.5} ${my + 2.5} Q ${cx} ${my - 2.5} ${cx + 4.5} ${my + 2.5}" stroke="${p.feat}" stroke-width="1.9" fill="none" stroke-linecap="round"/>`;
-			break;
 		case "sleeping":
 			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 2}" stroke="${p.feat}" stroke-width="1.3" stroke-linecap="round" opacity="0.7"/>
 				<path d="M ${cx - 3} ${my - 0.5} Q ${cx} ${my + 1.5} ${cx + 3} ${my - 0.5}" stroke="${p.feat}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
@@ -420,7 +412,6 @@ function muzzleFeatures(state: SpriteState, p: Parts, g: Geom): string {
 }
 
 function cheeks(state: SpriteState, p: Parts, g: Geom): string {
-	if (state === "sad") return "";
 	const op = state === "sleeping" ? 0.3 : 0.42;
 	const r = state === "happy" ? 3.2 : 2.7;
 	const y = g.eyeY + 6;
@@ -466,7 +457,7 @@ export function renderSpriteSvg(
 	const p = rawP as PartsX;
 	p.hasCapEnabled = t.hasCap;
 	const g = geomFor(character);
-	const droop = state === "sad" ? 3 : state === "sleeping" ? 1.5 : 0;
+	const droop = state === "sleeping" ? 1.5 : 0;
 	const gradId = `head-${state}`;
 	const haloColor = lighten(p.body, 0.08);
 

@@ -81,7 +81,14 @@ function LangSwitcher({
 }
 
 // Render a headline that mixes plain text with highlighter-marked words.
-function Headline({ segments }: { segments: Segment[] }) {
+// markClassName lets dark sections opt into the solid (high-contrast) mark.
+function Headline({
+	segments,
+	markClassName = "headline-mark",
+}: {
+	segments: Segment[];
+	markClassName?: string;
+}) {
 	return (
 		<>
 			{segments.map((s, i) =>
@@ -90,7 +97,7 @@ function Headline({ segments }: { segments: Segment[] }) {
 					<span key={i}>{s}</span>
 				) : (
 					// biome-ignore lint/suspicious/noArrayIndexKey: static, stable copy
-					<span key={i} className="headline-mark">
+					<span key={i} className={markClassName}>
 						{s.mark}
 					</span>
 				),
@@ -239,26 +246,41 @@ function TwoPaths({ c }: { c: LandingContent }) {
 					{c.twoPaths.kicker}
 				</div>
 				<h2 className="headline text-4xl md:text-6xl leading-[0.98] mb-12">
-					<Headline segments={c.twoPaths.title} />
+					<Headline
+						segments={c.twoPaths.title}
+						markClassName="headline-mark-solid"
+					/>
 				</h2>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div className="border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
+					<div className="flex flex-col border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
 						<div className="text-3xl mb-3" aria-hidden>
 							👩‍💻
 						</div>
 						<h3 className="headline text-2xl mb-3">{c.twoPaths.dev.title}</h3>
-						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed">
+						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed mb-6">
 							{c.twoPaths.dev.body}
 						</p>
+						<a
+							href={REPO_URL}
+							className="mt-auto inline-flex items-center gap-2 self-start border-2 border-[#fff8ee]/30 text-[#fff8ee] px-5 py-2.5 font-bold hover:border-[#c4e538] hover:text-[#c4e538] transition-colors"
+						>
+							{c.twoPaths.devCta}
+						</a>
 					</div>
-					<div className="border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
+					<div className="flex flex-col border-2 border-[#fff8ee]/20 p-7 hover:border-[#c4e538]/50 transition-colors">
 						<div className="text-3xl mb-3" aria-hidden>
 							🐾
 						</div>
 						<h3 className="headline text-2xl mb-3">{c.twoPaths.nonDev.title}</h3>
-						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed">
+						<p className="text-base md:text-lg text-[#fff8ee]/80 leading-relaxed mb-6">
 							{c.twoPaths.nonDev.body}
 						</p>
+						<a
+							href={STUDIO_IMPORT_URL}
+							className="mt-auto inline-flex items-center gap-2 self-start bg-[#c4e538] text-[#16110c] px-5 py-2.5 font-bold hover:brightness-95 transition"
+						>
+							{c.twoPaths.nonDevCta}
+						</a>
 					</div>
 				</div>
 				<p className="mt-10 text-lg md:text-xl text-[#fff8ee]/70 max-w-3xl">

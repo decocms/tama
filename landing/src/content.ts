@@ -44,7 +44,9 @@ export interface LandingContent {
 		kicker: string;
 		title: Segment[];
 		dev: Card;
+		devCta: string;
 		nonDev: Card;
+		nonDevCta: string;
 		footer: string;
 	};
 	whatsInside: { title: string; sub: string; features: Card[] }; // 9
@@ -105,10 +107,12 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				title: "You write code",
 				body: "Fork the repo and vibecode it with Claude. There's an AGENTS.md that tells your agent exactly what to do — set it up for your pet, then deploy to your own Cloudflare. You're in your terminal, you know the drill.",
 			},
+			devCta: "View on GitHub →",
 			nonDev: {
 				title: "You don't? No problem",
 				body: "Use deco studio. Paste the Tama link and the agent walks you through everything — even making your GitHub and Cloudflare accounts, setting up your pet, and going live. No terminal, no code, no stress.",
 			},
+			nonDevCta: "Create in deco studio →",
 			footer: "Either way, you bring the pet — Tama brings everything else.",
 		},
 		whatsInside: {
@@ -278,10 +282,12 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				title: "Você programa",
 				body: "Faça um fork do repositório e vibecode com o Claude. Tem um AGENTS.md que diz exatamente o que o seu agente deve fazer — configurar pro seu pet e fazer deploy na sua própria Cloudflare. Você tá no terminal, já manja.",
 			},
+			devCta: "Ver no GitHub →",
 			nonDev: {
 				title: "Não programa? Sem problema",
 				body: "Use o deco studio. Cole o link do Tama e o agente te guia em tudo — até criar suas contas no GitHub e na Cloudflare, configurar o seu pet e colocar no ar. Sem terminal, sem código, sem estresse.",
 			},
+			nonDevCta: "Criar no deco studio →",
 			footer: "De qualquer jeito, você traz o pet — o Tama traz o resto.",
 		},
 		whatsInside: {
