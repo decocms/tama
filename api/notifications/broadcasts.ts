@@ -5,14 +5,12 @@
 // re-administer. Single-tenant — broadcast to all subs.
 
 import type { Env } from "../env.ts";
-import { getEpisode } from "../storage/episodes.ts";
-import { getPet } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import { listPushSubscriptions } from "../storage/push-subscriptions.ts";
 import { getScheduleState, itemKey } from "../storage/schedule-state.ts";
 import { type PushPayload, sendPush } from "./webpush.ts";
 
 export interface DoseLoggedBroadcast {
-	episodeId: string;
 	itemName: string;
 	status: "given" | "skipped";
 	actualAt: string;
@@ -40,13 +38,10 @@ export async function broadcastDoseLogged(
 	if (subs.length === 0) return { sent: 0, pruned: 0, errors: 0 };
 
 	// Pull pet for the name + timezone, and schedule_state for dosage context.
-	// Both are fast single-row lookups; doing them in parallel keeps the
-	// dose-logging path snappy.
-	const [ep, ss] = await Promise.all([
-		getEpisode(env, args.episodeId),
-		getScheduleState(env, args.episodeId, itemKey(args.itemName)),
+	const [pet, ss] = await Promise.all([
+		getSelfPet(env),
+		getScheduleState(env, itemKey(args.itemName)),
 	]);
-	const pet = ep ? await getPet(env, ep.petId) : null;
 	const petName = pet?.name ?? "Pet";
 	const tz = pet?.timezone ?? null;
 
@@ -61,10 +56,10 @@ export async function broadcastDoseLogged(
 	const payload: PushPayload = {
 		title: `${petName}: ${args.itemName} ${verb}`,
 		body: `${dosageLine}${noteLine}`,
-		url: `/#/episode/${args.episodeId}`,
+		url: `/#/timetable`,
 		// Unique per dose event so multiple back-to-back logs don't collapse into
 		// a single OS notification.
-		tag: `dose-logged-${args.episodeId}-${args.actualAt}`,
+		tag: `dose-logged-${args.actualAt}`,
 	};
 
 	let sent = 0;

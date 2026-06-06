@@ -5,7 +5,7 @@ import { pickNearestDose } from "./doses.ts";
 function dose(overrides: Partial<Dose>): Dose {
 	return {
 		id: "d_x",
-		episodeId: "ep_1",
+		petId: "pet_self",
 		itemName: "SUCRAFILM",
 		kind: "medication",
 		plannedAt: null,

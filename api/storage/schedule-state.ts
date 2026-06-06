@@ -10,9 +10,13 @@ import type { Env } from "../env.ts";
 import type { ScheduleItem } from "../tools/shared.ts";
 import { listDoses } from "./doses.ts";
 import { newId } from "./ids.ts";
+import { PET_SELF_ID } from "./pet-self.ts";
 import { parseScheduleItems } from "./prescriptions.ts";
 import { wallClockToIso } from "./timetable.ts";
 
+// Single-pet: every schedule_state row belongs to the one pet (`pet_self`).
+// The (pet_id, item_key) pair is unique. Functions take an item key, never a
+// scope id.
 export type ScheduleState = ScheduleStateRow;
 
 export function itemKey(name: string): string {
@@ -39,7 +43,6 @@ export function deriveInitialAnchor(
 ): string {
 	const firstTime = item.times?.[0];
 	if (!firstTime) {
-		// No times listed — anchor to now + interval (will appear in the future).
 		const fallback = new Date(
 			Date.now() + deriveIntervalHours(item) * 60 * 60 * 1000,
 		);
@@ -48,19 +51,15 @@ export function deriveInitialAnchor(
 	return wallClockToIso(firstTime, timeZone);
 }
 
-export async function listScheduleStates(
-	env: Env,
-	episodeId: string,
-): Promise<ScheduleState[]> {
+export async function listScheduleStates(env: Env): Promise<ScheduleState[]> {
 	return db(env)
 		.select()
 		.from(scheduleState)
-		.where(eq(scheduleState.episodeId, episodeId));
+		.where(eq(scheduleState.petId, PET_SELF_ID));
 }
 
 export async function getScheduleState(
 	env: Env,
-	episodeId: string,
 	key: string,
 ): Promise<ScheduleState | null> {
 	const rows = await db(env)
@@ -68,7 +67,7 @@ export async function getScheduleState(
 		.from(scheduleState)
 		.where(
 			and(
-				eq(scheduleState.episodeId, episodeId),
+				eq(scheduleState.petId, PET_SELF_ID),
 				eq(scheduleState.itemKey, key),
 			),
 		);
@@ -76,19 +75,13 @@ export async function getScheduleState(
 }
 
 export interface UpsertScheduleStateInput {
-	episodeId: string;
 	item: ScheduleItem;
 	prescriptionId: string;
 	timeZone: string;
-	// Optional: ISO of the latest given/skipped dose for this item. When
-	// provided to a brand-new row, the anchor lands on lastDoseAt + interval
-	// instead of the prescription's first-time-today — so backfill respects
-	// doses logged before schedule_state existed.
 	latestDoseAt?: string | null;
 }
 
-// Insert if missing, otherwise refresh the *template* fields (display name,
-// dosage, route, notes, interval, duration, prescription_id) WITHOUT touching
+// Insert if missing, otherwise refresh the *template* fields WITHOUT touching
 // the live anchor_at. The anchor only moves when the user gives, snoozes, or
 // skips — re-prescribing the same med doesn't reset their drift.
 export async function upsertScheduleState(
@@ -96,7 +89,7 @@ export async function upsertScheduleState(
 	input: UpsertScheduleStateInput,
 ): Promise<ScheduleState> {
 	const key = itemKey(input.item.name);
-	const existing = await getScheduleState(env, input.episodeId, key);
+	const existing = await getScheduleState(env, key);
 	const intervalHours = deriveIntervalHours(input.item);
 
 	if (existing) {
@@ -119,12 +112,6 @@ export async function upsertScheduleState(
 		return row;
 	}
 
-	// Anchor decision when creating a fresh row, in priority order:
-	//   1. Item-provided startsAt — when set, the next anchor is startsAt +
-	//      interval. Used to record "Hemax started on 2026-05-18" without
-	//      pinning slots to today.
-	//   2. Known last dose for this item (cascade — same as advanceAnchorAfterDose).
-	//   3. The prescription's first time today in the pet's tz.
 	const startsAt =
 		input.item.startsAt ?? input.latestDoseAt ?? new Date().toISOString();
 	const anchorAt = input.item.startsAt
@@ -148,7 +135,7 @@ export async function upsertScheduleState(
 		.insert(scheduleState)
 		.values({
 			id: newId("ss"),
-			episodeId: input.episodeId,
+			petId: PET_SELF_ID,
 			itemKey: key,
 			displayName: input.item.name,
 			kind: input.item.kind,
@@ -167,16 +154,12 @@ export async function upsertScheduleState(
 	return row;
 }
 
-// End a treatment immediately or at a specific time. Sets endsAt and flips
-// active=false so the medicine stops appearing in the timetable. Use this
-// for "Stop simeticona — its 7 days are up" or any early-termination case.
 export async function endScheduleStateItem(
 	env: Env,
-	episodeId: string,
 	key: string,
 	endsAt?: string,
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
 	const stopAt = endsAt ?? new Date().toISOString();
 	const [updated] = await db(env)
@@ -191,19 +174,18 @@ export async function endScheduleStateItem(
 	return updated ?? null;
 }
 
-// Adjust treatment bounds without ending the course. Either bound may be
-// null to clear it (e.g. remove the end date to make a course open-ended).
 export async function setScheduleStateBounds(
 	env: Env,
-	episodeId: string,
 	key: string,
 	bounds: { startsAt?: string | null; endsAt?: string | null },
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
-	const patch: { startsAt?: string | null; endsAt?: string | null; updatedAt: string } = {
-		updatedAt: new Date().toISOString(),
-	};
+	const patch: {
+		startsAt?: string | null;
+		endsAt?: string | null;
+		updatedAt: string;
+	} = { updatedAt: new Date().toISOString() };
 	if (bounds.startsAt !== undefined) patch.startsAt = bounds.startsAt;
 	if (bounds.endsAt !== undefined) patch.endsAt = bounds.endsAt;
 	const [updated] = await db(env)
@@ -214,8 +196,7 @@ export async function setScheduleStateBounds(
 	return updated ?? null;
 }
 
-// Reconcile a prescription's items with schedule_state for an episode.
-// Called when a prescription is created/confirmed/updated.
+// Reconcile a confirmed prescription's items into schedule_state.
 export async function syncPrescriptionToScheduleState(
 	env: Env,
 	rx: Prescription,
@@ -225,7 +206,6 @@ export async function syncPrescriptionToScheduleState(
 	const items = parseScheduleItems(rx);
 	for (const item of items) {
 		await upsertScheduleState(env, {
-			episodeId: rx.episodeId,
 			item,
 			prescriptionId: rx.id,
 			timeZone,
@@ -233,34 +213,19 @@ export async function syncPrescriptionToScheduleState(
 	}
 }
 
-// Lazy backfill: ensure schedule_state rows exist for every confirmed-rx
-// item in an episode. Idempotent — upsert preserves anchors for existing
-// rows. For NEW rows, we look up the latest given/skipped dose for that
-// item so the anchor lands on `last + interval` instead of restarting from
-// the prescription's first-time-of-day (which would mark already-given
-// slots as overdue after a deploy).
-//
-// Both the schedules list and the doses list can be passed in by callers
-// that have already fetched them (episode_get does this) — saves two D1
-// round-trips per read. The doses lookup is also lazy: we only fetch it
-// if at least one new item actually needs to be inserted (i.e. there's a
-// brand-new key in the prescriptions). Steady state: 1 read max, 0 writes.
-export async function ensureScheduleStateForEpisode(
+// Lazy backfill: ensure schedule_state rows exist for every confirmed-rx item.
+// Idempotent — upsert preserves anchors for existing rows. For NEW rows, we
+// anchor on `lastDose + interval` so already-given slots aren't marked overdue.
+export async function ensureScheduleStateForPet(
 	env: Env,
-	episodeId: string,
 	prescriptions: Prescription[],
 	timeZone: string,
 	preloaded?: { schedules?: ScheduleState[]; doses?: Dose[] },
 ): Promise<ScheduleState[]> {
-	const existing =
-		preloaded?.schedules ?? (await listScheduleStates(env, episodeId));
+	const existing = preloaded?.schedules ?? (await listScheduleStates(env));
 	const existingByKey = new Map<string, ScheduleState>();
 	for (const s of existing) existingByKey.set(s.itemKey, s);
 
-	// Look ahead at the prescriptions: are there any items whose key doesn't
-	// already exist in schedule_state? Only then do we need the doses table
-	// (to anchor the new row at last-dose + interval rather than today's
-	// first-time-of-day, which would mark already-given slots as overdue).
 	let hasNewItem = false;
 	for (const rx of prescriptions) {
 		if (rx.status !== "confirmed") continue;
@@ -275,8 +240,7 @@ export async function ensureScheduleStateForEpisode(
 
 	const latestByKey = new Map<string, string>();
 	if (hasNewItem) {
-		const doses =
-			preloaded?.doses ?? (await listDoses(env, episodeId));
+		const doses = preloaded?.doses ?? (await listDoses(env));
 		for (const d of doses) {
 			if (d.status === "undone") continue;
 			const k = itemKey(d.itemName);
@@ -288,15 +252,10 @@ export async function ensureScheduleStateForEpisode(
 	}
 
 	const sorted = [...prescriptions].sort(
-		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+		(a, b) =>
+			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
 	);
 	let touched = false;
-	// Build the list of writes synchronously by comparing in-memory, then fire
-	// them in parallel. Two big wins over the previous serial upsert loop:
-	//   • Steady state (the hot path on every episode_get / dose_log) hits zero
-	//     writes when nothing has drifted — previously we issued one no-op
-	//     UPDATE per item, ~7 sequential D1 round-trips for Beto.
-	//   • Real changes still apply but in parallel, not serially.
 	const writes: Promise<unknown>[] = [];
 	const nowIso = new Date().toISOString();
 	for (const rx of sorted) {
@@ -306,8 +265,6 @@ export async function ensureScheduleStateForEpisode(
 			const existingRow = existingByKey.get(key);
 			const intervalHours = deriveIntervalHours(item);
 			if (existingRow) {
-				// Only issue an UPDATE if any tracked field actually drifted —
-				// upsert was previously unconditional.
 				const needs =
 					existingRow.displayName !== item.name ||
 					existingRow.kind !== item.kind ||
@@ -341,7 +298,6 @@ export async function ensureScheduleStateForEpisode(
 			} else {
 				writes.push(
 					upsertScheduleState(env, {
-						episodeId,
 						item,
 						prescriptionId: rx.id,
 						timeZone,
@@ -352,16 +308,10 @@ export async function ensureScheduleStateForEpisode(
 			}
 		}
 	}
-	if (writes.length > 0) {
-		await Promise.all(writes);
-	}
+	if (writes.length > 0) await Promise.all(writes);
 
-	// Auto-expire: anything whose endsAt has passed gets active=false on the
-	// next read. Cheaper to handle here (lazy) than to schedule a separate
-	// cleanup cron — every episode_get / timetable_get already calls this.
-	const refreshed = touched || existing.length === 0
-		? await listScheduleStates(env, episodeId)
-		: existing;
+	const refreshed =
+		touched || existing.length === 0 ? await listScheduleStates(env) : existing;
 	const toExpire = refreshed.filter(
 		(s) => s.active && s.endsAt && s.endsAt <= nowIso,
 	);
@@ -374,7 +324,7 @@ export async function ensureScheduleStateForEpisode(
 					.where(eq(scheduleState.id, s.id)),
 			),
 		);
-		return listScheduleStates(env, episodeId);
+		return listScheduleStates(env);
 	}
 	if (!touched && existing.length > 0) return existing;
 	return refreshed;
@@ -382,11 +332,10 @@ export async function ensureScheduleStateForEpisode(
 
 export async function advanceAnchorAfterDose(
 	env: Env,
-	episodeId: string,
 	key: string,
 	givenAtIso: string,
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
 	const newAnchor = new Date(
 		new Date(givenAtIso).getTime() + row.intervalHours * 60 * 60 * 1000,
@@ -401,11 +350,10 @@ export async function advanceAnchorAfterDose(
 
 export async function shiftAnchorBy(
 	env: Env,
-	episodeId: string,
 	key: string,
 	hours: number,
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
 	const newAnchor = new Date(
 		new Date(row.anchorAt).getTime() + hours * 60 * 60 * 1000,
@@ -420,11 +368,10 @@ export async function shiftAnchorBy(
 
 export async function setAnchor(
 	env: Env,
-	episodeId: string,
 	key: string,
 	anchorAt: string,
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
 	const [updated] = await db(env)
 		.update(scheduleState)
@@ -434,10 +381,7 @@ export async function setAnchor(
 	return updated ?? null;
 }
 
-// Hard-delete a single schedule_state row by id. Used to clean up
-// orphan/ghost items left after a prescription_delete — those rows go
-// inactive but linger with prescription_id=null. Past dose history (the
-// doses table) is unaffected; only the runtime row goes away.
+// Hard-delete a single schedule_state row by id (cleanup of orphan/ghost rows).
 export async function deleteScheduleState(
 	env: Env,
 	id: string,
@@ -451,11 +395,10 @@ export async function deleteScheduleState(
 
 export async function setActive(
 	env: Env,
-	episodeId: string,
 	key: string,
 	active: boolean,
 ): Promise<ScheduleState | null> {
-	const row = await getScheduleState(env, episodeId, key);
+	const row = await getScheduleState(env, key);
 	if (!row) return null;
 	const [updated] = await db(env)
 		.update(scheduleState)

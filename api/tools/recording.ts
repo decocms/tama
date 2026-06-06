@@ -6,24 +6,24 @@ import {
 } from "../ai/summarize-recording.ts";
 import { whisperTranscribe } from "../ai/whisper.ts";
 import type { Env } from "../env.ts";
-import { addNote, getEpisode, listNotes } from "../storage/episodes.ts";
 import { getFile, readFileBytes, saveFile } from "../storage/files.ts";
-import { updatePet } from "../storage/pets.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
+import { updatePet } from "../storage/pets.ts";
 import {
 	addChunk,
 	createRecording,
 	getRecording,
 	listChunks,
-	listRecordingsForEpisode,
+	listRecordings,
 	setChunkTranscript,
 	updateRecording,
 } from "../storage/recordings.ts";
+import { addNote, listNotes } from "../storage/timeline.ts";
 import { URI } from "./uris.ts";
 
 const RecordingSchema = z.object({
 	id: z.string(),
-	episodeId: z.string(),
+	petId: z.string(),
 	originalFileId: z.string().nullable(),
 	originalName: z.string().nullable(),
 	mimeType: z.string(),
@@ -57,17 +57,12 @@ const ChunkSchema = z.object({
 	createdAt: z.string(),
 });
 
-// ---------------------------------------------------------------------------
-// recording_create — registers the recording row + optionally stores original
-// ---------------------------------------------------------------------------
-
 export const recordingCreateTool = (_env: Env) =>
 	createTool({
 		id: "recording_create",
 		description:
-			"Register a new audio recording for an episode. Stores the original file (optional) and reserves space for `numChunks` chunks. Call recording_add_chunk N times after this, then recording_transcribe.",
+			"Register a new audio recording for the pet. Stores the original file (optional) and reserves space for `numChunks` chunks. Call recording_add_chunk N times, then recording_transcribe.",
 		inputSchema: z.object({
-			episodeId: z.string(),
 			mimeType: z.string(),
 			originalName: z.string().optional(),
 			durationS: z.number().optional(),
@@ -91,7 +86,6 @@ export const recordingCreateTool = (_env: Env) =>
 				originalFileId = f.id;
 			}
 			const rec = await createRecording(env, {
-				episodeId: context.episodeId,
 				mimeType: context.mimeType,
 				originalName: context.originalName,
 				durationS: context.durationS,
@@ -101,10 +95,6 @@ export const recordingCreateTool = (_env: Env) =>
 			return { recording: rec };
 		},
 	});
-
-// ---------------------------------------------------------------------------
-// recording_add_chunk — saves one WAV chunk to R2 + DB row
-// ---------------------------------------------------------------------------
 
 export const recordingAddChunkTool = (_env: Env) =>
 	createTool({
@@ -142,23 +132,17 @@ export const recordingAddChunkTool = (_env: Env) =>
 		},
 	});
 
-// ---------------------------------------------------------------------------
-// recording_transcribe — transcribes any not-yet-transcribed chunks
-// ---------------------------------------------------------------------------
-
 export const recordingTranscribeTool = (_env: Env) =>
 	createTool({
 		id: "recording_transcribe",
 		description:
-			"Transcribe all chunks of a recording that don't yet have a transcript. Idempotent — already-transcribed chunks are skipped. Saves each chunk's transcript and the full combined transcript on the recording.",
+			"Transcribe all chunks of a recording that don't yet have a transcript. Idempotent. Saves each chunk's transcript and the full combined transcript on the recording.",
 		inputSchema: z.object({
 			recordingId: z.string(),
 			language: z
 				.string()
 				.optional()
-				.describe(
-					"BCP-47 language code, e.g. 'pt' or 'en'. Auto-detect if omitted.",
-				),
+				.describe("BCP-47 language code, e.g. 'pt' or 'en'. Auto-detect if omitted."),
 		}),
 		outputSchema: z.object({ recording: RecordingSchema }),
 		execute: async ({ context, runtimeContext }) => {
@@ -166,10 +150,7 @@ export const recordingTranscribeTool = (_env: Env) =>
 			const rec = await getRecording(env, context.recordingId);
 			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
 
-			await updateRecording(env, rec.id, {
-				status: "transcribing",
-				error: null,
-			});
+			await updateRecording(env, rec.id, { status: "transcribing", error: null });
 
 			const chunks = await listChunks(env, rec.id);
 			try {
@@ -208,15 +189,11 @@ export const recordingTranscribeTool = (_env: Env) =>
 		},
 	});
 
-// ---------------------------------------------------------------------------
-// recording_summarize — Claude proposes summary / history / episode note
-// ---------------------------------------------------------------------------
-
 export const recordingSummarizeTool = (_env: Env) =>
 	createTool({
 		id: "recording_summarize",
 		description:
-			"Read the full transcript and produce three review-ready outputs: a brief summary, an update to the pet's long-term profile, and a note for the current episode. Does NOT apply them — call recording_apply after the user reviews.",
+			"Read the full transcript and produce three review-ready outputs: a brief summary, an update to the pet's long-term profile, and a timeline note. Does NOT apply them — call recording_apply after review.",
 		inputSchema: z.object({ recordingId: z.string() }),
 		outputSchema: z.object({ recording: RecordingSchema }),
 		execute: async ({ context, runtimeContext }) => {
@@ -224,16 +201,12 @@ export const recordingSummarizeTool = (_env: Env) =>
 			const rec = await getRecording(env, context.recordingId);
 			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
 			if (!rec.fullTranscript) {
-				throw new Error(
-					"Transcript not ready — call recording_transcribe first",
-				);
+				throw new Error("Transcript not ready — call recording_transcribe first");
 			}
-			const ep = await getEpisode(env, rec.episodeId);
-			if (!ep) throw new Error("Episode not found");
 			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
-			const notesRows = await listNotes(env, ep.id);
+			const notesRows = await listNotes(env);
 			const out = await summarizeRecording(env, {
 				petContext: {
 					name: pet.name,
@@ -244,9 +217,9 @@ export const recordingSummarizeTool = (_env: Env) =>
 					ownerNotes: pet.ownerNotes,
 				},
 				episodeContext: {
-					title: ep.title,
-					summary: ep.summary,
-					existingNotes: notesRows.map((n) => n.content),
+					title: `${pet.name}'s timeline`,
+					summary: pet.summary,
+					existingNotes: notesRows.slice(0, 20).map((n) => n.content),
 				},
 				transcript: rec.fullTranscript,
 			});
@@ -260,37 +233,27 @@ export const recordingSummarizeTool = (_env: Env) =>
 		},
 	});
 
-// ---------------------------------------------------------------------------
-// recording_apply — write the user-confirmed updates to pet + episode
-// ---------------------------------------------------------------------------
-
 export const recordingApplyTool = (_env: Env) =>
 	createTool({
 		id: "recording_apply",
 		description:
-			"Apply the (optionally edited) summary outputs from a recording. Appends historyUpdate to the pet's owner notes and adds episodeNote as an episode note.",
+			"Apply the (optionally edited) summary outputs from a recording. Appends historyUpdate to the pet's owner notes and adds the summary as a timeline note.",
 		inputSchema: z.object({
 			recordingId: z.string(),
 			historyUpdate: z
 				.string()
 				.optional()
-				.describe(
-					"Override the AI-proposed history update. Empty string = skip.",
-				),
+				.describe("Override the AI-proposed history update. Empty string = skip."),
 			episodeNote: z
 				.string()
 				.optional()
-				.describe(
-					"Override the AI-proposed episode note. Empty string = skip.",
-				),
+				.describe("Override the AI-proposed timeline note. Empty string = skip."),
 		}),
 		outputSchema: z.object({ recording: RecordingSchema }),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
 			const rec = await getRecording(env, context.recordingId);
 			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
-			const ep = await getEpisode(env, rec.episodeId);
-			if (!ep) throw new Error("Episode not found");
 			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
@@ -303,7 +266,6 @@ export const recordingApplyTool = (_env: Env) =>
 					? context.episodeNote
 					: (rec.summary ?? "");
 
-			// Append history to ownerNotes (don't overwrite).
 			if (history.trim()) {
 				const stamp = new Date().toISOString().slice(0, 10);
 				const appended =
@@ -315,7 +277,6 @@ export const recordingApplyTool = (_env: Env) =>
 			let episodeNoteId: string | null = rec.episodeNoteId;
 			if (noteText.trim()) {
 				const n = await addNote(env, {
-					episodeId: ep.id,
 					kind: "ai-summary",
 					content: noteText.trim(),
 				});
@@ -332,17 +293,12 @@ export const recordingApplyTool = (_env: Env) =>
 		},
 	});
 
-// ---------------------------------------------------------------------------
-// recording_apply_group — combine N transcripts into one summary + apply
-// ---------------------------------------------------------------------------
-
 export const recordingApplyGroupTool = (_env: Env) =>
 	createTool({
 		id: "recording_apply_group",
 		description:
-			"Combine the transcripts of one or more recordings into a SINGLE analysis, then auto-apply: appends the long-term history update to pet.ownerNotes and inserts one ai-summary note on the episode. All recordings in the group are marked status='applied' and linked to that note. No review step — the analysis is shown via the resulting note in the timeline.",
+			"Combine the transcripts of one or more recordings into a SINGLE analysis, then auto-apply: appends the long-term history update to pet.ownerNotes and inserts one ai-summary timeline note. All recordings in the group are marked status='applied' and linked to that note.",
 		inputSchema: z.object({
-			episodeId: z.string(),
 			recordingIds: z
 				.array(z.string())
 				.min(1)
@@ -356,14 +312,9 @@ export const recordingApplyGroupTool = (_env: Env) =>
 		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
-			const ep = await getEpisode(env, context.episodeId);
-			if (!ep) throw new Error(`Episode not found: ${context.episodeId}`);
 			const pet = await getSelfPet(env);
 			if (!pet) throw new Error("Pet not found");
 
-			// Load each recording, validate it belongs to the episode and has a
-			// transcript. If any is missing, fail fast — better than silently
-			// merging an incomplete set.
 			const recs = await Promise.all(
 				context.recordingIds.map((id) => getRecording(env, id)),
 			);
@@ -372,9 +323,6 @@ export const recordingApplyGroupTool = (_env: Env) =>
 				const rec = recs[i];
 				const id = context.recordingIds[i];
 				if (!rec) throw new Error(`Recording not found: ${id}`);
-				if (rec.episodeId !== ep.id) {
-					throw new Error(`Recording ${id} is not part of this episode.`);
-				}
 				if (!rec.fullTranscript) {
 					throw new Error(
 						`Recording ${id} has no transcript yet — call recording_transcribe first.`,
@@ -383,7 +331,6 @@ export const recordingApplyGroupTool = (_env: Env) =>
 				valid.push(rec);
 			}
 
-			// Stable order: oldest first, so the narrative reads chronologically.
 			valid.sort(
 				(a, b) =>
 					new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
@@ -401,7 +348,7 @@ export const recordingApplyGroupTool = (_env: Env) =>
 				})),
 			);
 
-			const notesRows = await listNotes(env, ep.id);
+			const notesRows = await listNotes(env);
 			const out = await summarizeRecording(env, {
 				petContext: {
 					name: pet.name,
@@ -412,14 +359,13 @@ export const recordingApplyGroupTool = (_env: Env) =>
 					ownerNotes: pet.ownerNotes,
 				},
 				episodeContext: {
-					title: ep.title,
-					summary: ep.summary,
-					existingNotes: notesRows.map((n) => n.content),
+					title: `${pet.name}'s timeline`,
+					summary: pet.summary,
+					existingNotes: notesRows.slice(0, 20).map((n) => n.content),
 				},
 				transcript: combinedTranscript,
 			});
 
-			// Append history to ownerNotes (don't overwrite).
 			if (out.historyUpdate.trim()) {
 				const stamp = new Date().toISOString().slice(0, 10);
 				const tag =
@@ -430,19 +376,13 @@ export const recordingApplyGroupTool = (_env: Env) =>
 				await updatePet(env, pet.id, { ownerNotes: appended });
 			}
 
-			// Persist as a single ai-summary note on the episode.
 			let noteId: string | null = null;
 			const noteText = out.episodeNote.trim() || out.summary.trim();
 			if (noteText) {
-				const n = await addNote(env, {
-					episodeId: ep.id,
-					kind: "ai-summary",
-					content: noteText,
-				});
+				const n = await addNote(env, { kind: "ai-summary", content: noteText });
 				noteId = n.id;
 			}
 
-			// Mark each recording applied + linked to the same note.
 			const updated = await Promise.all(
 				valid.map((r) =>
 					updateRecording(env, r.id, {
@@ -463,10 +403,6 @@ export const recordingApplyGroupTool = (_env: Env) =>
 			};
 		},
 	});
-
-// ---------------------------------------------------------------------------
-// recording_get / recording_list
-// ---------------------------------------------------------------------------
 
 export const recordingGetTool = (_env: Env) =>
 	createTool({
@@ -491,13 +427,13 @@ export const recordingGetTool = (_env: Env) =>
 export const recordingListTool = (_env: Env) =>
 	createTool({
 		id: "recording_list",
-		description: "List all recordings for an episode.",
-		inputSchema: z.object({ episodeId: z.string() }),
+		description: "List all recordings for the pet.",
+		inputSchema: z.object({}),
 		outputSchema: z.object({ recordings: z.array(RecordingSchema) }),
 		annotations: { readOnlyHint: true },
-		execute: async ({ context, runtimeContext }) => {
+		execute: async ({ runtimeContext }) => {
 			const env = runtimeContext.env as Env;
-			const rs = await listRecordingsForEpisode(env, context.episodeId);
+			const rs = await listRecordings(env);
 			return { recordings: rs };
 		},
 	});

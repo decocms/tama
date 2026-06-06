@@ -1,13 +1,9 @@
-import { dashboardTool } from "./dashboard.ts";
 import {
-	episodeAddNoteTool,
-	episodeDeleteTool,
-	episodeEndTool,
-	episodeGetTool,
-	episodeListTool,
-	episodeStartTool,
-	episodeUpdateTool,
-} from "./episode.ts";
+	appPetTool,
+	appTimelineTool,
+	appTimetableTool,
+} from "./app-surfaces.ts";
+import { assetListTool, assetUploadTool } from "./assets.ts";
 import {
 	examDeleteTool,
 	examGetTool,
@@ -17,9 +13,7 @@ import {
 	examUpdateTool,
 	examUploadTool,
 } from "./exam.ts";
-import { episodeInsightsTool } from "./insights.ts";
 import { petEnrichTool, petProfileTool, petUpdateTool } from "./pet.ts";
-import { petSpriteGenerateTool } from "./sprite.ts";
 import {
 	prescriptionCreateTool,
 	prescriptionDeleteTool,
@@ -45,6 +39,11 @@ import {
 } from "./recording.ts";
 import { vetResearchTool } from "./research.ts";
 import {
+	petSpriteGenerateTool,
+	petSpriteSvgGenerateTool,
+	spriteCompareTool,
+} from "./sprite.ts";
+import {
 	doseLogTool,
 	doseUpdateTool,
 	scheduleStateDeleteTool,
@@ -55,25 +54,52 @@ import {
 	timetableSnoozeTool,
 	timetableStopItemTool,
 } from "./timetable.ts";
+import {
+	petSummaryRefreshTool,
+	symptomAddTool,
+	symptomListTool,
+	symptomResolveTool,
+	timelineGetTool,
+	timelineNoteAddTool,
+	vaccineAddTool,
+	vaccineListTool,
+	vetVisitAddTool,
+	vetVisitListTool,
+} from "./timeline.ts";
 
 export const tools = [
-	dashboardTool,
+	// Top-level apps
+	appPetTool,
+	appTimelineTool,
+	appTimetableTool,
+	// Pet
 	petProfileTool,
 	petUpdateTool,
 	petEnrichTool,
 	petSpriteGenerateTool,
-	episodeStartTool,
-	episodeGetTool,
-	episodeListTool,
-	episodeUpdateTool,
-	episodeEndTool,
-	episodeDeleteTool,
-	episodeAddNoteTool,
+	petSpriteSvgGenerateTool,
+	spriteCompareTool,
+	petSummaryRefreshTool,
+	// Timeline + typed entries
+	timelineGetTool,
+	timelineNoteAddTool,
+	vetVisitAddTool,
+	vetVisitListTool,
+	vaccineAddTool,
+	vaccineListTool,
+	symptomAddTool,
+	symptomResolveTool,
+	symptomListTool,
+	// Assets intake
+	assetUploadTool,
+	assetListTool,
+	// Prescriptions
 	prescriptionUploadTool,
 	prescriptionCreateTool,
 	prescriptionUpdateTool,
 	prescriptionListTool,
 	prescriptionDeleteTool,
+	// Exams
 	examUploadTool,
 	examPasteTool,
 	examUpdateTool,
@@ -81,6 +107,7 @@ export const tools = [
 	examGetTool,
 	examListTool,
 	examMetricSeriesTool,
+	// Timetable
 	timetableGetTool,
 	scheduleStateListTool,
 	scheduleStateDeleteTool,
@@ -90,6 +117,7 @@ export const tools = [
 	timetableSetAnchorTool,
 	timetableStopItemTool,
 	timetableSetDurationTool,
+	// Recordings
 	recordingCreateTool,
 	recordingAddChunkTool,
 	recordingTranscribeTool,
@@ -98,7 +126,7 @@ export const tools = [
 	recordingApplyGroupTool,
 	recordingGetTool,
 	recordingListTool,
-	episodeInsightsTool,
+	// Research + push
 	vetResearchTool,
 	pushVapidPublicKeyTool,
 	pushSubscribeTool,

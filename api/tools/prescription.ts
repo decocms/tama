@@ -2,7 +2,6 @@ import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import { extractPrescription } from "../ai/extract-prescription.ts";
 import type { Env } from "../env.ts";
-import { getEpisode } from "../storage/episodes.ts";
 import { saveFile } from "../storage/files.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
 import {
@@ -65,10 +64,9 @@ function firstToken(s: string): string {
 
 async function detectOverlaps(
 	env: Env,
-	episodeId: string,
 	items: ScheduleItem[],
 ): Promise<OverlapWarning[]> {
-	const existing = await listScheduleStates(env, episodeId);
+	const existing = await listScheduleStates(env);
 	if (existing.length === 0) return [];
 	const warnings: OverlapWarning[] = [];
 	for (const item of items) {
@@ -105,7 +103,7 @@ async function syncRxIfConfirmed(
 	env: Env,
 	rx: {
 		id: string;
-		episodeId: string;
+		petId: string;
 		status: "draft" | "confirmed";
 		scheduleItemsJson: string;
 		fileId: string | null;
@@ -115,8 +113,6 @@ async function syncRxIfConfirmed(
 	},
 ): Promise<void> {
 	if (rx.status !== "confirmed") return;
-	const ep = await getEpisode(env, rx.episodeId);
-	if (!ep) return;
 	const pet = await getSelfPet(env);
 	const tz = pet?.timezone ?? "UTC";
 	await syncPrescriptionToScheduleState(env, rx as never, tz);
@@ -126,7 +122,7 @@ export const PRESCRIPTION_REVIEW_URI = URI.prescriptionReview;
 
 const PrescriptionSchema = z.object({
 	id: z.string(),
-	episodeId: z.string(),
+	petId: z.string(),
 	fileId: z.string().nullable(),
 	status: z.enum(["draft", "confirmed"]),
 	scheduleItems: z.array(ScheduleItemSchema),
@@ -137,7 +133,7 @@ const PrescriptionSchema = z.object({
 
 function toRx(r: {
 	id: string;
-	episodeId: string;
+	petId: string;
 	fileId: string | null;
 	status: "draft" | "confirmed";
 	scheduleItemsJson: string;
@@ -147,7 +143,7 @@ function toRx(r: {
 }) {
 	return {
 		id: r.id,
-		episodeId: r.episodeId,
+		petId: r.petId,
 		fileId: r.fileId,
 		status: r.status,
 		scheduleItems: parseScheduleItems(r as never),
@@ -169,7 +165,6 @@ DO NOT use this when you already have the prescription content as structured/tex
 
 Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf. The PDF path uses Anthropic's native document content blocks — multi-page PDFs work.`,
 		inputSchema: z.object({
-			episodeId: z.string(),
 			imageBase64: z
 				.string()
 				.describe(
@@ -204,7 +199,6 @@ Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf.
 				sourceNotes: context.sourceNotes,
 			});
 			const rx = await createPrescription(e, {
-				episodeId: context.episodeId,
 				fileId: file.id,
 				scheduleItems: extracted.items,
 				rawAiText: extracted.rawAiText,
@@ -232,7 +226,6 @@ Defaults to status='confirmed' so items appear on the timetable immediately. Eac
 
 Only fall back to prescription_upload when you truly do not have the text and need vision/OCR to extract it.`,
 		inputSchema: z.object({
-			episodeId: z.string(),
 			scheduleItems: ScheduleItemsCoerced.describe(
 				"Array of items. At least one. Canonical fields per item: name (string), kind ('medication' | 'meal'), times (string[] HH:mm in pet's timezone). Optional: dosage, route, frequencyHours, durationDays, startsAt, notes. Do NOT use 'drug', 'dose', 'timing', 'scheduleDays', or 'durationWeeks' — those aren't recognized. Pass as a real JSON array; if your transport stringifies it, the server will JSON.parse defensively (no need to encode it yourself).",
 			),
@@ -268,13 +261,8 @@ Only fall back to prescription_upload when you truly do not have the text and ne
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
 			const items = context.scheduleItems as ScheduleItem[];
-			const overlapsExisting = await detectOverlaps(
-				env,
-				context.episodeId,
-				items,
-			);
+			const overlapsExisting = await detectOverlaps(env, items);
 			const rx = await createPrescription(env, {
-				episodeId: context.episodeId,
 				scheduleItems: items,
 				sourceNotes: context.sourceNotes,
 				status: context.status ?? "confirmed",
@@ -340,16 +328,13 @@ export const prescriptionUpdateTool = (_env: Env) =>
 export const prescriptionListTool = (_env: Env) =>
 	createTool({
 		id: "prescription_list",
-		description: "List prescriptions for an episode.",
-		inputSchema: z.object({ episodeId: z.string() }),
+		description: "List all prescriptions for the pet.",
+		inputSchema: z.object({}),
 		outputSchema: z.object({ prescriptions: z.array(PrescriptionSchema) }),
 		_meta: { ui: { resourceUri: URI.prescriptionList } },
 		annotations: { readOnlyHint: true },
-		execute: async ({ context, runtimeContext }) => {
-			const rows = await listPrescriptions(
-				runtimeContext.env as Env,
-				context.episodeId,
-			);
+		execute: async ({ runtimeContext }) => {
+			const rows = await listPrescriptions(runtimeContext.env as Env);
 			return { prescriptions: rows.map((r) => toRx(r)) };
 		},
 	});

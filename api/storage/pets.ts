@@ -62,6 +62,40 @@ export async function setEnrichment(
 	return row;
 }
 
+// Store the procedural SVG sprite pack (the cheap/crisp alternative to the
+// raster img2img pack). Both can coexist; the companion prefers SVG.
+export async function setSvgPack(
+	env: Env,
+	petId: string,
+	pack: Record<string, string>,
+	characterJson: string,
+): Promise<Pet | null> {
+	const [row] = await db(env)
+		.update(pets)
+		.set({ svgPackJson: JSON.stringify(pack), characterJson })
+		.where(eq(pets.id, petId))
+		.returning();
+	return row ?? null;
+}
+
+// The single evolving status summary (replaces the old per-episode
+// currentStatus). Regenerated from the whole timeline by pet_summary_refresh.
+export async function setPetSummary(
+	env: Env,
+	petId: string,
+	summary: string | null,
+): Promise<Pet | null> {
+	const [row] = await db(env)
+		.update(pets)
+		.set({
+			summary,
+			summaryAt: summary ? new Date().toISOString() : null,
+		})
+		.where(eq(pets.id, petId))
+		.returning();
+	return row ?? null;
+}
+
 export interface UpdatePetInput {
 	name?: string;
 	species?: string;
@@ -92,24 +126,6 @@ export async function updatePet(
 		.where(eq(pets.id, id))
 		.returning();
 	return row ?? null;
-}
-
-export async function deletePet(env: Env, id: string): Promise<boolean> {
-	// Soft delete: mark pet and cascade the flag to its episodes so they
-	// disappear from listings too. Underlying data is preserved.
-	const now = new Date().toISOString();
-	const { episodes } = await import("../db/schema.ts");
-	const result = await db(env)
-		.update(pets)
-		.set({ deletedAt: now })
-		.where(and(eq(pets.id, id), isNull(pets.deletedAt)))
-		.returning();
-	if (result.length === 0) return false;
-	await db(env)
-		.update(episodes)
-		.set({ deletedAt: now })
-		.where(and(eq(episodes.petId, id), isNull(episodes.deletedAt)));
-	return true;
 }
 
 export function parseEnrichment(pet: Pet): Enrichment | null {

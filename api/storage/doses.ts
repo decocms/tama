@@ -3,9 +3,9 @@ import { db } from "../db/client.ts";
 import { type Dose, doses } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { newId } from "./ids.ts";
+import { PET_SELF_ID } from "./pet-self.ts";
 
 export interface LogDoseInput {
-	episodeId: string;
 	itemName: string;
 	kind?: "medication" | "meal";
 	plannedAt?: string;
@@ -20,7 +20,7 @@ export async function logDose(env: Env, input: LogDoseInput): Promise<Dose> {
 		.insert(doses)
 		.values({
 			id,
-			episodeId: input.episodeId,
+			petId: PET_SELF_ID,
 			itemName: input.itemName,
 			kind: input.kind ?? "medication",
 			plannedAt: input.plannedAt,
@@ -32,11 +32,11 @@ export async function logDose(env: Env, input: LogDoseInput): Promise<Dose> {
 	return row;
 }
 
-export async function listDoses(env: Env, episodeId: string): Promise<Dose[]> {
+export async function listDoses(env: Env): Promise<Dose[]> {
 	return db(env)
 		.select()
 		.from(doses)
-		.where(eq(doses.episodeId, episodeId))
+		.where(eq(doses.petId, PET_SELF_ID))
 		.orderBy(desc(doses.actualAt));
 }
 
@@ -117,14 +117,13 @@ export function pickNearestDose(
 
 export async function findDoseForItem(
 	env: Env,
-	episodeId: string,
 	itemName: string,
 	opts: PickNearestOpts = {},
 ): Promise<Dose | null> {
 	const all = await db(env)
 		.select()
 		.from(doses)
-		.where(and(eq(doses.episodeId, episodeId), eq(doses.itemName, itemName)))
+		.where(and(eq(doses.petId, PET_SELF_ID), eq(doses.itemName, itemName)))
 		.orderBy(desc(doses.actualAt));
 	return pickNearestDose(all, opts);
 }

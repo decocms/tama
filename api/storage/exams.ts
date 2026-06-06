@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import {
-	episodes,
 	type Exam,
 	exams,
 	type ExamMetric,
@@ -11,6 +10,7 @@ import {
 import type { Env } from "../env.ts";
 import { chunkForBindVars } from "./chunk.ts";
 import { newId } from "./ids.ts";
+import { PET_SELF_ID } from "./pet-self.ts";
 
 // Number of columns in `exam_metrics` that we provide values for on insert
 // (id, examId, canonicalKey, displayName, valueNum, valueText, unit, refLow,
@@ -34,7 +34,6 @@ export interface ExamMetricInput {
 }
 
 export interface CreateExamDraftInput {
-	episodeId: string;
 	fileId?: string | null;
 	performedAt?: string | null;
 	labName?: string | null;
@@ -59,7 +58,7 @@ export async function createExamDraft(
 		.insert(exams)
 		.values({
 			id: examId,
-			episodeId: input.episodeId,
+			petId: PET_SELF_ID,
 			fileId: input.fileId ?? null,
 			status: input.status ?? "draft",
 			performedAt: input.performedAt ?? null,
@@ -92,28 +91,12 @@ export async function getExamWithMetrics(
 	return { exam, metrics: m };
 }
 
-export async function listExamsForEpisode(
-	env: Env,
-	episodeId: string,
-): Promise<Exam[]> {
+export async function listExamsForPet(env: Env): Promise<Exam[]> {
 	return db(env)
 		.select()
 		.from(exams)
-		.where(eq(exams.episodeId, episodeId))
+		.where(eq(exams.petId, PET_SELF_ID))
 		.orderBy(desc(exams.performedAt), desc(exams.createdAt));
-}
-
-export async function listExamsForPet(
-	env: Env,
-	petId: string,
-): Promise<Exam[]> {
-	const rows = await db(env)
-		.select({ exam: exams })
-		.from(exams)
-		.innerJoin(episodes, eq(exams.episodeId, episodes.id))
-		.where(and(eq(episodes.petId, petId), isNull(episodes.deletedAt)))
-		.orderBy(desc(exams.performedAt), desc(exams.createdAt));
-	return rows.map((r) => r.exam);
 }
 
 export interface UpdateExamInput {
@@ -262,12 +245,10 @@ export interface MetricSeriesRow {
 
 export async function getMetricSeriesForPet(
 	env: Env,
-	petId: string,
 	canonicalKeys?: string[],
 ): Promise<MetricSeriesRow[]> {
 	const baseWhere = and(
-		eq(episodes.petId, petId),
-		isNull(episodes.deletedAt),
+		eq(exams.petId, PET_SELF_ID),
 		eq(exams.status, "confirmed"),
 	);
 	const where =
@@ -292,7 +273,6 @@ export async function getMetricSeriesForPet(
 		})
 		.from(examMetrics)
 		.innerJoin(exams, eq(examMetrics.examId, exams.id))
-		.innerJoin(episodes, eq(exams.episodeId, episodes.id))
 		.where(where)
 		.orderBy(asc(exams.performedAt), asc(exams.createdAt));
 

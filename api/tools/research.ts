@@ -2,19 +2,13 @@ import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import { vetResearch } from "../ai/vet-research.ts";
 import type { Env } from "../env.ts";
-import { listDoses } from "../storage/doses.ts";
-import { getEpisode, listNotes } from "../storage/episodes.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
 import { parseEnrichment } from "../storage/pets.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
 } from "../storage/prescriptions.ts";
-
-function daysSinceIso(iso: string): number {
-	const ms = Date.now() - new Date(iso).getTime();
-	return Math.max(1, Math.floor(ms / 86_400_000) + 1);
-}
+import { listNotes } from "../storage/timeline.ts";
 
 export const vetResearchTool = (_env: Env) =>
 	createTool({
@@ -28,7 +22,7 @@ Use this tool whenever the user asks something that needs grounded clinical cont
 - "Is it safe to combine these meds with probiotics?"
 - "How long until omeprazole takes effect?"
 
-Best practice: pass episodeId so the tool auto-loads the active prescriptions + recent notes from that episode — pet profile is always auto-attached because there's only one pet on this deployment. The agent should then summarize the result back to the user in chat, and optionally call episode_add_note to persist key findings.
+The pet's profile, active medications, and recent timeline notes are auto-attached as context — you don't pass anything but the question. Summarize the result back to the user in chat, and optionally call timeline_note_add to persist key findings.
 
 Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-flag bullets), citations (urls). The tool does NOT replace a vet — present results as research to support the user's conversation with their veterinarian.`,
 		inputSchema: z.object({
@@ -37,12 +31,6 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 				.min(3)
 				.describe(
 					"The specific question to research. Be concrete — 'Will X and Y interact?' beats 'Tell me about X'.",
-				),
-			episodeId: z
-				.string()
-				.optional()
-				.describe(
-					"If provided, the episode's active medications + recent notes are auto-attached as context.",
 				),
 			extraContext: z
 				.string()
@@ -62,13 +50,8 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
 
-			// Pet context is always auto-attached (single-pet deploy). Episode is
-			// optional and brings in active meds + recent notes.
-			let episode: Awaited<ReturnType<typeof getEpisode>> = null;
-			if (context.episodeId) {
-				episode = await getEpisode(env, context.episodeId);
-			}
-
+			// Single-pet deploy: pet profile + active meds + recent notes are
+			// always auto-attached.
 			const pet = await getSelfPet(env);
 			const enrichment = pet ? parseEnrichment(pet) : null;
 			const conditionsParts: string[] = [];
@@ -82,35 +65,24 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 				route?: string | null;
 				frequencyHours?: number | null;
 			}[] = [];
-			let recentNotes: string[] = [];
 
-			if (episode) {
-				const [rxRows, _doses, noteRows] = await Promise.all([
-					listPrescriptions(env, episode.id),
-					listDoses(env, episode.id),
-					listNotes(env, episode.id),
-				]);
-				for (const rx of rxRows) {
-					if (rx.status !== "confirmed") continue;
-					for (const it of parseScheduleItems(rx)) {
-						if (it.kind !== "medication") continue;
-						activeMedications.push({
-							name: it.name,
-							dosage: it.dosage ?? null,
-							route: it.route ?? null,
-							frequencyHours: it.frequencyHours ?? null,
-						});
-					}
+			const [rxRows, noteRows] = await Promise.all([
+				listPrescriptions(env),
+				listNotes(env),
+			]);
+			for (const rx of rxRows) {
+				if (rx.status !== "confirmed") continue;
+				for (const it of parseScheduleItems(rx)) {
+					if (it.kind !== "medication") continue;
+					activeMedications.push({
+						name: it.name,
+						dosage: it.dosage ?? null,
+						route: it.route ?? null,
+						frequencyHours: it.frequencyHours ?? null,
+					});
 				}
-				recentNotes = noteRows
-					.slice()
-					.sort(
-						(a, b) =>
-							new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-					)
-					.slice(0, 5)
-					.map((n) => n.content);
 			}
+			const recentNotes = noteRows.slice(0, 5).map((n) => n.content);
 
 			const baseQuestion = context.extraContext
 				? `${context.question}\n\nAdditional context: ${context.extraContext}`
@@ -126,13 +98,6 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 							ageDescription: pet.dob,
 							weightKg: pet.weightKg,
 							conditions: conditionsParts.join("\n\n") || null,
-						}
-					: undefined,
-				episodeContext: episode
-					? {
-							title: episode.title,
-							summary: episode.summary,
-							dayNumber: daysSinceIso(episode.startedAt),
 						}
 					: undefined,
 				activeMedications:

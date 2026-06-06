@@ -8,9 +8,9 @@ import {
 } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { newId } from "./ids.ts";
+import { PET_SELF_ID } from "./pet-self.ts";
 
 export interface CreateRecordingInput {
-	episodeId: string;
 	mimeType: string;
 	originalName?: string;
 	durationS?: number;
@@ -27,7 +27,7 @@ export async function createRecording(
 		.insert(recordings)
 		.values({
 			id,
-			episodeId: input.episodeId,
+			petId: PET_SELF_ID,
 			mimeType: input.mimeType,
 			originalName: input.originalName,
 			durationS: input.durationS,
@@ -50,14 +50,11 @@ export async function getRecording(
 	return rows[0] ?? null;
 }
 
-export async function listRecordingsForEpisode(
-	env: Env,
-	episodeId: string,
-): Promise<Recording[]> {
+export async function listRecordings(env: Env): Promise<Recording[]> {
 	return db(env)
 		.select()
 		.from(recordings)
-		.where(eq(recordings.episodeId, episodeId))
+		.where(eq(recordings.petId, PET_SELF_ID))
 		.orderBy(asc(recordings.createdAt));
 }
 

@@ -10,11 +10,9 @@ import {
 	type ExamWithMetrics,
 	getExamWithMetrics,
 	getMetricSeriesForPet,
-	listExamsForEpisode,
 	listExamsForPet,
 	updateExam,
 } from "../storage/exams.ts";
-import { PET_SELF_ID } from "../storage/pet-self.ts";
 
 const MetricStatusEnum = z.enum([
 	"normal",
@@ -42,7 +40,7 @@ const ExamMetricSchema = z.object({
 
 const ExamSchema = z.object({
 	id: z.string(),
-	episodeId: z.string(),
+	petId: z.string(),
 	fileId: z.string().nullable(),
 	status: z.enum(["draft", "confirmed"]),
 	performedAt: z.string().nullable(),
@@ -84,7 +82,6 @@ Use this when you actually have a file to OCR. If you already have the lab value
 
 Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf.`,
 		inputSchema: z.object({
-			episodeId: z.string(),
 			imageBase64: z.string(),
 			mimeType: z.string(),
 			originalName: z.string().optional(),
@@ -109,7 +106,6 @@ Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf.
 				sourceNotes: context.sourceNotes,
 			});
 			const result = await createExamDraft(env, {
-				episodeId: context.episodeId,
 				fileId: file.id,
 				performedAt: extracted.exam.performedAt ?? null,
 				labName: extracted.exam.labName ?? null,
@@ -132,7 +128,6 @@ export const examPasteTool = (_env: Env) =>
 		id: "exam_paste",
 		description: `Extract lab parameters from a pasted block of raw text (email body, OCR'd transcript, screenshot text). Same extractor as exam_upload, no file is stored. Returns a DRAFT exam with structured metrics for owner review.`,
 		inputSchema: z.object({
-			episodeId: z.string(),
 			text: z.string().min(20),
 			sourceNotes: z.string().optional(),
 		}),
@@ -148,7 +143,6 @@ export const examPasteTool = (_env: Env) =>
 				sourceNotes: context.sourceNotes,
 			});
 			const result = await createExamDraft(env, {
-				episodeId: context.episodeId,
 				fileId: null,
 				performedAt: extracted.exam.performedAt ?? null,
 				labName: extracted.exam.labName ?? null,
@@ -239,19 +233,13 @@ export const examGetTool = (_env: Env) =>
 export const examListTool = (_env: Env) =>
 	createTool({
 		id: "exam_list",
-		description:
-			"List exams. Pass episodeId to scope to a single episode; omit it to list every exam this pet has ever had.",
-		inputSchema: z.object({
-			episodeId: z.string().optional(),
-		}),
+		description: "List every exam this pet has ever had.",
+		inputSchema: z.object({}),
 		outputSchema: z.object({ exams: z.array(ExamSchema) }),
 		annotations: { readOnlyHint: true },
-		execute: async ({ context, runtimeContext }) => {
+		execute: async ({ runtimeContext }) => {
 			const env = runtimeContext.env as Env;
-			if (context.episodeId) {
-				return { exams: await listExamsForEpisode(env, context.episodeId) };
-			}
-			return { exams: await listExamsForPet(env, PET_SELF_ID) };
+			return { exams: await listExamsForPet(env) };
 		},
 	});
 
@@ -284,7 +272,6 @@ export const examMetricSeriesTool = (_env: Env) =>
 		execute: async ({ context, runtimeContext }) => {
 			const series = await getMetricSeriesForPet(
 				runtimeContext.env as Env,
-				PET_SELF_ID,
 				context.canonicalKeys,
 			);
 			return { series };

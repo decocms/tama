@@ -25,33 +25,27 @@ export const pets = sqliteTable("pets", {
 	// from the source photo. Cached so re-renders stay on-model.
 	characterJson: text("character_json"),
 	photoFileId: text("photo_file_id"),
+	// The ONE evolving status summary for this pet, regenerated from the whole
+	// timeline by pet_summary_refresh. Replaces the old per-episode
+	// currentStatus — there are no episodes anymore, just a continuous life.
+	summary: text("summary"),
+	summaryAt: text("summary_at"),
 	createdAt: text("created_at").notNull().default(nowSql),
 	deletedAt: text("deleted_at"),
 });
 
-export const episodes = sqliteTable("episodes", {
+// Free-form timeline notes. There is no episode container anymore — every
+// note hangs directly off the (single) pet and shows up in the continuous
+// timeline. `kind` distinguishes a plain note from pasted chat history, an
+// AI-written summary, or a generic logged event.
+export const notes = sqliteTable("notes", {
 	id: text("id").primaryKey(),
 	petId: text("pet_id")
 		.notNull()
 		.references(() => pets.id, { onDelete: "cascade" }),
-	title: text("title").notNull(),
-	status: text("status", { enum: ["open", "closed"] })
-		.notNull()
-		.default("open"),
-	startedAt: text("started_at").notNull().default(nowSql),
-	endedAt: text("ended_at"),
-	summary: text("summary"),
-	currentStatus: text("current_status"),
-	currentStatusAt: text("current_status_at"),
-	deletedAt: text("deleted_at"),
-});
-
-export const notes = sqliteTable("notes", {
-	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
-		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
-	kind: text("kind", { enum: ["text", "chatlog", "ai-summary"] }).notNull(),
+	kind: text("kind", {
+		enum: ["text", "chatlog", "ai-summary", "general"],
+	}).notNull(),
 	content: text("content").notNull(),
 	aiSummary: text("ai_summary"),
 	createdAt: text("created_at").notNull().default(nowSql),
@@ -70,9 +64,9 @@ export const files = sqliteTable("files", {
 
 export const prescriptions = sqliteTable("prescriptions", {
 	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
+	petId: text("pet_id")
 		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
+		.references(() => pets.id, { onDelete: "cascade" }),
 	fileId: text("file_id").references(() => files.id, { onDelete: "set null" }),
 	status: text("status", { enum: ["draft", "confirmed"] })
 		.notNull()
@@ -85,9 +79,9 @@ export const prescriptions = sqliteTable("prescriptions", {
 
 export const doses = sqliteTable("doses", {
 	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
+	petId: text("pet_id")
 		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
+		.references(() => pets.id, { onDelete: "cascade" }),
 	itemName: text("item_name").notNull(),
 	kind: text("kind", { enum: ["medication", "meal"] })
 		.notNull()
@@ -102,13 +96,13 @@ export const doses = sqliteTable("doses", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
-// Live runtime schedule per (episode, item). The prescriptions table is the
+// Live runtime schedule per (pet, item). The prescriptions table is the
 // template; this is the drifting reality. See migration 0007 for the design.
 export const scheduleState = sqliteTable("schedule_state", {
 	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
+	petId: text("pet_id")
 		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
+		.references(() => pets.id, { onDelete: "cascade" }),
 	itemKey: text("item_key").notNull(),
 	displayName: text("display_name").notNull(),
 	kind: text("kind", { enum: ["medication", "meal"] })
@@ -133,21 +127,11 @@ export const scheduleState = sqliteTable("schedule_state", {
 	updatedAt: text("updated_at").notNull().default(nowSql),
 });
 
-export const episodeInsights = sqliteTable("episode_insights", {
-	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
-		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
-	bulletsJson: text("bullets_json").notNull().default("[]"),
-	rawAiText: text("raw_ai_text"),
-	generatedAt: text("generated_at").notNull().default(nowSql),
-});
-
 export const recordings = sqliteTable("recordings", {
 	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
+	petId: text("pet_id")
 		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
+		.references(() => pets.id, { onDelete: "cascade" }),
 	originalFileId: text("original_file_id").references(() => files.id, {
 		onDelete: "set null",
 	}),
@@ -211,9 +195,9 @@ export const pushSubscriptions = sqliteTable("push_subscriptions", {
 // date the blood was drawn) lives here.
 export const exams = sqliteTable("exams", {
 	id: text("id").primaryKey(),
-	episodeId: text("episode_id")
+	petId: text("pet_id")
 		.notNull()
-		.references(() => episodes.id, { onDelete: "cascade" }),
+		.references(() => pets.id, { onDelete: "cascade" }),
 	fileId: text("file_id").references(() => files.id, { onDelete: "set null" }),
 	status: text("status", { enum: ["draft", "confirmed"] })
 		.notNull()
@@ -268,6 +252,58 @@ export const metricAliases = sqliteTable("metric_aliases", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
+// ---- Timeline typed events ----
+// These three tables join notes / doses / exams / recordings / prescriptions
+// in the continuous per-pet timeline (merged at query time in
+// api/storage/timeline.ts). Each is the structured home for a kind of
+// life-event we know how to represent richly.
+
+// A vet appointment. The fileId optionally links the discharge note / invoice
+// in the Assets library that this visit was extracted from.
+export const vetVisits = sqliteTable("vet_visits", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id")
+		.notNull()
+		.references(() => pets.id, { onDelete: "cascade" }),
+	visitedAt: text("visited_at").notNull().default(nowSql),
+	vetName: text("vet_name"),
+	clinic: text("clinic"),
+	reason: text("reason"),
+	notes: text("notes"),
+	fileId: text("file_id").references(() => files.id, { onDelete: "set null" }),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// A vaccination. dueAt drives "next dose due" reminders later; lot/vetName are
+// captured from the certificate when available.
+export const vaccines = sqliteTable("vaccines", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id")
+		.notNull()
+		.references(() => pets.id, { onDelete: "cascade" }),
+	name: text("name").notNull(),
+	administeredAt: text("administered_at").notNull().default(nowSql),
+	dueAt: text("due_at"),
+	lot: text("lot"),
+	vetName: text("vet_name"),
+	fileId: text("file_id").references(() => files.id, { onDelete: "set null" }),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
+// An observed symptom. resolvedAt is set when it clears, so the timeline can
+// show "vomiting (3 days)" spans and the agent can correlate with meds.
+export const symptoms = sqliteTable("symptoms", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id")
+		.notNull()
+		.references(() => pets.id, { onDelete: "cascade" }),
+	observedAt: text("observed_at").notNull().default(nowSql),
+	description: text("description").notNull(),
+	severity: text("severity", { enum: ["mild", "moderate", "severe"] }),
+	resolvedAt: text("resolved_at"),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
 // Idempotency log for the reminder cron. (scheduleStateId, plannedAt) is the
 // primary key — INSERT OR IGNORE guarantees a single send per dose slot even
 // if cron ticks overlap or retry.
@@ -279,8 +315,6 @@ export const notificationsSent = sqliteTable("notifications_sent", {
 
 export type Pet = typeof pets.$inferSelect;
 export type NewPet = typeof pets.$inferInsert;
-export type Episode = typeof episodes.$inferSelect;
-export type NewEpisode = typeof episodes.$inferInsert;
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
 export type FileRow = typeof files.$inferSelect;
@@ -293,8 +327,6 @@ export type Recording = typeof recordings.$inferSelect;
 export type NewRecording = typeof recordings.$inferInsert;
 export type RecordingChunk = typeof recordingChunks.$inferSelect;
 export type NewRecordingChunk = typeof recordingChunks.$inferInsert;
-export type EpisodeInsightsRow = typeof episodeInsights.$inferSelect;
-export type NewEpisodeInsightsRow = typeof episodeInsights.$inferInsert;
 export type ScheduleStateRow = typeof scheduleState.$inferSelect;
 export type NewScheduleStateRow = typeof scheduleState.$inferInsert;
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
@@ -307,3 +339,9 @@ export type ExamMetric = typeof examMetrics.$inferSelect;
 export type NewExamMetric = typeof examMetrics.$inferInsert;
 export type MetricAlias = typeof metricAliases.$inferSelect;
 export type NewMetricAlias = typeof metricAliases.$inferInsert;
+export type VetVisit = typeof vetVisits.$inferSelect;
+export type NewVetVisit = typeof vetVisits.$inferInsert;
+export type Vaccine = typeof vaccines.$inferSelect;
+export type NewVaccine = typeof vaccines.$inferInsert;
+export type Symptom = typeof symptoms.$inferSelect;
+export type NewSymptom = typeof symptoms.$inferInsert;

@@ -8,9 +8,9 @@ import {
 import type { Env } from "../env.ts";
 import { type ScheduleItem, ScheduleItemsSchema } from "../tools/shared.ts";
 import { newId } from "./ids.ts";
+import { PET_SELF_ID } from "./pet-self.ts";
 
 export interface CreatePrescriptionInput {
-	episodeId: string;
 	fileId?: string;
 	scheduleItems: ScheduleItem[];
 	rawAiText?: string;
@@ -27,7 +27,7 @@ export async function createPrescription(
 		.insert(prescriptions)
 		.values({
 			id,
-			episodeId: input.episodeId,
+			petId: PET_SELF_ID,
 			fileId: input.fileId,
 			scheduleItemsJson: JSON.stringify(input.scheduleItems),
 			rawAiText: input.rawAiText,
@@ -49,14 +49,11 @@ export async function getPrescription(
 	return rows[0] ?? null;
 }
 
-export async function listPrescriptions(
-	env: Env,
-	episodeId: string,
-): Promise<Prescription[]> {
+export async function listPrescriptions(env: Env): Promise<Prescription[]> {
 	return db(env)
 		.select()
 		.from(prescriptions)
-		.where(eq(prescriptions.episodeId, episodeId))
+		.where(eq(prescriptions.petId, PET_SELF_ID))
 		.orderBy(desc(prescriptions.createdAt));
 }
 

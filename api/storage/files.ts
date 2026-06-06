@@ -1,8 +1,14 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type FileRow, files } from "../db/schema.ts";
 import type { Env } from "../env.ts";
 import { newId } from "./ids.ts";
+
+// All uploaded files (the Assets library), newest first. Single-tenant, so no
+// pet scoping needed — every file belongs to the one pet.
+export async function listFiles(env: Env): Promise<FileRow[]> {
+	return db(env).select().from(files).orderBy(desc(files.uploadedAt));
+}
 
 const EXT_BY_MIME: Record<string, string> = {
 	"image/jpeg": "jpg",

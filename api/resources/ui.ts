@@ -4,7 +4,7 @@ import { URI } from "../tools/uris.ts";
 
 const RESOURCE_MIME = "text/html;profile=mcp-app";
 
-export const MAIN_URI = URI.main;
+export const MAIN_URI = URI.pet;
 
 async function readHtml(env: Env): Promise<string> {
 	const req = new Request("https://assets.local/index.html");
@@ -29,38 +29,29 @@ function htmlResource(uri: string, name: string, description: string) {
 }
 
 export const uiResources = [
+	// Top-level apps (pinnable in studio).
 	htmlResource(
-		URI.main,
-		"Tama",
-		"Main admin dashboard: pet profile, episodes, timetable.",
+		URI.pet,
+		"Pet",
+		"Pet profile, evolving health summary, companion, and Assets library.",
 	),
 	htmlResource(
-		URI.petCreate,
-		"Pet created",
-		"Inline view shown after pet_create.",
+		URI.timeline,
+		"Timeline",
+		"The pet's continuous life log — visits, vaccines, symptoms, doses, exams, notes.",
 	),
+	htmlResource(
+		URI.timetable,
+		"Timetable",
+		"Live medication & meal schedule with dose logging.",
+	),
+	// Inline tool surfaces.
 	htmlResource(
 		URI.petEnrich,
 		"Pet research",
 		"Inline view shown after pet_enrich (AI research).",
 	),
-	htmlResource(URI.petGet, "Pet profile", "Inline pet profile view (pet_get)."),
-	htmlResource(URI.petList, "Pets", "Inline list of pets (pet_list)."),
-	htmlResource(
-		URI.episodeStart,
-		"Episode started",
-		"Inline view shown after episode_start.",
-	),
-	htmlResource(
-		URI.episodeGet,
-		"Episode dashboard",
-		"Inline episode dashboard (episode_get).",
-	),
-	htmlResource(
-		URI.episodeList,
-		"Episodes",
-		"Inline list of episodes (episode_list).",
-	),
+	htmlResource(URI.petGet, "Pet profile", "Inline pet profile view."),
 	htmlResource(
 		URI.prescriptionReview,
 		"Prescription review",
@@ -72,18 +63,8 @@ export const uiResources = [
 		"Inline list of prescriptions.",
 	),
 	htmlResource(
-		URI.timetableGet,
-		"Timetable",
-		"Inline live timetable (timetable_get).",
-	),
-	htmlResource(
 		URI.recordingGet,
 		"Recording",
 		"Inline view of a recording: transcript, summary, proposed updates.",
-	),
-	htmlResource(
-		URI.episodeInsights,
-		"AI insights",
-		"Up to 3 short AI insight bullets for an episode.",
 	),
 ];

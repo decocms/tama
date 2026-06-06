@@ -24,8 +24,7 @@ import {
 	scheduleState,
 } from "../db/schema.ts";
 import type { Env } from "../env.ts";
-import { getEpisode } from "../storage/episodes.ts";
-import { getPet } from "../storage/pets.ts";
+import { getSelfPet } from "../storage/pet-self.ts";
 import {
 	listPushSubscriptions,
 	type PushSubscription,
@@ -126,10 +125,8 @@ async function buildPayload(
 	env: Env,
 	row: ScheduleStateRow,
 ): Promise<PushPayload> {
-	// Pet name is nice context for the title; episode id is needed for the
-	// deep-link target. Both reads are cheap (single-row by PK).
-	const ep = await getEpisode(env, row.episodeId);
-	const pet = ep ? await getPet(env, ep.petId) : null;
+	// Pet name is nice context for the title. Single-row read by PK.
+	const pet = await getSelfPet(env);
 	const petName = pet?.name ?? "Pet";
 
 	const minsAhead = Math.max(
@@ -143,7 +140,7 @@ async function buildPayload(
 	return {
 		title: `${petName}: ${row.displayName} in ~${minsAhead} min`,
 		body: `${row.kind === "meal" ? "Meal" : "Dose"}${dosagePart}${routePart}. Tap to log.`,
-		url: `/#/episode/${row.episodeId}`,
+		url: `/#/timetable`,
 		tag: `dose-${row.id}-${row.anchorAt}`,
 		scheduleStateId: row.id,
 		plannedAt: row.anchorAt,

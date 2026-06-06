@@ -6,7 +6,7 @@ import { deriveTimetable, wallClockToIso } from "./timetable.ts";
 function makeState(overrides: Partial<ScheduleState>): ScheduleState {
 	return {
 		id: "ss_1",
-		episodeId: "ep_1",
+		petId: "pet_self",
 		itemKey: "prelone",
 		displayName: "PRELONE",
 		kind: "medication",
@@ -29,7 +29,7 @@ function makeState(overrides: Partial<ScheduleState>): ScheduleState {
 function makeDose(overrides: Partial<Dose>): Dose {
 	return {
 		id: "d_1",
-		episodeId: "ep_1",
+		petId: "pet_self",
 		itemName: "PRELONE",
 		kind: "medication",
 		plannedAt: null,
