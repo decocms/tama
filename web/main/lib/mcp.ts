@@ -31,15 +31,36 @@ async function callToolHttp<TOut>(
 	if (!res.ok) {
 		throw new Error(`MCP HTTP ${res.status}: ${await res.text()}`);
 	}
-	// MCP responses come back as SSE-style "event: message\ndata: {…}"
-	// when accept includes text/event-stream — strip the framing.
+	// MCP responses come back as SSE-style "event: message\ndata: {…}" when
+	// accept includes text/event-stream. A slow tool can interleave other
+	// frames (notifications/keep-alives) before the JSON-RPC response, so scan
+	// ALL `data:` lines and keep the one carrying result/error — not just the
+	// first (the bug that made long calls like exam_explain "fail").
 	const raw = await res.text();
-	const dataLine = raw
+	const dataLines = raw
 		.split("\n")
-		.find((l) => l.startsWith("data:"))
-		?.slice(5)
-		.trim();
-	const json = dataLine ? JSON.parse(dataLine) : JSON.parse(raw);
+		.filter((l) => l.startsWith("data:"))
+		.map((l) => l.slice(5).trim())
+		.filter(Boolean);
+	// biome-ignore lint/suspicious/noExplicitAny: JSON-RPC frame is dynamic
+	let json: any = null;
+	for (const dl of dataLines) {
+		try {
+			const obj = JSON.parse(dl);
+			if (obj && (obj.result !== undefined || obj.error !== undefined)) {
+				json = obj;
+			}
+		} catch {
+			// skip non-JSON frames (comments/keep-alives)
+		}
+	}
+	if (!json) {
+		try {
+			json = dataLines.length ? JSON.parse(dataLines[0]) : JSON.parse(raw);
+		} catch {
+			throw new Error(`MCP: could not parse response for ${name}`);
+		}
+	}
 	if (json.error) {
 		throw new Error(json.error.message ?? "MCP error");
 	}
