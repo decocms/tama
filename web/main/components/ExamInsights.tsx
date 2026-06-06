@@ -52,21 +52,21 @@ export function InsightsCard({
 }) {
 	if (pending) {
 		return (
-			<div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+			<div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
 				Reading {petName ?? "your pet"}'s lab trends…
 			</div>
 		);
 	}
 	if (error) {
 		return (
-			<div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+			<div className="mb-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
 				Couldn't generate insights: {error}
 			</div>
 		);
 	}
 	if (!text) return null;
 	return (
-		<div className="mt-4 rounded-2xl border-2 border-[color:var(--color-border-strong,#2a1f17)]/15 bg-primary/5 p-4">
+		<div className="mb-4 rounded-2xl border-2 border-[color:var(--color-border-strong,#2a1f17)]/15 bg-primary/5 p-4">
 			<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-primary mb-2">
 				<Sparkles className="w-3 h-3" /> AI insights
 			</div>

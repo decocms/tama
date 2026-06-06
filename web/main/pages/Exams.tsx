@@ -73,6 +73,13 @@ export function ExamsPage() {
 						</div>
 					}
 				>
+					<InsightsCard
+						pending={explain.pending}
+						error={explain.error}
+						text={explain.text}
+						petName={pet?.name}
+					/>
+
 					<PanelOverview
 						series={series ?? []}
 						onSelectPanel={(panel) =>
@@ -81,13 +88,6 @@ export function ExamsPage() {
 								search: { keys: PANEL_DEFAULT_KEYS[panel].join(",") },
 							})
 						}
-					/>
-
-					<InsightsCard
-						pending={explain.pending}
-						error={explain.error}
-						text={explain.text}
-						petName={pet?.name}
 					/>
 				</Section>
 

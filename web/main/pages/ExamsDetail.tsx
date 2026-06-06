@@ -125,6 +125,12 @@ export function ExamsDetailPage() {
 							) : null
 						}
 					>
+						<InsightsCard
+							pending={explain.pending}
+							error={explain.error}
+							text={explain.text}
+							petName={pet?.name}
+						/>
 						{isLoading ? (
 							<Skeleton className="h-64 w-full rounded-xl" />
 						) : selectedArr.length === 0 ? (
@@ -144,12 +150,6 @@ export function ExamsDetailPage() {
 								/>
 							</div>
 						)}
-						<InsightsCard
-							pending={explain.pending}
-							error={explain.error}
-							text={explain.text}
-							petName={pet?.name}
-						/>
 					</Section>
 				</div>
 			</div>
