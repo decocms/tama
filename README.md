@@ -100,19 +100,30 @@ bun run deploy
 
 ## Migrating from the legacy `myvet` shape
 
-If you ran the pre-tama version of this repo on a Cloudflare account and
-want to bring its data forward:
+If you ran the pre-tama (episode-era) version on a Cloudflare account and
+want to bring one pet's data forward into the new timeline shape:
 
 ```bash
-SOURCE_DB=myvet TARGET_DB=tama-<petslug> \
-SOURCE_BUCKET=myvet-files TARGET_BUCKET=tama-<petslug>-files \
-BETO_PET_ID=pet_xxxxx \
-bun scripts/migrate-beto.ts
+# → local D1 by default, so you can test before touching prod
+BETO_PET_ID=pet_xxxxx bun run scripts/migrate-beto.ts
+
+# → a remote target instead
+TARGET_REMOTE=1 TARGET_DB=tama-<petslug> TARGET_BUCKET=tama-<petslug>-files \
+BETO_PET_ID=pet_xxxxx bun run scripts/migrate-beto.ts
 ```
 
-The script snapshots the source D1, filters to one pet's subtree,
-rewrites `pet_id` values to `pet_self`, mirrors R2 files, and
-sanity-checks row counts. See [`scripts/migrate-beto.ts`](./scripts/migrate-beto.ts).
+It pulls each table from the source D1 as JSON, inserts only the columns that
+exist in the new schema (so `episode_id` is dropped and everything re-keys onto
+`pet_self`), mirrors the R2 blobs, and wipes the single-pet target first so it's
+idempotent. See [`scripts/migrate-beto.ts`](./scripts/migrate-beto.ts).
+
+To (re-)extract lab PDFs into charted metrics — e.g. a hemoglobin trend the old
+deploy never captured — run the worker and feed the files through `exam_upload`:
+
+```bash
+bun run dev   # worker on :8788, in another terminal
+bun run scripts/ingest-exams.ts ~/Downloads/exam1.pdf ~/Downloads/exam2.pdf
+```
 
 ## MCP tools
 

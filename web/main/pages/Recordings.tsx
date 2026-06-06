@@ -237,11 +237,11 @@ function RecordingRow({
 	return (
 		<li
 			className={cn(
-				"flex items-center gap-3 px-4 py-2.5",
+				"flex items-start gap-3 px-4 py-3",
 				canSelect && selected ? "bg-primary/5" : "",
 			)}
 		>
-			<div className="w-6 flex items-center justify-center">
+			<div className="w-6 flex items-center justify-center mt-0.5">
 				{canSelect ? (
 					<Checkbox
 						checked={selected}
@@ -265,6 +265,18 @@ function RecordingRow({
 					{recording.numChunks} chunk{recording.numChunks === 1 ? "" : "s"}
 					{recording.error ? ` · ${recording.error}` : ""}
 				</div>
+				{/* Quick glance at what's in each recording — the AI summary once
+				    it's been generated/applied. Falls back to a transcript snippet
+				    so transcribed-but-not-yet-analyzed rows still preview. */}
+				{recording.summary ? (
+					<p className="mt-1 text-xs text-foreground/75 line-clamp-2 leading-snug">
+						{recording.summary}
+					</p>
+				) : recording.fullTranscript ? (
+					<p className="mt-1 text-xs text-muted-foreground/80 line-clamp-2 leading-snug italic">
+						{recording.fullTranscript}
+					</p>
+				) : null}
 			</div>
 			<StatusBadge status={recording.status} />
 		</li>

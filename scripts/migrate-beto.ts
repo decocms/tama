@@ -1,300 +1,302 @@
 #!/usr/bin/env bun
+//
+// Migrate Beto's real production data (legacy episode-era `myvet` deploy) into
+// the new episode-free TIMELINE shape, loaded into a LOCAL D1 by default so you
+// can test the new Tama against real data on a throwaway branch.
+//
+// Strategy (robust to schema drift): for every table we pull Beto's rows from
+// prod as JSON, then insert only the columns that ALSO exist in the new local
+// schema (column intersection). That automatically drops `episode_id` (gone in
+// the new schema) and re-keys everything onto the singleton `pet_self`. No
+// fragile SQL-dump surgery.
+//
+//   prod (remote, episodes) ──JSON──▶ transform ──SQL──▶ local D1 (timeline)
+//
+// Tables: pets (profile only), notes, prescriptions, doses, schedule_state,
+// recordings, recording_chunks, exams, exam_metrics, files. R2 blobs are
+// mirrored best-effort so exam PDFs / audio still resolve locally.
+//
+// The local DB is wiped of pet data first (single-pet: there's one pet_self),
+// so re-running is safe and idempotent.
+//
+// Usage:
+//   bun run scripts/migrate-beto.ts                 # → local D1
+//   BETO_PET_ID=pet_xxx bun run scripts/migrate-beto.ts
+//   TARGET_REMOTE=1 TARGET_DB=tama-beto bun run scripts/migrate-beto.ts   # → a remote target
+//
+// After it runs, ingest the real bloodwork PDFs for the hemoglobin trend:
+//   bun run scripts/ingest-exams.ts ~/Downloads/roberto_hg130526.pdf ...
 
-// scripts/migrate-beto.ts
-//
-// ⚠ OUTDATED: this script was written for the episode-era schema (it filters
-// episodes and rewrites episode subtrees). The schema is now episode-free
-// (see migration 0014 — everything keys to `pet_self`, no episodes). Before
-// running Beto's real migration, rework this to map his legacy episode-shaped
-// prod data into the timeline shape: drop the episode filtering, re-key every
-// child table's pet_id to 'pet_self', and ignore episodes/episode_insights.
-// Kept as a reference for the data-mirroring + R2 + verification scaffolding.
-//
-// One-off migration: take Beto's data from the legacy myvet prod deploy and
-// reshape it for a fresh tama-shaped target deploy. Used exactly once during
-// the rebrand cutover — Beto's medical history is the only valuable data on
-// the source side.
-//
-// Shape:
-//   1. Snapshot source D1 (myvet) via wrangler d1 export --remote.
-//   2. Filter the dump to "Beto's subtree" — keep only his pets row and
-//      every episode/note/prescription/dose/recording/schedule/exam
-//      transitively reachable from him via FKs. Drop other pets' data.
-//   3. Rewrite pet_id values from the legacy id to 'pet_self' so the data
-//      lands singleton-shaped.
-//   4. Apply to the target D1 (tama-beto) via wrangler d1 execute --remote.
-//   5. Mirror R2 files: for every files.r2_key, copy the blob from the
-//      source bucket (myvet-files) to the target bucket (tama-beto-files).
-//   6. Sanity-check row counts: source vs target should match per table.
-//
-// Inputs are wired via env vars to keep secrets out of the script:
-//   SOURCE_DB=myvet
-//   TARGET_DB=tama-beto
-//   SOURCE_BUCKET=myvet-files
-//   TARGET_BUCKET=tama-beto-files
-//   BETO_PET_ID=pet_xxxxx              (the legacy id; check with d1 query)
-//
-// Re-running is NOT safe — the target D1 should be empty (only the seed
-// pet_self placeholder from 0011_singleton_pet.sql). The script ABORTS if
-// any non-seed data exists on the target. Use --force to override.
-//
-// Run with: bun scripts/migrate-beto.ts
-
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
 
 const SOURCE_DB = process.env.SOURCE_DB ?? "myvet";
-const TARGET_DB = process.env.TARGET_DB ?? "tama-beto";
 const SOURCE_BUCKET = process.env.SOURCE_BUCKET ?? "myvet-files";
-const TARGET_BUCKET = process.env.TARGET_BUCKET ?? "tama-beto-files";
-const BETO_PET_ID = process.env.BETO_PET_ID;
-const FORCE = process.argv.includes("--force");
-const TARGET_SELF_ID = "pet_self";
+const TARGET_DB = process.env.TARGET_DB ?? "myvet";
+const TARGET_BUCKET = process.env.TARGET_BUCKET ?? "myvet-files";
+const TARGET_REMOTE = process.env.TARGET_REMOTE === "1";
+const BETO_PET_ID = process.env.BETO_PET_ID ?? "pet_f280f94409f441ae";
+const PET_SELF_ID = "pet_self";
 
-if (!BETO_PET_ID) {
-	console.error(
-		"Set BETO_PET_ID=pet_xxx (the legacy pet id). Find it with:\n  wrangler d1 execute myvet --remote --command \"SELECT id, name FROM pets;\"",
+const targetFlag = TARGET_REMOTE ? "--remote" : "--local";
+
+// ---- wrangler d1 helpers ----
+
+// biome-ignore lint/suspicious/noExplicitAny: D1 rows are dynamic
+async function query(db: string, remote: boolean, sql: string): Promise<any[]> {
+	const flag = remote ? "--remote" : "--local";
+	const out =
+		await $`bunx wrangler d1 execute ${db} ${flag} --json --command ${sql}`
+			.quiet()
+			.text();
+	try {
+		const parsed = JSON.parse(out) as { results: unknown[] }[];
+		return (parsed[0]?.results as unknown[]) ?? [];
+	} catch {
+		return [];
+	}
+}
+
+async function targetColumns(table: string): Promise<string[]> {
+	const rows = await query(
+		TARGET_DB,
+		TARGET_REMOTE,
+		`SELECT name FROM pragma_table_info('${table}');`,
 	);
-	process.exit(1);
+	return rows.map((r) => (r as { name: string }).name);
+}
+
+// ---- SQL value serialization ----
+
+// biome-ignore lint/suspicious/noExplicitAny: serializing arbitrary cell values
+function sqlVal(v: any): string {
+	if (v === null || v === undefined) return "NULL";
+	if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NULL";
+	if (typeof v === "boolean") return v ? "1" : "0";
+	return `'${String(v).replaceAll("'", "''")}'`;
+}
+
+// Build an INSERT OR REPLACE keeping only columns present in the target table.
+function insertRow(
+	table: string,
+	// biome-ignore lint/suspicious/noExplicitAny: dynamic row
+	row: Record<string, any>,
+	cols: string[],
+	overrides: Record<string, string> = {},
+): string {
+	const keep = cols.filter((c) => c in row || c in overrides);
+	const names = keep.map((c) => `"${c}"`).join(", ");
+	const vals = keep
+		.map((c) => (c in overrides ? overrides[c] : sqlVal(row[c])))
+		.join(", ");
+	return `INSERT OR REPLACE INTO "${table}" (${names}) VALUES (${vals});`;
+}
+
+function idList(ids: string[]): string {
+	return ids.map((id) => `'${id.replaceAll("'", "''")}'`).join(",");
 }
 
 async function main() {
-	console.log(`Migrating ${BETO_PET_ID} from ${SOURCE_DB} → ${TARGET_DB} (pet_self)`);
-	const tmp = await mkdtempPrefix();
-	try {
-		await preflightTargetEmpty();
-		const rewritten = await snapshotAndRewrite(tmp);
-		await applyToTarget(rewritten);
-		await mirrorR2();
-		await verifyCounts();
-		console.log("\n✓ Beto migrated. Run a smoke check in the new deploy.");
-	} finally {
-		await rm(tmp, { recursive: true, force: true });
+	console.log(
+		`Migrating Beto (${BETO_PET_ID}) from ${SOURCE_DB} (remote) → ${TARGET_DB} (${targetFlag}) as ${PET_SELF_ID}`,
+	);
+
+	// 1. Resolve Beto's episode ids (the join key for child tables in prod).
+	const episodes = await query(
+		SOURCE_DB,
+		true,
+		`SELECT id FROM episodes WHERE pet_id = '${BETO_PET_ID}';`,
+	);
+	const epIds = episodes.map((e) => (e as { id: string }).id);
+	console.log(`  episodes: ${epIds.length}`);
+	if (epIds.length === 0) {
+		throw new Error("No episodes found for Beto in prod — wrong BETO_PET_ID?");
 	}
-}
+	const epIn = idList(epIds);
 
-// Abort if the target has any data beyond the seed pet_self placeholder.
-async function preflightTargetEmpty() {
-	if (FORCE) return;
-	const out = await $`bunx wrangler d1 execute ${TARGET_DB} --remote --json --command ${"SELECT COUNT(*) AS n FROM episodes;"}`.text();
-	try {
-		const parsed = JSON.parse(out) as { results: { n: number }[] }[];
-		const n = parsed[0]?.results?.[0]?.n ?? 0;
-		if (n > 0) {
-			console.error(
-				`Target ${TARGET_DB} already has ${n} episode rows. Re-run with --force to overwrite. (You probably don't want to.)`,
-			);
-			process.exit(2);
-		}
-	} catch {
-		// Couldn't parse — best to abort than corrupt the target.
-		console.error("Could not verify target is empty; pass --force to skip this check.");
-		process.exit(2);
-	}
-}
+	// 2. Pull prod rows per table.
+	const petRows = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM pets WHERE id = '${BETO_PET_ID}';`,
+	);
+	const beto = petRows[0];
+	if (!beto) throw new Error("Beto pet row not found");
 
-// Export source D1, filter to Beto's subtree, rewrite pet_id, write SQL.
-async function snapshotAndRewrite(tmp: string): Promise<string> {
-	console.log("→ snapshotting source D1…");
-	const rawDump = join(tmp, "source.sql");
-	await $`bunx wrangler d1 export ${SOURCE_DB} --remote --no-schema --output ${rawDump}`.quiet();
-	const sql = await readFile(rawDump, "utf8");
+	const notes = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM notes WHERE episode_id IN (${epIn});`,
+	);
+	const prescriptions = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM prescriptions WHERE episode_id IN (${epIn});`,
+	);
+	const doses = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM doses WHERE episode_id IN (${epIn});`,
+	);
+	const scheduleState = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM schedule_state WHERE episode_id IN (${epIn});`,
+	);
+	const recordings = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM recordings WHERE episode_id IN (${epIn});`,
+	);
+	const exams = await query(
+		SOURCE_DB,
+		true,
+		`SELECT * FROM exams WHERE episode_id IN (${epIn});`,
+	);
 
-	console.log("→ filtering to Beto's subtree…");
-	// Collect every id we keep so cascading inserts don't reference orphans.
-	const keepIds = await collectBetoSubtreeIds();
-	const filtered = filterAndRewrite(sql, keepIds);
+	const recIds = recordings.map((r) => (r as { id: string }).id);
+	const examIds = exams.map((x) => (x as { id: string }).id);
+	const chunks = recIds.length
+		? await query(
+				SOURCE_DB,
+				true,
+				`SELECT * FROM recording_chunks WHERE recording_id IN (${idList(recIds)});`,
+			)
+		: [];
+	const metrics = examIds.length
+		? await query(
+				SOURCE_DB,
+				true,
+				`SELECT * FROM exam_metrics WHERE exam_id IN (${idList(examIds)});`,
+			)
+		: [];
 
-	const out = join(tmp, "beto.upsert.sql");
-	await writeFile(out, filtered, "utf8");
-	console.log(`  wrote ${out} (${filtered.length} bytes)`);
-	return out;
-}
+	// Files referenced by anything we kept.
+	const fileIds = new Set<string>();
+	for (const r of recordings)
+		if ((r as { original_file_id?: string }).original_file_id)
+			fileIds.add((r as { original_file_id: string }).original_file_id);
+	for (const c of chunks)
+		if ((c as { file_id?: string }).file_id)
+			fileIds.add((c as { file_id: string }).file_id);
+	for (const x of exams)
+		if ((x as { file_id?: string }).file_id)
+			fileIds.add((x as { file_id: string }).file_id);
+	for (const p of prescriptions)
+		if ((p as { file_id?: string }).file_id)
+			fileIds.add((p as { file_id: string }).file_id);
+	if ((beto as { photo_file_id?: string }).photo_file_id)
+		fileIds.add((beto as { photo_file_id: string }).photo_file_id);
+	const files = fileIds.size
+		? await query(
+				SOURCE_DB,
+				true,
+				`SELECT * FROM files WHERE id IN (${idList([...fileIds])});`,
+			)
+		: [];
 
-// Query source D1 for Beto's downstream ids (episodes, notes, prescriptions,
-// doses, recordings, schedule_state, exams). We need these so the filter can
-// keep their related rows even after pet_id is rewritten.
-async function collectBetoSubtreeIds(): Promise<Set<string>> {
-	const keep = new Set<string>();
-	keep.add(BETO_PET_ID!);
+	console.log(
+		`  pulled: ${notes.length} notes, ${prescriptions.length} rx, ${doses.length} doses, ${scheduleState.length} schedule_state, ${recordings.length} recordings, ${chunks.length} chunks, ${exams.length} exams, ${metrics.length} metrics, ${files.length} files`,
+	);
 
-	async function ids(sql: string): Promise<string[]> {
-		const out = await $`bunx wrangler d1 execute ${SOURCE_DB} --remote --json --command ${sql}`.text();
-		try {
-			const parsed = JSON.parse(out) as { results: { id: string }[] }[];
-			return parsed[0]?.results?.map((r) => r.id) ?? [];
-		} catch {
-			return [];
-		}
-	}
+	// 3. Target column sets.
+	const cols = {
+		pets: await targetColumns("pets"),
+		notes: await targetColumns("notes"),
+		prescriptions: await targetColumns("prescriptions"),
+		doses: await targetColumns("doses"),
+		schedule_state: await targetColumns("schedule_state"),
+		recordings: await targetColumns("recordings"),
+		recording_chunks: await targetColumns("recording_chunks"),
+		exams: await targetColumns("exams"),
+		exam_metrics: await targetColumns("exam_metrics"),
+		files: await targetColumns("files"),
+	};
 
-	const episodes = await ids(`SELECT id FROM episodes WHERE pet_id = '${BETO_PET_ID}';`);
-	for (const id of episodes) keep.add(id);
+	// 4. Build the SQL: wipe pet data, set the profile, insert everything.
+	const sql: string[] = ["PRAGMA defer_foreign_keys = TRUE;"];
 
-	if (episodes.length > 0) {
-		const epList = episodes.map((id) => `'${id}'`).join(",");
-		const childTables = [
-			"notes",
-			"prescriptions",
-			"doses",
-			"schedule_state",
-			"recordings",
-			"episode_insights",
-			"exams",
-		];
-		for (const t of childTables) {
-			for (const id of await ids(
-				`SELECT id FROM ${t} WHERE episode_id IN (${epList});`,
-			)) {
-				keep.add(id);
-			}
-		}
-		// exam_metrics is keyed on exam_id; collect via the kept exam ids.
-		// recording_chunks is keyed on recording_id; same.
-	}
-
-	console.log(`  keeping ${keep.size} ids transitively reachable from ${BETO_PET_ID}`);
-	return keep;
-}
-
-// Stream through the SQL dump line by line; keep INSERTs whose primary key
-// is in keepIds OR whose foreign key (pet_id / episode_id / exam_id /
-// recording_id) points at a kept id. Rewrite pet_id values to pet_self.
-function filterAndRewrite(sql: string, keepIds: Set<string>): string {
-	const out: string[] = [];
-	for (const rawLine of sql.split("\n")) {
-		const line = rawLine.trim();
-		if (!line) continue;
-		if (line.startsWith("--")) continue;
-		if (/^(BEGIN|COMMIT|ROLLBACK|PRAGMA|CREATE|DROP|ALTER)\b/i.test(line)) {
-			continue;
-		}
-		if (!/^INSERT\s+INTO\b/i.test(line)) continue;
-		// Skip SQLite internals.
-		if (/INSERT\s+INTO\s+"?(sqlite_sequence|_cf_METADATA)"?/i.test(line)) {
-			continue;
-		}
-		// Decide whether this insert references anything in keepIds. Cheap
-		// approximation: if any kept id literal appears in the line, keep it.
-		// We're optimizing for "false positives are fine, false negatives
-		// orphan rows" — orphan rows then fail at apply time due to FKs.
-		let keep = false;
-		for (const id of keepIds) {
-			if (line.includes(`'${id}'`)) {
-				keep = true;
-				break;
-			}
-		}
-		if (!keep) continue;
-
-		// Rewrite the legacy pet id → pet_self.
-		const rewritten = line.replaceAll(`'${BETO_PET_ID}'`, `'${TARGET_SELF_ID}'`);
-		// Force upsert semantics so re-runs don't error on duplicate ids.
-		out.push(rewritten.replace(/^INSERT\s+INTO/i, "INSERT OR REPLACE INTO"));
-	}
-	return out.join("\n") + "\n";
-}
-
-async function applyToTarget(file: string) {
-	console.log("→ applying to target D1…");
-	await $`bunx wrangler d1 execute ${TARGET_DB} --remote --file ${file}`;
-	console.log("  ✓ target D1 loaded");
-}
-
-async function mirrorR2() {
-	console.log("→ mirroring R2 files…");
-	// Pull the list of r2_keys from the target D1 (post-load).
-	const out = await $`bunx wrangler d1 execute ${TARGET_DB} --remote --json --command ${"SELECT id, r2_key FROM files;"}`.text();
-	let keys: { id: string; r2_key: string }[] = [];
-	try {
-		const parsed = JSON.parse(out) as {
-			results: { id: string; r2_key: string }[];
-		}[];
-		keys = parsed[0]?.results ?? [];
-	} catch {
-		console.warn("  could not parse file list; skipping R2 mirror");
-		return;
-	}
-	console.log(`  ${keys.length} files to mirror`);
-	let done = 0;
-	for (const { r2_key } of keys) {
-		const tmp = `/tmp/tama-mig-${Date.now()}-${done}.bin`;
-		try {
-			await $`bunx wrangler r2 object get ${SOURCE_BUCKET}/${r2_key} --file ${tmp} --remote`.quiet();
-			await $`bunx wrangler r2 object put ${TARGET_BUCKET}/${r2_key} --file ${tmp} --remote`.quiet();
-			done++;
-			if (done % 5 === 0) {
-				console.log(`  mirrored ${done}/${keys.length}`);
-			}
-		} catch (err) {
-			console.warn(`  ! failed to mirror ${r2_key}: ${(err as Error).message}`);
-		} finally {
-			await rm(tmp, { force: true });
-		}
-	}
-	console.log(`  ✓ mirrored ${done} files`);
-}
-
-async function verifyCounts() {
-	console.log("→ verifying row counts source vs target…");
-	const tables = [
-		"pets",
-		"episodes",
-		"notes",
-		"prescriptions",
+	// Clean slate (single-pet). Order children-first to respect FKs.
+	for (const t of [
+		"exam_metrics",
+		"recording_chunks",
 		"doses",
 		"schedule_state",
+		"prescriptions",
+		"notes",
 		"recordings",
-		"episode_insights",
 		"exams",
-		"exam_metrics",
-	];
-	let drift = false;
-	for (const t of tables) {
-		const where =
-			t === "pets"
-				? `id = '${TARGET_SELF_ID}'`
-				: t === "episodes"
-					? `pet_id = '${TARGET_SELF_ID}'`
-					: "1=1";
-		const srcWhere =
-			t === "pets"
-				? `id = '${BETO_PET_ID}'`
-				: t === "episodes"
-					? `pet_id = '${BETO_PET_ID}'`
-					: "1=1";
-		const src = await count(SOURCE_DB, `SELECT COUNT(*) AS n FROM ${t} WHERE ${srcWhere};`);
-		const tgt = await count(TARGET_DB, `SELECT COUNT(*) AS n FROM ${t} WHERE ${where};`);
-		const tag = src === tgt ? "✓" : "✗";
-		console.log(`  ${tag} ${t}: src=${src} target=${tgt}`);
-		if (src !== tgt) drift = true;
+		"vet_visits",
+		"vaccines",
+		"symptoms",
+		"files",
+	]) {
+		sql.push(`DELETE FROM "${t}";`);
 	}
-	if (drift) {
-		console.warn(
-			"\n! row counts diverge — inspect manually before declaring done.",
-		);
-	}
-}
 
-async function count(db: string, sql: string): Promise<number> {
-	const out = await $`bunx wrangler d1 execute ${db} --remote --json --command ${sql}`.text();
-	try {
-		const parsed = JSON.parse(out) as { results: { n: number }[] }[];
-		return parsed[0]?.results?.[0]?.n ?? 0;
-	} catch {
-		return -1;
-	}
-}
-
-async function mkdtempPrefix(): Promise<string> {
-	const dir = join(
-		tmpdir(),
-		`tama-migrate-beto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+	// Beto's profile onto the singleton (UPDATE, keep id = pet_self).
+	const profileCols = cols.pets.filter(
+		(c) => c !== "id" && c !== "created_at" && c in (beto as object),
 	);
-	await mkdir(dir, { recursive: true });
-	return dir;
+	if (profileCols.length) {
+		const sets = profileCols
+			.map((c) => `"${c}" = ${sqlVal((beto as Record<string, unknown>)[c])}`)
+			.join(", ");
+		sql.push(`UPDATE "pets" SET ${sets} WHERE id = '${PET_SELF_ID}';`);
+	}
+
+	const petOverride = { pet_id: `'${PET_SELF_ID}'` };
+	for (const r of notes) sql.push(insertRow("notes", r, cols.notes, petOverride));
+	for (const r of prescriptions)
+		sql.push(insertRow("prescriptions", r, cols.prescriptions, petOverride));
+	for (const r of doses) sql.push(insertRow("doses", r, cols.doses, petOverride));
+	for (const r of scheduleState)
+		sql.push(insertRow("schedule_state", r, cols.schedule_state, petOverride));
+	for (const r of recordings)
+		sql.push(insertRow("recordings", r, cols.recordings, petOverride));
+	for (const r of exams) sql.push(insertRow("exams", r, cols.exams, petOverride));
+	// chunks/metrics/files are not pet-keyed.
+	for (const r of chunks)
+		sql.push(insertRow("recording_chunks", r, cols.recording_chunks));
+	for (const r of metrics)
+		sql.push(insertRow("exam_metrics", r, cols.exam_metrics));
+	for (const r of files) sql.push(insertRow("files", r, cols.files));
+
+	// 5. Apply.
+	const tmp = await mkdtemp(join(tmpdir(), "beto-mig-"));
+	const file = join(tmp, "beto.sql");
+	await writeFile(file, sql.join("\n"), "utf8");
+	console.log(`  applying ${sql.length} statements → ${TARGET_DB} ${targetFlag}…`);
+	await $`bunx wrangler d1 execute ${TARGET_DB} ${targetFlag} --file ${file}`.quiet();
+	await rm(tmp, { recursive: true, force: true });
+
+	// 6. Mirror R2 blobs (best-effort).
+	if (files.length) {
+		console.log(`  mirroring ${files.length} R2 files…`);
+		let ok = 0;
+		for (const f of files) {
+			const key = (f as { r2_key?: string }).r2_key;
+			if (!key) continue;
+			const blobTmp = join(tmpdir(), `beto-r2-${ok}-${key.replaceAll("/", "_")}`);
+			try {
+				await $`bunx wrangler r2 object get ${SOURCE_BUCKET}/${key} --file ${blobTmp} --remote`.quiet();
+				await $`bunx wrangler r2 object put ${TARGET_BUCKET}/${key} --file ${blobTmp} ${targetFlag}`.quiet();
+				ok++;
+			} catch (err) {
+				console.warn(`    ! ${key}: ${(err as Error).message.split("\n")[0]}`);
+			} finally {
+				await rm(blobTmp, { force: true });
+			}
+		}
+		console.log(`    mirrored ${ok}/${files.length}`);
+	}
+
+	console.log("\n✓ Beto migrated. Start the worker and open / to see his timeline.");
+	console.log(
+		"  Next: bun run scripts/ingest-exams.ts ~/Downloads/roberto_hg130526.pdf ~/Downloads/roberto_hg170526.pdf ~/Downloads/roberto_bq130526.pdf ~/Downloads/roberto_bq17052026.pdf",
+	);
 }
 
 main().catch((err) => {
