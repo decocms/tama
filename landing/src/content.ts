@@ -110,7 +110,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 			devCta: "View on GitHub →",
 			nonDev: {
 				title: "You don't? No problem",
-				body: "Use deco studio. Paste the Tama link and the agent walks you through everything — even making your GitHub and Cloudflare accounts, setting up your pet, and going live. No terminal, no code, no stress.",
+				body: "Use deco studio. Connect your GitHub and point it at Tama — Studio runs a coding agent (Claude) right there in the chat. It forks the repo, customizes everything for your pet, and deploys to your own Cloudflare. You just answer a few questions. No terminal, no code, no stress.",
 			},
 			nonDevCta: "Create in deco studio →",
 			footer: "Either way, you bring the pet — Tama brings everything else.",
@@ -152,7 +152,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{
 					n: "01",
 					title: "Open it",
-					body: "Go to deco studio and point it at Tama. One click — no downloads, nothing to install.",
+					body: "Open deco studio and connect your GitHub. The only prerequisites are a coding agent (Claude) and a GitHub account — Studio brings both into one chat and points them at Tama.",
 				},
 				{
 					n: "02",
@@ -285,7 +285,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 			devCta: "Ver no GitHub →",
 			nonDev: {
 				title: "Não programa? Sem problema",
-				body: "Use o deco studio. Cole o link do Tama e o agente te guia em tudo — até criar suas contas no GitHub e na Cloudflare, configurar o seu pet e colocar no ar. Sem terminal, sem código, sem estresse.",
+				body: "Use o deco studio. Conecte o seu GitHub e aponte pro Tama — o studio roda um agente de código (o Claude) ali no chat. Ele faz o fork, customiza tudo pro seu pet e faz o deploy na sua própria Cloudflare. Você só responde algumas perguntas. Sem terminal, sem código, sem estresse.",
 			},
 			nonDevCta: "Criar no deco studio →",
 			footer: "De qualquer jeito, você traz o pet — o Tama traz o resto.",
@@ -327,7 +327,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{
 					n: "01",
 					title: "Abra",
-					body: "Vá no deco studio e aponte pro Tama. Um clique — nada pra baixar, nada pra instalar.",
+					body: "Abra o deco studio e conecte o seu GitHub. Os únicos pré-requisitos são um agente de código (o Claude) e uma conta no GitHub — o studio junta os dois num chat só e aponta pro Tama.",
 				},
 				{
 					n: "02",

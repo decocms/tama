@@ -30,15 +30,23 @@ your data lives in your account — we never see it.
 
 ## How to create your pet's agent
 
-The intended path is **inside Studio**: studio.decocms.com → Import from
-GitHub → paste the URL of your fork. Studio's coding-agent reads
-`AGENTS.md` and walks you through customize → commit → deploy → operate.
-No terminal needed.
+**You need two things: a coding agent ([Claude Code](https://claude.com/claude-code))
+and a GitHub account.** Studio handles the rest — you don't write code, you have
+a conversation.
 
-If you prefer a local IDE, the same flow works in Claude Code (invoke the
-[`/create-agent`](./.claude/skills/create-agent.md) skill), Cursor, or
-anything else that honors `AGENTS.md`. Or read [AGENTS.md](./AGENTS.md)
-yourself and do it by hand — every step is a real shell command.
+**The guided path — [deco studio](https://studio.decocms.com):** connect your
+GitHub, point Studio at this repo, and Studio runs the project like a coding
+agent does — it has git, a shell, and Claude right there in the chat. It reads
+[`AGENTS.md`](./AGENTS.md) and walks you through it: it asks a few questions
+about your pet, forks and customizes the code for you, draws the pixel sprite,
+and deploys to *your* own Cloudflare account. No terminal, no copy-pasting
+commands — just answer questions and approve the deploy. Studio takes you the
+whole way.
+
+**On your own machine:** open your fork in Claude Code and run the
+[`/create-agent`](./.claude/skills/create-agent.md) skill — the same `AGENTS.md`
+flow, in your editor. Cursor, Aider, or doing it by hand from
+[`AGENTS.md`](./AGENTS.md) all work too; every step is a real shell command.
 
 ## Architecture
 

@@ -30,6 +30,13 @@ The thesis: **one agent, one pet, one deploy.** No multi-tenant complexity,
 no pet picker, no "which pet" question to ever ask. Each fork is *somebody's*
 pet.
 
+**The human only needs a coding agent (Claude Code) and a GitHub account.**
+Inside **deco studio** this whole file runs in one chat: Studio gives you (the
+agent) git + a shell scoped to the project — like Claude Code's bash tool — so
+you can fork, edit, commit, and trigger the deploy without the human ever
+leaving the conversation. Drive it end-to-end; only pause for the inputs and
+approvals the steps below call out.
+
 ---
 
 ## Lifecycle
