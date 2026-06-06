@@ -333,12 +333,14 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	// those strokes in a light ink whenever the cap is dark.
 	const capDark = !!p.patch && luma(p.patch) < 110;
 	const arc = capDark ? "#f4ece0" : p.feat;
-	// A solid dark eye with an OPAQUE cream rim just behind it: the rim makes
-	// the eye pop on the dark cap, and is invisible on light fur — so the eye
-	// always reads clearly (the old semi-transparent white sclera turned into a
-	// murky blob on the dark cap).
+	// A solid dark eye inside a warm-amber ring with a thin dark outline. The
+	// amber differs from BOTH white/cream fur and the dark cap (so the eye never
+	// blends into the coat, the way a cream rim did against the white blaze),
+	// and the hairline outline keeps the edge crisp on light fur. Reads like a
+	// natural tan eye-marking.
+	const ring = "#e7cf9c";
 	const open = (ex: number) => `
-		<ellipse cx="${ex}" cy="${y}" rx="4.3" ry="4.9" fill="#f4ece0"/>
+		<ellipse cx="${ex}" cy="${y}" rx="4.5" ry="5.1" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
 		<ellipse cx="${ex}" cy="${y}" rx="3.3" ry="4" fill="${ink}"/>
 		<circle cx="${ex + 1.1}" cy="${y - 1.5}" r="1.2" fill="#fff"/>
 		<circle cx="${ex - 1}" cy="${y + 1.4}" r="0.55" fill="#fff" opacity="0.6"/>
@@ -357,8 +359,8 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 			return `
 				<path d="M ${lx - 4} ${y - 4} Q ${lx} ${y - 6.2} ${lx + 4} ${y - 4.2}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
 				<path d="M ${rx - 4} ${y - 4.2} Q ${rx} ${y - 6.2} ${rx + 4} ${y - 4}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-				<ellipse cx="${lx}" cy="${y + 0.6}" rx="3.6" ry="4" fill="#f4ece0"/>
-				<ellipse cx="${rx}" cy="${y + 0.6}" rx="3.6" ry="4" fill="#f4ece0"/>
+				<ellipse cx="${lx}" cy="${y + 0.6}" rx="3.8" ry="4.2" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
+				<ellipse cx="${rx}" cy="${y + 0.6}" rx="3.8" ry="4.2" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
 				<ellipse cx="${lx}" cy="${y + 0.8}" rx="2.6" ry="3.1" fill="${ink}"/>
 				<ellipse cx="${rx}" cy="${y + 0.8}" rx="2.6" ry="3.1" fill="${ink}"/>
 				<circle cx="${lx + 0.9}" cy="${y - 0.4}" r="0.8" fill="#fff"/>

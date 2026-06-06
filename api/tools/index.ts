@@ -38,7 +38,11 @@ import {
 	recordingTranscribeTool,
 } from "./recording.ts";
 import { vetResearchTool } from "./research.ts";
-import { petSpriteSvgGenerateTool } from "./sprite.ts";
+import {
+	petSpriteAdjustTool,
+	petSpriteGetTool,
+	petSpriteSvgGenerateTool,
+} from "./sprite.ts";
 import {
 	doseLogTool,
 	doseUpdateTool,
@@ -73,6 +77,8 @@ export const tools = [
 	petUpdateTool,
 	petEnrichTool,
 	petSpriteSvgGenerateTool,
+	petSpriteGetTool,
+	petSpriteAdjustTool,
 	petSummaryRefreshTool,
 	// Timeline + typed entries
 	timelineGetTool,

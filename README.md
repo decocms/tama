@@ -136,7 +136,8 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | `pet_profile` / `pet_update`| Read / patch the singleton pet                |
 | `pet_enrich`                | Perplexity breed/condition research           |
 | `pet_summary_refresh`       | Regenerate the one evolving health summary    |
-| `pet_sprite_svg_generate`   | 6-state procedural-SVG companion sprite from a photo |
+| `pet_sprite_svg_generate`   | 6-state procedural-SVG companion sprite from a photo (saves v1) |
+| `pet_sprite_get` / `pet_sprite_adjust` | Read / iterate sprite traits (re-render, no new photo) |
 | `timeline_get`              | The merged continuous timeline                |
 | `timeline_note_add`         | Add a free-form timeline note                 |
 | `vet_visit_add` / `_list`   | Log / read vet visits                         |
