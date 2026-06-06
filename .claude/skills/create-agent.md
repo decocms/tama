@@ -25,7 +25,7 @@ human's tone. Collect:
    sprite step.
 7. **Owner notes** — known conditions, allergies, behavior quirks.
 
-If the photo is huge, that's fine — `pet_sprite_generate` handles
+If the photo is huge, that's fine — `pet_sprite_svg_generate` handles
 arbitrary inputs.
 
 ## Edits to make
@@ -39,10 +39,10 @@ Using your normal file/edit tools:
    - `wrangler.toml`: worker `name` (slug-friendly: lowercase, hyphens)
    - `README.md`, page `<title>` tags, hero copy
    - `api/db/migrations/0011_singleton_pet.sql`: the seed row's `name`
-3. Generate the sprite. `pet_sprite_svg_generate` is instant, free, and
-   needs no extra auth — start there. If the human wants the photo-grounded
-   raster look, also call `pet_sprite_generate` (30–60s; Workers AI). Don't
-   move on until the one you run returns; both write to the pet row.
+3. Generate the sprite: call `pet_sprite_svg_generate` with the photo. One
+   Claude vision call reads it into a character sheet, then 6 SVG states
+   render instantly (free, no extra auth). Wait for it to return; it writes
+   the pack to the pet row.
 4. Call `pet_enrich` to seed AI research from the breed + conditions.
 
 ## Commit

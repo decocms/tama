@@ -268,26 +268,23 @@ function ears(
 		`;
 	}
 	// pointy / tufted / default — big upright leaf ears (chihuahua-style).
+	// One canonical ear drawn around a local (0,0) base anchor pointing up and
+	// leaning slightly outward; the right ear is the SAME path mirrored with
+	// scale(-1,1) so the two are guaranteed-symmetric (no twisting).
 	const w = big ? 9 : 7; // half-width at base
-	const h = big ? 18 : 14; // height above the dome
-	const baseY = g.domeCy - g.domeRy * 0.55 + dy;
-	const lbx = g.cx - g.domeRx * 0.62;
-	const rbx = g.cx + g.domeRx * 0.62;
-	const tip = (bx: number, dir: number) =>
-		`M ${r2(bx - w * 0.3)} ${r2(baseY + 2)} Q ${r2(bx - dir * w * 1.1)} ${r2(baseY - h * 0.55)} ${r2(bx - dir * w * 0.5)} ${r2(baseY - h)} Q ${r2(bx + dir * w * 0.2)} ${r2(baseY - h * 0.7)} ${r2(bx + w * 0.7)} ${r2(baseY + 2)} Z`;
-	const inner = (bx: number, dir: number) =>
-		`M ${r2(bx - w * 0.1)} ${r2(baseY)} Q ${r2(bx - dir * w * 0.55)} ${r2(baseY - h * 0.5)} ${r2(bx - dir * w * 0.32)} ${r2(baseY - h * 0.78)} Q ${r2(bx + dir * w * 0.1)} ${r2(baseY - h * 0.55)} ${r2(bx + w * 0.35)} ${r2(baseY)} Z`;
-	const fur = t.longCoat
-		? `
-			<path d="${tip(lbx, 1)}" fill="${p.bodyLight}" opacity="0.5" transform="translate(-1 1) scale(1.06)" transform-origin="${lbx} ${baseY}"/>
-			<path d="${tip(rbx, -1)}" fill="${p.bodyLight}" opacity="0.5" transform="translate(1 1) scale(1.06)" transform-origin="${rbx} ${baseY}"/>`
+	const h = big ? 19 : 15; // height above the dome
+	const baseY = g.domeCy - g.domeRy * 0.5 + dy;
+	const lbx = g.cx - g.domeRx * 0.6;
+	const rbx = g.cx + g.domeRx * 0.6;
+	const outer = `M ${r2(-w * 0.7)} 2 Q ${r2(-w)} ${r2(-h * 0.5)} ${r2(-w * 0.5)} ${r2(-h)} Q ${r2(w * 0.15)} ${r2(-h * 0.62)} ${r2(w * 0.62)} 2 Z`;
+	const inner = `M ${r2(-w * 0.34)} 0 Q ${r2(-w * 0.5)} ${r2(-h * 0.48)} ${r2(-w * 0.28)} ${r2(-h * 0.74)} Q ${r2(w * 0.06)} ${r2(-h * 0.5)} ${r2(w * 0.3)} 0 Z`;
+	const back = t.longCoat
+		? `<path d="M ${r2(-w * 0.85)} 2 Q ${r2(-w * 1.15)} ${r2(-h * 0.5)} ${r2(-w * 0.55)} ${r2(-h * 1.05)} Q ${r2(w * 0.2)} ${r2(-h * 0.62)} ${r2(w * 0.78)} 2 Z" fill="${p.bodyLight}" opacity="0.6"/>`
 		: "";
+	const earGroup = `${back}<path d="${outer}" fill="${earFill}"/><path d="${inner}" fill="${p.earInner}" opacity="0.85"/>`;
 	return `
-		${fur}
-		<path d="${tip(lbx, 1)}" fill="${earFill}"/>
-		<path d="${tip(rbx, -1)}" fill="${earFill}"/>
-		<path d="${inner(lbx, 1)}" fill="${p.earInner}" opacity="0.85"/>
-		<path d="${inner(rbx, -1)}" fill="${p.earInner}" opacity="0.85"/>
+		<g transform="translate(${r2(lbx)} ${r2(baseY)})">${earGroup}</g>
+		<g transform="translate(${r2(rbx)} ${r2(baseY)}) scale(-1 1)">${earGroup}</g>
 	`;
 }
 
@@ -332,6 +329,12 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	const rx = g.cx + g.eyeDx;
 	const y = g.eyeY;
 	const ink = p.feat;
+	// The eyes sit on the dark cap (particolor). Filled pupils read fine on
+	// their white sclera, but stroke-only expressions (happy/sad/sleeping
+	// squints, pill-time brows) would disappear into the dark fur — so draw
+	// those strokes in a light ink whenever the cap is dark.
+	const capDark = !!p.patch && luma(p.patch) < 110;
+	const arc = capDark ? "#f4ece0" : p.feat;
 	const open = (ex: number) => `
 		<ellipse cx="${ex}" cy="${y}" rx="4" ry="4.6" fill="#fff" opacity="0.55"/>
 		<ellipse cx="${ex}" cy="${y}" rx="3.5" ry="4.2" fill="${ink}"/>
@@ -341,8 +344,8 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	switch (state) {
 		case "happy":
 			return `
-				<path d="M ${lx - 4} ${y + 1.5} Q ${lx} ${y - 4.5} ${lx + 4} ${y + 1.5}" stroke="${ink}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 4} ${y + 1.5} Q ${rx} ${y - 4.5} ${rx + 4} ${y + 1.5}" stroke="${ink}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+				<path d="M ${lx - 4} ${y + 1.5} Q ${lx} ${y - 4.5} ${lx + 4} ${y + 1.5}" stroke="${arc}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+				<path d="M ${rx - 4} ${y + 1.5} Q ${rx} ${y - 4.5} ${rx + 4} ${y + 1.5}" stroke="${arc}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
 			`;
 		case "hungry":
 			return `${open(lx)}${open(rx)}
@@ -350,8 +353,10 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 				<circle cx="${rx + 1.8}" cy="${y - 2}" r="0.8" fill="#fff"/>`;
 		case "pill-time":
 			return `
-				<path d="M ${lx - 4} ${y - 3.5} Q ${lx} ${y - 6} ${lx + 4} ${y - 4}" stroke="${ink}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 4} ${y - 4} Q ${rx} ${y - 6} ${rx + 4} ${y - 3.5}" stroke="${ink}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				<path d="M ${lx - 4} ${y - 3.5} Q ${lx} ${y - 6} ${lx + 4} ${y - 4}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				<path d="M ${rx - 4} ${y - 4} Q ${rx} ${y - 6} ${rx + 4} ${y - 3.5}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				<ellipse cx="${lx}" cy="${y + 0.5}" rx="3.3" ry="3.9" fill="#fff" opacity="0.55"/>
+				<ellipse cx="${rx}" cy="${y + 0.5}" rx="3.3" ry="3.9" fill="#fff" opacity="0.55"/>
 				<ellipse cx="${lx}" cy="${y + 0.5}" rx="2.8" ry="3.4" fill="${ink}"/>
 				<ellipse cx="${rx}" cy="${y + 0.5}" rx="2.8" ry="3.4" fill="${ink}"/>
 				<circle cx="${lx + 1}" cy="${y - 0.6}" r="0.9" fill="#fff"/>
@@ -359,14 +364,14 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 			`;
 		case "sad":
 			return `
-				<path d="M ${lx - 3.5} ${y - 1.5} Q ${lx} ${y + 3} ${lx + 3.5} ${y - 1}" stroke="${ink}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 3.5} ${y - 1} Q ${rx} ${y + 3} ${rx + 3.5} ${y - 1.5}" stroke="${ink}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+				<path d="M ${lx - 3.5} ${y - 1.5} Q ${lx} ${y + 3} ${lx + 3.5} ${y - 1}" stroke="${arc}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+				<path d="M ${rx - 3.5} ${y - 1} Q ${rx} ${y + 3} ${rx + 3.5} ${y - 1.5}" stroke="${arc}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
 				<ellipse cx="${lx - 1}" cy="${y + 5}" rx="1.7" ry="2.8" fill="#7ec0e0" opacity="0.9"/>
 			`;
 		case "sleeping":
 			return `
-				<path d="M ${lx - 3.6} ${y} Q ${lx} ${y + 3} ${lx + 3.6} ${y}" stroke="${ink}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 3.6} ${y} Q ${rx} ${y + 3} ${rx + 3.6} ${y}" stroke="${ink}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
+				<path d="M ${lx - 3.6} ${y} Q ${lx} ${y + 3} ${lx + 3.6} ${y}" stroke="${arc}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
+				<path d="M ${rx - 3.6} ${y} Q ${rx} ${y + 3} ${rx + 3.6} ${y}" stroke="${arc}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
 			`;
 		default:
 			// idle — eyebrows-relaxed, big round eyes

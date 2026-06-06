@@ -16,10 +16,6 @@ export interface Bindings {
 	// Secrets — empty string when unset. In local dev they come from .dev.vars;
 	// in production from `wrangler secret put`.
 	CF_AI_GATEWAY_TOKEN?: string;
-	// Cloudflare API token with "Workers AI: Read" permission. Only needed to
-	// run Workers AI (the raster sprite img2img) via REST in local dev — the
-	// `env.AI` binding can't run locally without `wrangler dev --remote`.
-	CF_API_TOKEN?: string;
 	ANTHROPIC_API_KEY?: string;
 	PERPLEXITY_API_KEY?: string;
 	OPENAI_API_KEY?: string;

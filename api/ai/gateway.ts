@@ -17,46 +17,6 @@ function gatewayUrl(
 	return `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/${slug}${path}`;
 }
 
-// Workers AI through the AI Gateway, by REST. The `env.AI` binding only runs
-// when deployed (or `wrangler dev --remote`) — in plain local dev it throws
-// "Binding AI needs to be run remotely". The REST route is a normal fetch, so
-// it works everywhere as long as a Cloudflare API token with Workers AI
-// permission is available (CF_API_TOKEN; falls back to the gateway token).
-function workersAiUrl(env: Env, model: string) {
-	return `https://gateway.ai.cloudflare.com/v1/${env.AI_GATEWAY_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/workers-ai/${model}`;
-}
-
-// Run a Workers AI model via REST and return the raw response bytes (for image
-// models like img2img, the body IS the PNG). Throws with a helpful message if
-// no token is configured.
-export async function workersAiRunBytes(
-	env: Env,
-	model: string,
-	// biome-ignore lint/suspicious/noExplicitAny: model inputs are heterogeneous
-	body: any,
-): Promise<Uint8Array> {
-	const token = env.CF_API_TOKEN || env.CF_AI_GATEWAY_TOKEN;
-	if (!token) {
-		throw new Error(
-			"Workers AI REST needs a Cloudflare API token. Set CF_API_TOKEN in .dev.vars (a token with the 'Workers AI: Read' permission), or run `wrangler dev --remote` to use the AI binding instead.",
-		);
-	}
-	const headers: Record<string, string> = {
-		"content-type": "application/json",
-		Authorization: `Bearer ${token}`,
-		...gatewayAuthHeader(env),
-	};
-	const res = await fetch(workersAiUrl(env, model), {
-		method: "POST",
-		headers,
-		body: JSON.stringify(body),
-	});
-	if (!res.ok) {
-		throw new Error(`workers-ai via gateway: ${res.status} ${await res.text()}`);
-	}
-	return new Uint8Array(await res.arrayBuffer());
-}
-
 // Gateway-level auth (set when "Authenticated Gateway" is enabled in the dashboard).
 function gatewayAuthHeader(env: Env): Record<string, string> {
 	return env.CF_AI_GATEWAY_TOKEN

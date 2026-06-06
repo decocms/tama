@@ -60,10 +60,10 @@ questions at a time, like a person would. Collect:
    - Any "Tama" in `README.md`, page `<title>` tags, dashboard copy.
    - `api/db/migrations/0011_singleton_pet.sql` — the seed row's `name` so
      fresh deploys land with the right pet identity from minute one.
-3. Generate the sprite pack: call `pet_sprite_generate` (this repo's MCP
-   tool) with `imageBase64` of the photo and `mimeType`. Wait for it — it
-   takes 30–60s while Workers AI does the 6 img2img passes. The tool stores
-   results in R2 and updates the pet row automatically.
+3. Generate the sprite pack: call `pet_sprite_svg_generate` (this repo's MCP
+   tool) with `imageBase64` of the photo and `mimeType`. One Claude vision
+   call reads the photo into a character sheet, then 6 SVG states render
+   instantly. The tool stores the pack on the pet row automatically.
 4. If the human gave owner notes or breed, also call `pet_enrich` so the
    dashboard ships with a baseline of AI research.
 

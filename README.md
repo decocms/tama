@@ -22,10 +22,11 @@ your data lives in your account — we never see it.
   Studio imports it and chat becomes admin: "Did I give Beto his Prelone?"
   "What was his hemoglobin trend?" "Look up Sucralfate side effects."
 - **A pixel companion** — `/companion` is a tiny pixel face that lives on your
-  home screen (PWA). Generated from a photo via a two-pass img2img pipeline:
-  Claude reads the photo and builds a character sheet, then Workers AI
-  generates 6 emotion variants (idle, happy, hungry, pill-time, sad,
-  sleeping) that hold the same identity. Reacts ambient to dose schedule.
+  home screen (PWA). Generated from a photo by a single Claude vision call that
+  reads the photo into a character sheet (coat colors, ear shape, markings),
+  then a deterministic SVG renderer draws 6 emotion variants (idle, happy,
+  hungry, pill-time, sad, sleeping) — instant, free, crisp at any size. Reacts
+  ambient to the dose schedule.
 
 ## How to create your pet's agent
 
@@ -51,8 +52,8 @@ yourself and do it by hand — every step is a real shell command.
 - **Cloudflare AI Gateway** — routes Anthropic (vision extraction, exam
   parsing, asset classification, character sheet) and Perplexity (vet
   research). No API keys live in the Worker; the gateway holds BYOK.
-- **Workers AI** — img2img for the raster sprite pipeline. Free tier covers a
-  one-time setup run. (The procedural SVG sprite path is instant + free.)
+- **Workers AI** — Whisper transcription for audio recordings. (The companion
+  sprite is procedural SVG — no image model, instant + free.)
 - **React UI** (`web/`) — bundled to a single HTML by Vite. Three top-level
   apps (Pet / Timeline / Timetable) + exams, companion, and sprite-lab, all
   served from the same Worker.
@@ -135,8 +136,7 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | `pet_profile` / `pet_update`| Read / patch the singleton pet                |
 | `pet_enrich`                | Perplexity breed/condition research           |
 | `pet_summary_refresh`       | Regenerate the one evolving health summary    |
-| `pet_sprite_generate` / `pet_sprite_svg_generate` | Raster / SVG 6-state sprite pack |
-| `sprite_compare`            | Both sprite methods side by side (sprite-lab) |
+| `pet_sprite_svg_generate`   | 6-state procedural-SVG companion sprite from a photo |
 | `timeline_get`              | The merged continuous timeline                |
 | `timeline_note_add`         | Add a free-form timeline note                 |
 | `vet_visit_add` / `_list`   | Log / read vet visits                         |
