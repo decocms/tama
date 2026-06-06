@@ -1,11 +1,13 @@
 name = "tama-landing"
+main = "src/worker.ts"
 compatibility_date = "2026-05-01"
 
-# Static-only Worker — assets served directly from dist/. No JS entrypoint
-# needed; the runtime returns the matching file (or index.html for SPA-
-# style 404 routing if we ever add client-side routes).
+# Assets via the ASSETS binding; the Worker (src/worker.ts) rewrites per-locale
+# <title> + og/SEO meta for /pt vs /en, so social unfurls and crawlers see
+# Portuguese on /pt without running the client JS.
 [assets]
 directory = "./dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
 
 # Custom domain. UNCOMMENT once tama.vet is an active zone on this
