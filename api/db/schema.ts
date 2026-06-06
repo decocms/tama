@@ -15,7 +15,7 @@ export const pets = sqliteTable("pets", {
 	timezone: text("timezone"),
 	// Per-pet pixel sprite pack — JSON map of {idle, happy, ...} → R2 URL.
 	// Populated by pet_sprite_generate (raster img2img). NULL until the
-	// adopt flow runs.
+	// setup flow runs.
 	spritePackJson: text("sprite_pack_json"),
 	// Parallel SVG sprite pack — JSON map of {idle, happy, ...} → SVG
 	// string. Populated by pet_sprite_svg_generate (procedural). Crisp at

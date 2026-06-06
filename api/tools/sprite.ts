@@ -44,7 +44,7 @@ const SvgPackSchema = z.object({
 //   - Quality varies. The prompts in api/ai/generate-sprite.ts are a
 //     starting point; expect to iterate on strength/guidance/steps.
 //   - Cost: 6 model calls plus 1 vision call. ~30-60s end-to-end on a
-//     warm Workers AI region. Acceptable as a one-time adopt step.
+//     warm Workers AI region. Acceptable as a one-time setup step.
 //   - Identity drift: the base sprite is the anchor for variants. If
 //     variants don't resemble the base, raise strength on the base pass
 //     or lower it on the variants.
@@ -56,7 +56,7 @@ export const petSpriteGenerateTool = (_env: Env) =>
 
 Idempotent unless regenerate=true; otherwise re-running with the same photo will overwrite the existing pack.
 
-This is what the adopt skill calls after collecting the pet's photo. Can also be re-invoked later (e.g. the pet got a haircut, or the first render looked off).`,
+This is what the setup skill calls after collecting the pet's photo. Can also be re-invoked later (e.g. the pet got a haircut, or the first render looked off).`,
 		inputSchema: z.object({
 			imageBase64: z.string().describe("Base64 PNG/JPEG/WebP of the pet."),
 			mimeType: z.string().describe("image/jpeg, image/png, image/webp."),

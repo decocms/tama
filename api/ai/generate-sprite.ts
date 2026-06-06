@@ -3,6 +3,7 @@ import {
 	type CharacterSheet,
 	characterPromptFragment,
 } from "./extract-character.ts";
+import { workersAiRunBytes } from "./gateway.ts";
 
 // Pass 1b + Pass 2 of the sprite pipeline: Workers AI img2img runs.
 //
@@ -72,6 +73,23 @@ async function streamToBytes(stream: ReadableStream<Uint8Array>): Promise<Uint8A
 	return out;
 }
 
+// Run the img2img model, preferring the in-Worker AI binding (fast, no extra
+// auth) and falling back to the AI Gateway REST route when the binding can't
+// run (local `wrangler dev` without --remote throws "run remotely"). Both
+// paths return the PNG bytes.
+// biome-ignore lint/suspicious/noExplicitAny: model input is heterogeneous
+async function runImg2Img(env: Env, body: any): Promise<Uint8Array> {
+	try {
+		const result = (await env.AI.run(MODEL, body)) as ReadableStream<Uint8Array>;
+		return await streamToBytes(result);
+	} catch (err) {
+		const msg = (err as Error).message ?? "";
+		// The binding throws this in local dev; anything else is a real error.
+		if (!/run remotely|not supported|binding/i.test(msg)) throw err;
+		return workersAiRunBytes(env, MODEL, body);
+	}
+}
+
 function base64ToBytes(b64: string): Uint8Array {
 	const clean = b64.replace(/^data:[^,]+,/, "");
 	const binary = atob(clean);
@@ -92,7 +110,7 @@ export async function generateBaseSprite(
 	].join(", ");
 
 	const photoBytes = base64ToBytes(input.photoBase64);
-	const result = (await env.AI.run(MODEL, {
+	return runImg2Img(env, {
 		prompt,
 		negative_prompt: NEGATIVE,
 		image: Array.from(photoBytes),
@@ -101,9 +119,7 @@ export async function generateBaseSprite(
 		strength: 0.85,
 		guidance: 8,
 		num_steps: 25,
-	})) as ReadableStream<Uint8Array>;
-
-	return streamToBytes(result);
+	});
 }
 
 // Pass 2: derive expression variants from the base sprite.
@@ -121,7 +137,7 @@ export async function generateVariantSprite(
 		expression,
 	].join(", ");
 
-	const result = (await env.AI.run(MODEL, {
+	return runImg2Img(env, {
 		prompt,
 		negative_prompt: NEGATIVE,
 		image: Array.from(input.baseSpriteBytes),
@@ -130,9 +146,7 @@ export async function generateVariantSprite(
 		strength: 0.55,
 		guidance: 7,
 		num_steps: 20,
-	})) as ReadableStream<Uint8Array>;
-
-	return streamToBytes(result);
+	});
 }
 
 export const SPRITE_STATES = [

@@ -4,8 +4,8 @@
 // real pet's data. Safe to ship in the public template; powers `bun run dev`
 // and the public demo deploy.
 //
-// NOT a migration and NOT run on fork — real adopters start empty and use the
-// adopt flow. This is opt-in: `bun run seed:example` (local) or
+// NOT a migration and NOT run on fork — real forks start empty and use the
+// setup flow. This is opt-in: `bun run seed:example` (local) or
 // `bun run seed:example -- --remote` against a demo D1.
 //
 // Dates are computed relative to "now" so the timetable always looks alive

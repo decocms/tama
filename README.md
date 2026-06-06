@@ -3,8 +3,9 @@
 An agent for your pet to live a better life. One pet, one agent, one deploy.
 
 This repo is a **template**. You fork it, ask a coding-agent (Studio,
-Claude Code, …) to adopt it for *your* pet, and deploy it to your own
-Cloudflare account. The deployed worker is the agent: dashboard at `/`,
+Claude Code, …) to set it up for *your* pet — creating an agent that knows
+your pet — and deploy it to your own Cloudflare account. The deployed worker
+is that agent: dashboard at `/`,
 an ambient pixel companion at `/companion`, MCP server at `/mcp`. Free, MIT,
 your data lives in your account — we never see it.
 
@@ -26,7 +27,7 @@ your data lives in your account — we never see it.
   generates 6 emotion variants (idle, happy, hungry, pill-time, sad,
   sleeping) that hold the same identity. Reacts ambient to dose schedule.
 
-## How to adopt this for your pet
+## How to create your pet's agent
 
 The intended path is **inside Studio**: studio.decocms.com → Import from
 GitHub → paste the URL of your fork. Studio's coding-agent reads
@@ -34,9 +35,9 @@ GitHub → paste the URL of your fork. Studio's coding-agent reads
 No terminal needed.
 
 If you prefer a local IDE, the same flow works in Claude Code (invoke the
-[`/adopt-pet`](./.claude/skills/adopt-pet.md) skill), Cursor, or anything
-else that honors `AGENTS.md`. Or read [AGENTS.md](./AGENTS.md) yourself
-and do it by hand — every step is a real shell command.
+[`/create-agent`](./.claude/skills/create-agent.md) skill), Cursor, or
+anything else that honors `AGENTS.md`. Or read [AGENTS.md](./AGENTS.md)
+yourself and do it by hand — every step is a real shell command.
 
 ## Architecture
 
@@ -51,7 +52,7 @@ and do it by hand — every step is a real shell command.
   parsing, asset classification, character sheet) and Perplexity (vet
   research). No API keys live in the Worker; the gateway holds BYOK.
 - **Workers AI** — img2img for the raster sprite pipeline. Free tier covers a
-  one-time adopt run. (The procedural SVG sprite path is instant + free.)
+  one-time setup run. (The procedural SVG sprite path is instant + free.)
 - **React UI** (`web/`) — bundled to a single HTML by Vite. Three top-level
   apps (Pet / Timeline / Timetable) + exams, companion, and sprite-lab, all
   served from the same Worker.
@@ -67,7 +68,7 @@ a fork: `bun run update` (see [docs/UPDATING.md](./docs/UPDATING.md)).
 
 ## Local development
 
-After adopting the template for your pet:
+After setting up the agent for your pet:
 
 ```bash
 bun install
@@ -163,5 +164,5 @@ Built on [deco studio](https://studio.decocms.com). The MCP runtime, the
 agent surface, and the "Studio is the full lifecycle IDE" thesis come
 from there. Tama is the personal-use side of the same primitives.
 
-[See AGENTS.md](./AGENTS.md) for the adopt lifecycle.
+[See AGENTS.md](./AGENTS.md) for the setup lifecycle.
 [See docs/](./docs/) for the open feature requests to the Studio team.

@@ -8,6 +8,7 @@ import type {
 	ExamMetricSeriesPoint,
 	Pet,
 	Prescription,
+	Recording,
 	ScheduleState,
 	Symptom,
 	TimelineEntry,
@@ -24,6 +25,7 @@ export const keys = {
 	timetable: ["timetable"] as const,
 	scheduleStates: ["schedule-states"] as const,
 	assets: ["assets"] as const,
+	recordings: ["recordings"] as const,
 	vetVisits: ["vet-visits"] as const,
 	vaccines: ["vaccines"] as const,
 	symptoms: ["symptoms"] as const,
@@ -40,6 +42,7 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
 		"timetable",
 		"schedule-states",
 		"assets",
+		"recordings",
 		"vet-visits",
 		"vaccines",
 		"symptoms",
@@ -349,6 +352,89 @@ export function useUploadAsset() {
 				refId: string;
 				fileId: string | null;
 			}>(app, "asset_upload", input),
+		onSuccess: () => invalidateAll(qc),
+	});
+}
+
+// ---------- Recordings ----------
+
+export function useRecordings() {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.recordings,
+		queryFn: () =>
+			callTool<{ recordings: Recording[] }>(app, "recording_list", {}).then(
+				(r) => r.recordings,
+			),
+		enabled: true,
+		// Poll while anything is mid-flight so the row statuses advance live.
+		refetchInterval: (q) => {
+			const data = q.state.data as Recording[] | undefined;
+			const busy = data?.some(
+				(r) => r.status === "uploading" || r.status === "transcribing",
+			);
+			return busy ? 2500 : false;
+		},
+	});
+}
+
+export function useCreateRecording() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			mimeType: string;
+			originalName?: string;
+			durationS?: number;
+			numChunks: number;
+			originalBase64?: string;
+		}) =>
+			callTool<{ recording: Recording }>(app, "recording_create", input).then(
+				(r) => r.recording,
+			),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.recordings }),
+	});
+}
+
+export function useAddChunk() {
+	const app = useMcpApp();
+	return useMutation({
+		mutationFn: (input: {
+			recordingId: string;
+			idx: number;
+			startS: number;
+			endS: number;
+			audioBase64: string;
+		}) =>
+			callTool<{ chunkId: string; fileId: string }>(
+				app,
+				"recording_add_chunk",
+				input,
+			),
+	});
+}
+
+export function useTranscribeRecording() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { recordingId: string; language?: string }) =>
+			callTool<{ recording: Recording }>(app, "recording_transcribe", input),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.recordings }),
+	});
+}
+
+export function useApplyRecordingGroup() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: { recordingIds: string[] }) =>
+			callTool<{
+				noteId: string | null;
+				summary: string;
+				historyUpdate: string;
+				recordings: Recording[];
+			}>(app, "recording_apply_group", input),
 		onSuccess: () => invalidateAll(qc),
 	});
 }

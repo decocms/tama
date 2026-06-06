@@ -71,7 +71,7 @@ questions at a time, like a person would. Collect:
 
 ```bash
 git add -A
-git commit -m "Adopt Tama for <Petname>"
+git commit -m "Create <Petname>'s agent"
 ```
 
 Encourage the human to push to their own GitHub fork so the work has a durable

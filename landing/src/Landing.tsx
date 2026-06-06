@@ -5,7 +5,7 @@
 // Plain React, no router, no fetches. Ships to Cloudflare Pages as static
 // HTML+JS.
 
-const REPO_URL = "https://github.com/deco-cx/tama"; // update on first publish
+const REPO_URL = "https://github.com/decocms/tama";
 const STUDIO_IMPORT_URL = `https://studio.decocms.com/import?repo=${encodeURIComponent(
 	REPO_URL,
 )}`;
@@ -15,6 +15,7 @@ export function Landing() {
 	return (
 		<main className="min-h-dvh">
 			<Hero />
+			<ThreeConcepts />
 			<TwoPaths />
 			<WhatIsTama />
 			<HowItWorks />
@@ -52,7 +53,7 @@ function Hero() {
 						href={STUDIO_IMPORT_URL}
 						className="brut bg-[#2a1f17] text-[#fff8ee] px-4 py-2 font-bold inline-flex items-center gap-2 border-2 border-[#2a1f17]"
 					>
-						Adopt yours →
+						Create yours →
 					</a>
 				</div>
 			</nav>
@@ -78,7 +79,7 @@ function Hero() {
 							href={STUDIO_IMPORT_URL}
 							className="brut bg-[#ffbd8e] text-[#2a1f17] px-6 py-4 font-bold text-lg border-2 border-[#2a1f17] inline-flex items-center gap-2"
 						>
-							Adopt your Tama, free →
+							Create your pet's agent, free →
 						</a>
 						<a
 							href={DEMO_URL}
@@ -100,9 +101,76 @@ function Hero() {
 							aria-hidden
 						/>
 						<div className="absolute -bottom-4 left-1/2 -translate-x-1/2 brut bg-[#b6e3c8] border-2 border-[#2a1f17] px-3 py-1 text-xs font-bold whitespace-nowrap">
-							Beto, Chihuahua, 6 yrs
+							Pixel, Chihuahua, 6 yrs
 						</div>
 					</div>
+				</div>
+			</div>
+		</section>
+	);
+}
+
+// The three core concepts, foregrounded right under the hero so the whole
+// product reads as: one timeline, one timetable, drop anything in. Everything
+// else (graphs, reminders, the companion) hangs off these three.
+function ThreeConcepts() {
+	const concepts = [
+		{
+			emoji: "📜",
+			color: "#b6e3c8",
+			kicker: "Timeline",
+			title: "The whole story, one log.",
+			body: "Every vet visit, vaccine, symptom, medicine given, and lab result — in one continuous, chronological record. Nothing siloed, nothing lost. The agent always has the full history when you or your vet ask.",
+		},
+		{
+			emoji: "💊",
+			color: "#ffbd8e",
+			kicker: "Timetable",
+			title: "Medicines, organized.",
+			body: "A live schedule of every medicine and meal, with reminders that buzz your phone. Give a dose early or late and the schedule shifts to keep the interval — no math, no missed doses.",
+		},
+		{
+			emoji: "📥",
+			color: "#c9b6f0",
+			kicker: "Assets",
+			title: "Drop in anything.",
+			body: "Upload a PDF, a photo, a vaccine card, a voice memo. The agent reads it and files it into the timeline for you — as an exam with charted values, a visit, a vaccine, or a note.",
+		},
+	];
+	return (
+		<section className="px-6 md:px-12 py-20 md:py-28 border-b-4 border-[#2a1f17] bg-[#fff8ee]">
+			<div className="max-w-6xl mx-auto">
+				<div className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#2a1f17]/55 mb-4">
+					Three simple ideas
+				</div>
+				<h2 className="headline text-4xl md:text-6xl mb-3 max-w-3xl">
+					A <span className="headline-mark">timeline</span>, a{" "}
+					<span className="headline-mark">timetable</span>, and a place to{" "}
+					<span className="headline-mark">drop anything</span>.
+				</h2>
+				<p className="text-lg text-[#2a1f17]/70 mb-12 max-w-2xl">
+					That's the whole product. Everything else — the graphs, the
+					reminders, the AI your vet can talk to — grows out of these three.
+				</p>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+					{concepts.map((c) => (
+						<div
+							key={c.kicker}
+							className="brut p-7 border-2 border-[#2a1f17]"
+							style={{ backgroundColor: c.color }}
+						>
+							<div className="text-4xl mb-4" aria-hidden>
+								{c.emoji}
+							</div>
+							<div className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#2a1f17]/55 mb-2">
+								{c.kicker}
+							</div>
+							<h3 className="headline text-2xl mb-3">{c.title}</h3>
+							<p className="text-sm text-[#2a1f17]/85 leading-relaxed">
+								{c.body}
+							</p>
+						</div>
+					))}
 				</div>
 			</div>
 		</section>
@@ -134,7 +202,7 @@ function TwoPaths() {
 							<code className="text-[#c4e538] font-mono text-[0.9em]">
 								AGENTS.md
 							</code>{" "}
-							that tells your agent exactly what to do — adopt it for your
+							that tells your agent exactly what to do — set it up for your
 							pet, then deploy to your own Cloudflare. You're in your
 							terminal, you know the drill.
 						</p>
@@ -332,8 +400,10 @@ function LiveDemo() {
 						A real, working Tama.
 					</h2>
 					<p className="text-lg text-[#2a1f17]/80 mb-6">
-						The demo deploy uses placeholder data — explore the dashboard,
-						upload a sample exam, watch the companion react. No signup.
+						The demo is seeded with a real example pet — Pixel, recovering
+						from anemia. Scroll the timeline, watch the hemoglobin trend
+						climb, check the medicine timetable, see the companion react.
+						No signup.
 					</p>
 					<a
 						href={DEMO_URL}

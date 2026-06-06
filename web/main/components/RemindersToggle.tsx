@@ -40,10 +40,10 @@ interface Props {
 // is studio's domain — not our worker. We hardcode the worker origin so the
 // /subscribe popup actually loads the Tama page rather than a studio route.
 //
-// THE ADOPT FLOW REPLACES THIS — see AGENTS.md step 1 ("CUSTOMIZE"). After
+// THE SETUP FLOW REPLACES THIS — see AGENTS.md step 1 ("CUSTOMIZE"). After
 // deploy, set it to the real worker URL (something like
 // "https://tama-<petslug>.workers.dev"). The placeholder below points at
-// the public example demo and is harmless until the real adopt runs.
+// the public example demo and is harmless until the real setup runs.
 const WORKER_ORIGIN = "https://tama-example.deco-ceo.workers.dev";
 
 // Two render paths, split into separate components so neither leaks hook

@@ -18,6 +18,7 @@ import { CompanionPage } from "./pages/Companion.tsx";
 import { ExamsPage } from "./pages/Exams.tsx";
 import { ExamsDetailPage } from "./pages/ExamsDetail.tsx";
 import { PetPage } from "./pages/Pet.tsx";
+import { RecordingsPage } from "./pages/Recordings.tsx";
 import { SpriteLabPage } from "./pages/SpriteLab.tsx";
 import { SubscribePage } from "./pages/Subscribe.tsx";
 import { TimelinePage } from "./pages/Timeline.tsx";
@@ -62,6 +63,12 @@ const examsDetail = createRoute({
 	}),
 });
 
+const recordings = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/recordings",
+	component: RecordingsPage,
+});
+
 const companion = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/companion",
@@ -91,6 +98,7 @@ const routeTree = rootRoute.addChildren([
 	timetable,
 	exams,
 	examsDetail,
+	recordings,
 	companion,
 	spriteLab,
 	subscribe,
