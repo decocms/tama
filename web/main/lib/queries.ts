@@ -509,6 +509,16 @@ export function usePasteExam() {
 	});
 }
 
+export function useExplainExams() {
+	const app = useMcpApp();
+	return useMutation({
+		mutationFn: () =>
+			callTool<{ insights: string }>(app, "exam_explain", {}).then(
+				(r) => r.insights,
+			),
+	});
+}
+
 export function useUpdateExam() {
 	const app = useMcpApp();
 	const qc = useQueryClient();

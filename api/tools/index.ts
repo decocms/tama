@@ -6,6 +6,7 @@ import {
 import { assetListTool, assetUploadTool } from "./assets.ts";
 import {
 	examDeleteTool,
+	examExplainTool,
 	examGetTool,
 	examListTool,
 	examMetricSeriesTool,
@@ -107,6 +108,7 @@ export const tools = [
 	examGetTool,
 	examListTool,
 	examMetricSeriesTool,
+	examExplainTool,
 	// Timetable
 	timetableGetTool,
 	scheduleStateListTool,

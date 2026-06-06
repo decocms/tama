@@ -3,6 +3,7 @@ import { PawPrint, Wind } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Toaster } from "@/components/ui/sonner.tsx";
+import { usePet } from "../lib/queries.ts";
 import { BreathingCounter } from "./BreathingCounter.tsx";
 
 /**
@@ -18,6 +19,10 @@ export function Layout({
 	breadcrumb?: ReactNode;
 }) {
 	const [breathingOpen, setBreathingOpen] = useState(false);
+	// This deploy IS the pet — show its name as the brand (falls back to the
+	// template name until the pet row loads / before setup).
+	const { data: pet } = usePet();
+	const brand = pet?.name?.trim() || "Tama";
 
 	return (
 		<div className="min-h-dvh flex flex-col bg-background overflow-x-hidden">
@@ -31,7 +36,7 @@ export function Layout({
 							<PawPrint className="w-4 h-4" />
 						</span>
 						<span className="font-display font-semibold text-lg leading-none">
-							Tama
+							{brand}
 						</span>
 					</Link>
 					{breadcrumb ? (

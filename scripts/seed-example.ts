@@ -15,6 +15,22 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
+import { renderSpritePack } from "../api/ai/render-sprite-svg.ts";
+
+// Pixel's character sheet → procedural SVG sprite pack, so the demo's Pet hero
+// + companion show a real avatar out of the box (a black-and-tan long-haired
+// chihuahua, same look the landing uses).
+const PIXEL_CHARACTER = {
+	species: "dog",
+	breed: "long-haired chihuahua",
+	primaryColor: "white",
+	secondaryColor: "black and tan",
+	earShape: "pointy" as const,
+	markings: ["black cap over head and ears", "white blaze on muzzle", "tan spots above eyes"],
+	headShape: "round apple head",
+	eyeColor: "dark brown",
+	distinctiveFeatures: ["oversized ears", "long coat fringe"],
+};
 
 const DB = process.env.SEED_DB ?? "myvet";
 const REMOTE = process.argv.includes("--remote");
@@ -95,9 +111,10 @@ for (const t of [
 	}
 }
 
-// Pet profile.
+// Pet profile (incl. the procedural SVG sprite pack so the avatar shows).
+const svgPack = JSON.stringify(renderSpritePack(PIXEL_CHARACTER));
 sql.push(
-	`UPDATE pets SET name='Pixel', species='dog', breed='Chihuahua', dob='6 years', weight_kg=4.1, timezone='America/Sao_Paulo', owner_notes='Recovering from regenerative anemia; sensitive stomach.', summary=${q(
+	`UPDATE pets SET name='Pixel', species='dog', breed='Chihuahua', dob='6 years', weight_kg=4.1, timezone='America/Sao_Paulo', owner_notes='Recovering from regenerative anemia; sensitive stomach.', svg_pack_json=${q(svgPack)}, character_json=${q(JSON.stringify(PIXEL_CHARACTER))}, summary=${q(
 		"Pixel is recovering well — hemoglobin has climbed from a low of 6.6 to 9.4 g/dL over the last two weeks. On Prednisolone daily; appetite improving. Watch for any return of lethargy or pale gums.",
 	)}, summary_at='${iso(now - HOUR)}' WHERE id='${PET}';`,
 );

@@ -29,6 +29,7 @@ export interface Pet {
 	timezone: string | null;
 	enrichment: Enrichment | null;
 	spritePack?: SpritePack | null;
+	svgPack?: Record<string, string> | null;
 	summary?: string | null;
 	summaryAt?: string | null;
 	createdAt: string;

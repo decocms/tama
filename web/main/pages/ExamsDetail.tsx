@@ -54,10 +54,6 @@ export function ExamsDetailPage() {
 		<Layout
 			breadcrumb={
 				<span className="flex items-center gap-2">
-					<Link to="/" className="hover:underline">
-						{pet?.name ?? "pet"}
-					</Link>
-					<span>/</span>
 					<Link to="/exams" className="hover:underline">
 						exams
 					</Link>

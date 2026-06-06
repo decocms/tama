@@ -29,7 +29,18 @@ export function PetHero({
 	return (
 		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
-				<Avatar name={pet.name} size="xl" />
+				{pet.svgPack?.idle ? (
+					<div className="shrink-0 mx-auto sm:mx-0 w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#e7dfce] border border-border/60 flex items-center justify-center overflow-hidden">
+						{/* biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer */}
+						<div
+							className="w-[88%] h-[88%] [&>svg]:w-full [&>svg]:h-full"
+							aria-label={pet.name}
+							dangerouslySetInnerHTML={{ __html: pet.svgPack.idle }}
+						/>
+					</div>
+				) : (
+					<Avatar name={pet.name} size="xl" />
+				)}
 				<div className="flex-1 min-w-0">
 					<h1 className="font-display text-3xl sm:text-4xl font-semibold leading-none">
 						{pet.name}

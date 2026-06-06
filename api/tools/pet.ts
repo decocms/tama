@@ -6,6 +6,7 @@ import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
 import {
 	parseEnrichment,
 	parseSpritePack,
+	parseSvgPack,
 	setEnrichment,
 	updatePet,
 } from "../storage/pets.ts";
@@ -33,6 +34,7 @@ const PetSchema = z.object({
 	timezone: z.string().nullable(),
 	enrichment: EnrichmentSchema.nullable(),
 	spritePack: SpritePackSchema.nullable(),
+	svgPack: z.record(z.string(), z.string()).nullable(),
 	createdAt: z.string(),
 });
 
@@ -48,6 +50,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		timezone: p.timezone,
 		enrichment: parseEnrichment(p),
 		spritePack: parseSpritePack(p),
+		svgPack: parseSvgPack(p),
 		createdAt: p.createdAt,
 	};
 }

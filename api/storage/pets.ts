@@ -165,6 +165,18 @@ export function parseSpritePack(pet: Pet): SpritePack | null {
 	}
 }
 
+// The procedural SVG sprite pack — {state: svgString}. The sole sprite path.
+export function parseSvgPack(pet: Pet): Record<string, string> | null {
+	if (!pet.svgPackJson) return null;
+	try {
+		const obj = JSON.parse(pet.svgPackJson);
+		if (obj && typeof obj.idle === "string") return obj as Record<string, string>;
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 export async function setSpritePack(
 	env: Env,
 	petId: string,

@@ -37,7 +37,7 @@ export function PetPage() {
 	const refreshSummary = useRefreshSummary();
 
 	return (
-		<Layout breadcrumb={<span>{pet?.name ?? "pet"}</span>}>
+		<Layout>
 			<div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
 				{isLoading || !pet ? (
 					<>
