@@ -118,7 +118,8 @@ export async function generateBaseSprite(
 		// photo-realistic remix of the input.
 		strength: 0.85,
 		guidance: 8,
-		num_steps: 25,
+		// Workers AI caps img2img at 20 steps (the REST API rejects >20).
+		num_steps: 20,
 	});
 }
 
