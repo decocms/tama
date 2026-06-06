@@ -21,7 +21,6 @@ interface QueueItem {
 }
 
 interface Props {
-	episodeId: string | undefined;
 	sourceNotes: string;
 	onCreated: (examId: string) => void;
 	onClearNotes: () => void;
@@ -46,7 +45,6 @@ function fmtBytes(n: number): string {
 }
 
 export function ExamUploadQueue({
-	episodeId,
 	sourceNotes,
 	onCreated,
 	onClearNotes,
@@ -63,10 +61,6 @@ export function ExamUploadQueue({
 	};
 
 	const handleFiles = async (files: File[]) => {
-		if (!episodeId) {
-			toast.error("Pick an episode first");
-			return;
-		}
 		const queued: QueueItem[] = files.map((f) => {
 			idCounter.current += 1;
 			return {
@@ -90,7 +84,6 @@ export function ExamUploadQueue({
 				try {
 					const base64 = await fileToBase64(files[idx]);
 					const result = await upload.mutateAsync({
-						episodeId,
 						imageBase64: base64,
 						mimeType: item.mimeType,
 						originalName: item.fileName,
@@ -143,7 +136,6 @@ export function ExamUploadQueue({
 	const inFlight = items.filter(
 		(i) => i.status === "queued" || i.status === "extracting",
 	).length;
-	const noEpisode = !episodeId;
 
 	return (
 		<div className="space-y-3">
@@ -154,7 +146,6 @@ export function ExamUploadQueue({
 					accept="image/*,application/pdf"
 					multiple
 					className="sr-only"
-					disabled={noEpisode}
 					onChange={(e) => {
 						const fs = Array.from(e.target.files ?? []);
 						if (fs.length > 0) handleFiles(fs);
@@ -164,7 +155,6 @@ export function ExamUploadQueue({
 				<Button
 					type="button"
 					size="sm"
-					disabled={noEpisode}
 					onClick={() => inputRef.current?.click()}
 				>
 					<Upload className="w-3.5 h-3.5" />

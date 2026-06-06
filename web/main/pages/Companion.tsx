@@ -6,7 +6,7 @@ import {
 	deriveCompanionStatus,
 } from "@/companion/state.ts";
 import type { SpritePack } from "@/types/api.ts";
-import { useEpisode, useEpisodes, usePet } from "../lib/queries.ts";
+import { usePet, useTimetable } from "../lib/queries.ts";
 
 // Tiny pixel-companion view. The PWA manifest points `start_url`
 // here so when the app is launched from the dock/home-screen it lands in
@@ -52,21 +52,7 @@ function browserTimeZone(): string {
 export function CompanionPage() {
 	const navigate = useNavigate();
 	const { data: pet } = usePet();
-	const { data: episodes } = useEpisodes();
-
-	// Pick the most-recently-started open episode. Companion is single-episode
-	// for v1 — multi-episode aggregation can wait.
-	const activeEpisode = useMemo(() => {
-		const open = (episodes ?? [])
-			.filter((e) => e.status === "open")
-			.sort(
-				(a, b) =>
-					new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-			);
-		return open[0] ?? episodes?.[0] ?? null;
-	}, [episodes]);
-
-	const { data: dashboard } = useEpisode(activeEpisode?.id);
+	const { data: entries } = useTimetable();
 
 	// Re-tick once a minute so state ("due in 5 minutes" → "overdue") updates
 	// without waiting for the next query refetch.
@@ -79,25 +65,19 @@ export function CompanionPage() {
 	const status = useMemo(
 		() =>
 			deriveCompanionStatus({
-				dashboard: dashboard ?? null,
+				entries: entries ?? [],
 				petName: pet?.name ?? "Tama",
+				summary: pet?.summary ?? null,
 				now: new Date(),
 				timeZone: pet?.timezone ?? browserTimeZone(),
 			}),
 		// tick intentionally in deps so we re-derive every minute
 		// biome-ignore lint/correctness/useExhaustiveDependencies: tick is the manual re-render trigger
-		[dashboard, pet, tick],
+		[entries, pet, tick],
 	);
 
 	const openFullDashboard = () => {
-		if (status.openEpisodeId) {
-			navigate({
-				to: "/episode/$episodeId",
-				params: { episodeId: status.openEpisodeId },
-			});
-		} else {
-			navigate({ to: "/" });
-		}
+		navigate({ to: "/" });
 	};
 
 	return (

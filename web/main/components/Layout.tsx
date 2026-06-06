@@ -40,7 +40,26 @@ export function Layout({
 							<span className="truncate">{breadcrumb}</span>
 						</div>
 					) : null}
-					<div className="ml-auto flex items-center gap-2">
+					<nav className="ml-auto flex items-center gap-1 text-sm">
+						{(
+							[
+								["/", "Pet"],
+								["/timeline", "Timeline"],
+								["/timetable", "Timetable"],
+								["/exams", "Exams"],
+							] as const
+						).map(([to, label]) => (
+							<Link
+								key={to}
+								to={to}
+								className="px-2.5 py-1.5 rounded-full hover:bg-primary/10 [&.active]:bg-primary/15 [&.active]:text-primary font-medium"
+								activeOptions={{ exact: to === "/" }}
+							>
+								{label}
+							</Link>
+						))}
+					</nav>
+					<div className="flex items-center gap-2">
 						<Button
 							variant="ghost"
 							size="sm"

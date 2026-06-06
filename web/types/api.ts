@@ -30,26 +30,80 @@ export interface Pet {
 	timezone: string | null;
 	enrichment: Enrichment | null;
 	spritePack?: SpritePack | null;
+	summary?: string | null;
+	summaryAt?: string | null;
 	createdAt: string;
 }
 
-export interface Episode {
+export type TimelineType =
+	| "note"
+	| "dose"
+	| "exam"
+	| "recording"
+	| "vet-visit"
+	| "vaccine"
+	| "symptom"
+	| "prescription";
+
+export interface TimelineEntry {
 	id: string;
-	petId: string;
+	type: TimelineType;
+	at: string;
 	title: string;
-	status: "open" | "closed";
-	startedAt: string;
-	endedAt: string | null;
-	summary: string | null;
-	currentStatus: string | null;
-	currentStatusAt: string | null;
-	deletedAt: string | null;
+	detail: string | null;
+	refId: string;
+	status: string | null;
+}
+
+export interface VetVisit {
+	id: string;
+	visitedAt: string;
+	vetName: string | null;
+	clinic: string | null;
+	reason: string | null;
+	notes: string | null;
+	fileId: string | null;
+}
+
+export interface Vaccine {
+	id: string;
+	name: string;
+	administeredAt: string;
+	dueAt: string | null;
+	lot: string | null;
+	vetName: string | null;
+	fileId: string | null;
+}
+
+export interface Symptom {
+	id: string;
+	description: string;
+	observedAt: string;
+	severity: string | null;
+	resolvedAt: string | null;
+}
+
+export interface Asset {
+	id: string;
+	originalName: string | null;
+	mimeType: string;
+	kind: string;
+	uploadedAt: string;
+}
+
+export interface SpritePackFull {
+	idle: string;
+	happy: string;
+	hungry: string;
+	"pill-time": string;
+	sad: string;
+	sleeping: string;
 }
 
 export interface Note {
 	id: string;
-	episodeId: string;
-	kind: "text" | "chatlog" | "ai-summary";
+	petId: string;
+	kind: "text" | "chatlog" | "ai-summary" | "general";
 	content: string;
 	aiSummary: string | null;
 	createdAt: string;
@@ -68,7 +122,7 @@ export interface ScheduleItem {
 
 export interface Prescription {
 	id: string;
-	episodeId: string;
+	petId: string;
 	fileId: string | null;
 	status: "draft" | "confirmed";
 	scheduleItems: ScheduleItem[];
@@ -100,7 +154,7 @@ export interface TimetableEntry {
 
 export interface Dose {
 	id: string;
-	episodeId: string;
+	petId: string;
 	itemName: string;
 	kind: "medication" | "meal";
 	plannedAt: string | null;
@@ -113,7 +167,7 @@ export interface Dose {
 
 export interface ScheduleState {
 	id: string;
-	episodeId: string;
+	petId: string;
 	itemKey: string;
 	displayName: string;
 	kind: "medication" | "meal";
@@ -131,15 +185,6 @@ export interface ScheduleState {
 	updatedAt: string;
 }
 
-export interface EpisodeDashboardResult {
-	episode: Episode | null;
-	timetable: TimetableEntry[];
-	prescriptions: Prescription[];
-	notes: Note[];
-	doses: Dose[];
-	scheduleStates: ScheduleState[];
-}
-
 export type RecordingStatus =
 	| "uploading"
 	| "transcribing"
@@ -150,7 +195,7 @@ export type RecordingStatus =
 
 export interface Recording {
 	id: string;
-	episodeId: string;
+	petId: string;
 	originalFileId: string | null;
 	originalName: string | null;
 	mimeType: string;
@@ -165,27 +210,12 @@ export interface Recording {
 	createdAt: string;
 }
 
-export type InsightTag = "status" | "watch-out" | "next-action";
-
-export interface InsightBullet {
-	tag: InsightTag;
-	text: string;
-	sourceKind: "note" | "recording" | "prescription" | "dose" | "schedule";
-	sourceId: string | null;
-}
-
-export interface EpisodeInsightsResult {
-	insights: InsightBullet[];
-	generatedAt: string;
-	cached: boolean;
-}
-
 export type ExamStatus = "draft" | "confirmed";
 export type MetricStatus = "normal" | "low" | "high" | "abnormal" | "unknown";
 
 export interface Exam {
 	id: string;
-	episodeId: string;
+	petId: string;
 	fileId: string | null;
 	status: ExamStatus;
 	performedAt: string | null;

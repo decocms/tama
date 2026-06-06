@@ -5,13 +5,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
@@ -23,7 +16,6 @@ import { Layout } from "../components/Layout.tsx";
 import { MetricChart } from "../components/MetricChart.tsx";
 import { Section } from "../components/Section.tsx";
 import {
-	useEpisodes,
 	useExam,
 	useExams,
 	useMetricSeries,
@@ -40,15 +32,9 @@ import {
 export function ExamsPage() {
 	const navigate = useNavigate();
 	const { data: pet } = usePet();
-	const { data: episodes } = useEpisodes();
 	const { data: exams, isLoading } = useExams();
 	const { data: series } = useMetricSeries([]);
 	const [reviewingId, setReviewingId] = useState<string | null>(null);
-
-	const openEpisodeId = useMemo(
-		() => episodes?.find((e) => e.status === "open")?.id ?? episodes?.[0]?.id,
-		[episodes],
-	);
 
 	return (
 		<Layout
@@ -64,15 +50,7 @@ export function ExamsPage() {
 		>
 			<div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
 				<Section title="Upload a lab exam" eyebrow="New exam">
-					<UploadCard
-						defaultEpisodeId={openEpisodeId}
-						episodes={(episodes ?? []).map((e) => ({
-							id: e.id,
-							title: e.title,
-							status: e.status,
-						}))}
-						onCreated={(examId) => setReviewingId(examId)}
-					/>
+					<UploadCard onCreated={(examId) => setReviewingId(examId)} />
 				</Section>
 
 				{reviewingId ? (
@@ -149,37 +127,18 @@ function ExamReviewLoader({
 	);
 }
 
-function UploadCard({
-	defaultEpisodeId,
-	episodes,
-	onCreated,
-}: {
-	defaultEpisodeId: string | undefined;
-	episodes: { id: string; title: string; status: "open" | "closed" }[];
-	onCreated: (examId: string) => void;
-}) {
+function UploadCard({ onCreated }: { onCreated: (examId: string) => void }) {
 	const paste = usePasteExam();
-	const [episodeId, setEpisodeId] = useState<string | undefined>(
-		defaultEpisodeId,
-	);
 	const [sourceNotes, setSourceNotes] = useState("");
 	const [pasteText, setPasteText] = useState("");
 
-	const effectiveEpisodeId = episodeId ?? defaultEpisodeId;
-	const noEpisodeYet = !effectiveEpisodeId;
-
 	const handlePaste = async () => {
-		if (!effectiveEpisodeId) {
-			toast.error("Pick an episode first");
-			return;
-		}
 		if (pasteText.trim().length < 20) {
 			toast.error("Paste at least a short block of lab text");
 			return;
 		}
 		try {
 			const result = await paste.mutateAsync({
-				episodeId: effectiveEpisodeId,
 				text: pasteText,
 				sourceNotes: sourceNotes || undefined,
 			});
@@ -196,34 +155,6 @@ function UploadCard({
 
 	return (
 		<div className="rounded-2xl bg-card surface p-4 space-y-3">
-			{episodes.length > 0 ? (
-				<div className="flex flex-wrap items-center gap-2">
-					<label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-						Episode
-					</label>
-					<Select
-						value={effectiveEpisodeId ?? ""}
-						onValueChange={setEpisodeId}
-					>
-						<SelectTrigger className="w-72 h-8">
-							<SelectValue placeholder="Pick an episode" />
-						</SelectTrigger>
-						<SelectContent>
-							{episodes.map((e) => (
-								<SelectItem key={e.id} value={e.id}>
-									{e.title}{" "}
-									<span className="text-muted-foreground">({e.status})</span>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-			) : (
-				<p className="text-sm text-muted-foreground">
-					No episodes yet — start one from the pet page first.
-				</p>
-			)}
-
 			<Input
 				placeholder="Optional context (which vet, why drawn, …)"
 				value={sourceNotes}
@@ -237,7 +168,6 @@ function UploadCard({
 				</TabsList>
 				<TabsContent value="file" className="pt-3">
 					<ExamUploadQueue
-						episodeId={effectiveEpisodeId}
 						sourceNotes={sourceNotes}
 						onCreated={onCreated}
 						onClearNotes={() => setSourceNotes("")}
@@ -253,7 +183,7 @@ function UploadCard({
 					<Button
 						size="sm"
 						onClick={handlePaste}
-						disabled={paste.isPending || noEpisodeYet}
+						disabled={paste.isPending}
 					>
 						<FlaskConical className="w-3.5 h-3.5" />
 						{paste.isPending ? "Extracting…" : "Extract metrics"}

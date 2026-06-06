@@ -148,7 +148,7 @@ function StandaloneRemindersToggle({ petId }: Props) {
 					isPending={subscribe.isPending}
 					onEnable={() => {
 						subscribe.mutate(
-							{ petId },
+							undefined,
 							{
 								onSuccess: () => {
 									toast.success("Reminders enabled");

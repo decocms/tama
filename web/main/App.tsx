@@ -15,11 +15,13 @@ import {
 	registerServiceWorker,
 } from "./lib/push.ts";
 import { CompanionPage } from "./pages/Companion.tsx";
-import { DashboardPage } from "./pages/Dashboard.tsx";
-import { EpisodePage } from "./pages/Episode.tsx";
 import { ExamsPage } from "./pages/Exams.tsx";
 import { ExamsDetailPage } from "./pages/ExamsDetail.tsx";
+import { PetPage } from "./pages/Pet.tsx";
+import { SpriteLabPage } from "./pages/SpriteLab.tsx";
 import { SubscribePage } from "./pages/Subscribe.tsx";
+import { TimelinePage } from "./pages/Timeline.tsx";
+import { TimetablePage } from "./pages/Timetable.tsx";
 
 const queryClient = new QueryClient({
 	defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
@@ -27,10 +29,22 @@ const queryClient = new QueryClient({
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
 
-const dashboard = createRoute({
+const pet = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/",
-	component: DashboardPage,
+	component: PetPage,
+});
+
+const timeline = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/timeline",
+	component: TimelinePage,
+});
+
+const timetable = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/timetable",
+	component: TimetablePage,
 });
 
 const exams = createRoute({
@@ -48,16 +62,16 @@ const examsDetail = createRoute({
 	}),
 });
 
-const episode = createRoute({
-	getParentRoute: () => rootRoute,
-	path: "/episode/$episodeId",
-	component: EpisodePage,
-});
-
 const companion = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/companion",
 	component: CompanionPage,
+});
+
+const spriteLab = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/sprite-lab",
+	component: SpriteLabPage,
 });
 
 // Standalone push-setup surface. Reached two ways:
@@ -72,11 +86,13 @@ const subscribe = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-	dashboard,
+	pet,
+	timeline,
+	timetable,
 	exams,
 	examsDetail,
-	episode,
 	companion,
+	spriteLab,
 	subscribe,
 ]);
 
