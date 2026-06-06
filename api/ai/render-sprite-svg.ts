@@ -361,14 +361,18 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	// their white sclera, but stroke-only expressions (happy/sad/sleeping
 	// squints, pill-time brows) would disappear into the dark fur — so draw
 	// those strokes in a light ink whenever the cap is dark.
-	const capDark = !!p.patch && luma(p.patch) < 110;
-	const arc = capDark ? "#f4ece0" : p.feat;
 	// A solid dark eye inside a warm-amber ring with a thin dark outline. The
 	// amber differs from BOTH white/cream fur and the dark cap (so the eye never
 	// blends into the coat, the way a cream rim did against the white blaze),
 	// and the hairline outline keeps the edge crisp on light fur. Reads like a
 	// natural tan eye-marking.
 	const ring = "#e7cf9c";
+	// Closed/curved eye lines: a dark stroke with an amber core on top, so the
+	// line reads on BOTH the dark mask (amber pops) and the light blaze (dark
+	// border delineates) — a single light line blended into the blaze; a single
+	// dark one vanished on the mask.
+	const lash = (d: string, w = 2.2) =>
+		`<path d="${d}" stroke="#2a2017" stroke-width="${w + 1.4}" fill="none" stroke-linecap="round"/><path d="${d}" stroke="${ring}" stroke-width="${w}" fill="none" stroke-linecap="round"/>`;
 	const open = (ex: number) => `
 		<ellipse cx="${ex}" cy="${y}" rx="4.5" ry="5.1" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
 		<ellipse cx="${ex}" cy="${y}" rx="3.3" ry="4" fill="${ink}"/>
@@ -377,18 +381,18 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 	`;
 	switch (state) {
 		case "happy":
-			return `
-				<path d="M ${lx - 4} ${y + 1.5} Q ${lx} ${y - 4.5} ${lx + 4} ${y + 1.5}" stroke="${arc}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 4} ${y + 1.5} Q ${rx} ${y - 4.5} ${rx + 4} ${y + 1.5}" stroke="${arc}" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-			`;
+			return (
+				lash(`M ${lx - 4} ${y + 1.5} Q ${lx} ${y - 4.5} ${lx + 4} ${y + 1.5}`, 2.3) +
+				lash(`M ${rx - 4} ${y + 1.5} Q ${rx} ${y - 4.5} ${rx + 4} ${y + 1.5}`, 2.3)
+			);
 		case "hungry":
 			return `${open(lx)}${open(rx)}
 				<circle cx="${lx + 1.8}" cy="${y - 2}" r="0.8" fill="#fff"/>
 				<circle cx="${rx + 1.8}" cy="${y - 2}" r="0.8" fill="#fff"/>`;
 		case "pill-time":
 			return `
-				<path d="M ${lx - 4} ${y - 4} Q ${lx} ${y - 6.2} ${lx + 4} ${y - 4.2}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 4} ${y - 4.2} Q ${rx} ${y - 6.2} ${rx + 4} ${y - 4}" stroke="${arc}" stroke-width="1.7" fill="none" stroke-linecap="round"/>
+				${lash(`M ${lx - 4} ${y - 4} Q ${lx} ${y - 6.2} ${lx + 4} ${y - 4.2}`, 1.5)}
+				${lash(`M ${rx - 4} ${y - 4.2} Q ${rx} ${y - 6.2} ${rx + 4} ${y - 4}`, 1.5)}
 				<ellipse cx="${lx}" cy="${y + 0.6}" rx="3.8" ry="4.2" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
 				<ellipse cx="${rx}" cy="${y + 0.6}" rx="3.8" ry="4.2" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
 				<ellipse cx="${lx}" cy="${y + 0.8}" rx="2.6" ry="3.1" fill="${ink}"/>
@@ -397,10 +401,10 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 				<circle cx="${rx + 0.9}" cy="${y - 0.4}" r="0.8" fill="#fff"/>
 			`;
 		case "sleeping":
-			return `
-				<path d="M ${lx - 3.6} ${y} Q ${lx} ${y + 3} ${lx + 3.6} ${y}" stroke="${arc}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
-				<path d="M ${rx - 3.6} ${y} Q ${rx} ${y + 3} ${rx + 3.6} ${y}" stroke="${arc}" stroke-width="2.1" fill="none" stroke-linecap="round"/>
-			`;
+			return (
+				lash(`M ${lx - 3.6} ${y} Q ${lx} ${y + 3} ${lx + 3.6} ${y}`, 2) +
+				lash(`M ${rx - 3.6} ${y} Q ${rx} ${y + 3} ${rx + 3.6} ${y}`, 2)
+			);
 		default:
 			// idle — eyebrows-relaxed, big round eyes
 			return `${open(lx)}${open(rx)}`;
@@ -444,13 +448,24 @@ function muzzleFeatures(state: SpriteState, p: Parts, g: Geom): string {
 }
 
 function cheeks(state: SpriteState, p: Parts, g: Geom): string {
-	const op = state === "sleeping" ? 0.3 : 0.42;
-	const r = state === "happy" ? 3.2 : 2.7;
-	const y = g.eyeY + 6;
-	const dx = g.eyeDx + 3.5;
+	// Soft blush: a radial gradient that fades to transparent, so there's no
+	// hard pink edge (and it sits gently over the tan cheek fur). Per-state id
+	// to stay unique across the sprites on a page.
+	const peak = state === "happy" ? 0.42 : state === "sleeping" ? 0.26 : 0.34;
+	const r = state === "happy" ? 4 : 3.4;
+	const y = g.eyeY + 5.5;
+	const dx = g.eyeDx + 3;
+	const gid = `blush-${state}`;
 	return `
-		<ellipse cx="${g.cx - dx}" cy="${y}" rx="${r}" ry="${r * 0.66}" fill="${p.blush}" opacity="${op}"/>
-		<ellipse cx="${g.cx + dx}" cy="${y}" rx="${r}" ry="${r * 0.66}" fill="${p.blush}" opacity="${op}"/>
+		<defs>
+			<radialGradient id="${gid}">
+				<stop offset="0%" stop-color="${p.blush}" stop-opacity="${peak}"/>
+				<stop offset="55%" stop-color="${p.blush}" stop-opacity="${peak * 0.45}"/>
+				<stop offset="100%" stop-color="${p.blush}" stop-opacity="0"/>
+			</radialGradient>
+		</defs>
+		<ellipse cx="${g.cx - dx}" cy="${y}" rx="${r}" ry="${r * 0.82}" fill="url(#${gid})"/>
+		<ellipse cx="${g.cx + dx}" cy="${y}" rx="${r}" ry="${r * 0.82}" fill="url(#${gid})"/>
 	`;
 }
 
