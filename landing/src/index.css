@@ -64,24 +64,8 @@
 	95% { transform: scaleY(0.1); }
 }
 
+/* The companion sprite is inline SVG now (see CompanionSprite.tsx), so it gets
+   a gentle breathe and no pixelation. */
 .sprite {
-	image-rendering: pixelated;
 	animation: breathe 2.6s ease-in-out infinite;
-}
-
-/* The sprite-sheet hero face animates through the 6 cells on a loop */
-@keyframes face-cycle {
-	0%, 12% { background-position: 0 0; }
-	14%, 26% { background-position: -384px 0; }   /* happy */
-	28%, 40% { background-position: -768px 0; }   /* hungry */
-	42%, 54% { background-position: -1152px 0; }  /* pill-time */
-	56%, 68% { background-position: -1536px 0; }  /* sad */
-	70%, 88% { background-position: -1920px 0; }  /* sleeping */
-	90%, 100% { background-position: 0 0; }
-}
-.face-cycle {
-	background-image: url("/companion-sprite.svg");
-	background-size: 2304px 384px;
-	background-position: 0 0;
-	animation: face-cycle 14s steps(1, end) infinite, breathe 2.6s ease-in-out infinite;
 }

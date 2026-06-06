@@ -75,8 +75,8 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{ mark: "timeline" },
 				", a ",
 				{ mark: "timetable" },
-				", and a place to ",
-				{ mark: "drop anything" },
+				", and your ",
+				{ mark: "exams & visits" },
 				".",
 			],
 			sub: "That's the whole product. Everything else — the graphs, the reminders, the AI your vet can talk to — grows out of these three.",
@@ -92,9 +92,9 @@ export const CONTENT: Record<Lang, LandingContent> = {
 					body: "A live schedule of every medicine and meal, with reminders that buzz your phone. Give a dose early or late and the schedule shifts to keep the interval — no math, no missed doses.",
 				},
 				{
-					kicker: "Assets",
-					title: "Drop in anything.",
-					body: "Upload a PDF, a photo, a vaccine card, a voice memo. The agent reads it and files it into the timeline for you — as an exam with charted values, a visit, a vaccine, or a note.",
+					kicker: "Exams & visits",
+					title: "Send it all, keep the context.",
+					body: "Upload exam PDFs and voice recordings of your vet visits. The agent reads them, turns the lab values into charts, and keeps the whole context on the timeline — nothing lost from one visit to the next.",
 				},
 			],
 		},
@@ -112,21 +112,9 @@ export const CONTENT: Record<Lang, LandingContent> = {
 			footer: "Either way, you bring the pet — Tama brings everything else.",
 		},
 		whatsInside: {
-			title: "What's inside.",
-			sub: "Nine things, one place — all working together because they're all about the same pet.",
+			title: "And then some.",
+			sub: "More that comes built in — all pulling in the same direction, because it's all about the same pet.",
 			features: [
-				{
-					title: "One continuous timeline",
-					body: "Every vet visit, vaccine, symptom, medicine, exam, and note in one chronological log. The whole story of your pet's life — so nothing about their health ever falls through the cracks.",
-				},
-				{
-					title: "Medicine timetable",
-					body: "A live schedule for every medicine and meal. Doses given early or late shift the schedule to keep the interval — no math, no missed doses.",
-				},
-				{
-					title: "Assets — drop anything",
-					body: "Upload any document, lab report, vaccine card, or recording. The agent reads it and files it into the timeline automatically — as an exam, a visit, a vaccine, or a note.",
-				},
 				{
 					title: "Lab exam graphs",
 					body: "Lab values are extracted and charted over time, so you and your vet can see a trend — hemoglobin recovering, kidney values holding — at a glance.",
@@ -148,8 +136,8 @@ export const CONTENT: Record<Lang, LandingContent> = {
 					body: "One evolving paragraph — where your pet stands right now, what's active, what to watch — regenerated from the whole timeline whenever you ask.",
 				},
 				{
-					title: "Pixel companion",
-					body: "Add it to your home screen. A tiny pixel face of your pet that reacts to the schedule — sleeping at night, looking concerned when meds are late.",
+					title: "A companion on your home screen",
+					body: "A little face of your pet, drawn from its photo, that reacts to the schedule — asleep at night, a worried look when meds run late.",
 				},
 			],
 		},
@@ -165,7 +153,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{
 					n: "02",
 					title: "Introduce your pet",
-					body: "The agent asks a few friendly questions — name, breed, a photo, your vet's notes. It even draws a little pixel version of them from the photo.",
+					body: "The agent asks a few friendly questions — name, breed, a photo, your vet's notes. It even draws a little cartoon version of them from the photo.",
 				},
 				{
 					n: "03",
@@ -229,7 +217,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 					a: "Each pet gets its own Tama — so you'd set one up per pet. They stay completely separate, which keeps each one simple and personal. The agent can set up another one the same easy way.",
 				},
 				{
-					q: "What if my pet's pixel face looks off?",
+					q: "What if my pet's face looks off?",
 					a: "Just give it another photo and ask for a new one. You can re-do it as many times as you like until it feels like them.",
 				},
 			],
@@ -260,8 +248,8 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{ mark: "linha do tempo" },
 				", uma ",
 				{ mark: "agenda de remédios" },
-				", e um lugar pra ",
-				{ mark: "jogar qualquer coisa" },
+				", e os ",
+				{ mark: "exames e consultas" },
 				".",
 			],
 			sub: "É o produto inteiro. Todo o resto — os gráficos, os lembretes, a IA com quem o seu veterinário conversa — nasce dessas três coisas.",
@@ -277,9 +265,9 @@ export const CONTENT: Record<Lang, LandingContent> = {
 					body: "Uma agenda ao vivo de cada remédio e refeição, com lembretes que avisam no seu celular. Deu uma dose adiantada ou atrasada e a agenda se ajusta pra manter o intervalo — sem conta de cabeça, sem dose esquecida.",
 				},
 				{
-					kicker: "Documentos",
-					title: "Jogue qualquer coisa.",
-					body: "Suba um PDF, uma foto, uma carteira de vacinação, um áudio. O agente lê e arquiva na linha do tempo pra você — como exame com valores no gráfico, consulta, vacina ou anotação.",
+					kicker: "Exames & consultas",
+					title: "Mande tudo, guarde o contexto.",
+					body: "Envie PDFs de exames e áudios das consultas. O agente lê, transforma os valores em gráficos e guarda o contexto inteiro na linha do tempo — nada se perde de uma visita pra outra.",
 				},
 			],
 		},
@@ -297,44 +285,32 @@ export const CONTENT: Record<Lang, LandingContent> = {
 			footer: "De qualquer jeito, você traz o pet — o Tama traz o resto.",
 		},
 		whatsInside: {
-			title: "O que tem dentro.",
-			sub: "Nove coisas, um lugar só — funcionando juntas porque são todas sobre o mesmo pet.",
+			title: "E ainda mais.",
+			sub: "O que já vem junto — tudo puxando pro mesmo lugar, porque é tudo sobre o mesmo pet.",
 			features: [
 				{
-					title: "Uma linha do tempo contínua",
-					body: "Cada consulta, vacina, sintoma, remédio, exame e anotação num só registro cronológico. A história inteira da vida do seu pet — pra que nada sobre a saúde dele passe batido.",
-				},
-				{
-					title: "Agenda de remédios",
-					body: "Uma agenda ao vivo de cada remédio e refeição. Doses dadas adiantadas ou atrasadas reajustam a agenda pra manter o intervalo — sem conta, sem dose perdida.",
-				},
-				{
-					title: "Documentos — jogue qualquer coisa",
-					body: "Suba qualquer documento, exame, carteira de vacina ou áudio. O agente lê e arquiva na linha do tempo automaticamente — como exame, consulta, vacina ou anotação.",
-				},
-				{
 					title: "Gráficos de exames",
-					body: "Os valores dos exames são extraídos e plotados ao longo do tempo, pra você e o veterinário verem a tendência — hemoglobina se recuperando, função renal estável — num olhar.",
+					body: "Os valores dos exames são extraídos e viram gráfico ao longo do tempo, pra você e o veterinário verem a tendência — a hemoglobina se recuperando, a função renal estável — num relance.",
 				},
 				{
 					title: "Uma IA com quem o veterinário conversa",
-					body: "Seu veterinário (ou uma segunda opinião) pode perguntar ao agente sobre o histórico completo do seu pet em linguagem natural, e colaborar no caso com o registro inteiro à frente.",
+					body: "Seu veterinário (ou uma segunda opinião) pode perguntar ao agente sobre o histórico completo do seu pet em linguagem natural, e cuidar do caso com o registro inteiro à frente.",
 				},
 				{
 					title: "Lembretes no celular",
-					body: "Quando uma dose está na hora, seu celular ou laptop vibra. Funciona pelo app na tela inicial no iOS e no Android.",
+					body: "Quando chega a hora de uma dose, seu celular vibra. Funciona pelo app na tela inicial, no iOS e no Android.",
 				},
 				{
 					title: "Pesquisa veterinária com fontes",
-					body: "Pergunte sobre interações de medicamentos, efeitos colaterais ou o que esperar — as respostas são buscadas na literatura com os remédios e o histórico reais do seu pet anexados.",
+					body: "Pergunte sobre interações de medicamentos, efeitos colaterais ou o que esperar — as respostas vêm da literatura, com os remédios e o histórico reais do seu pet já anexados.",
 				},
 				{
-					title: "Resumo de saúde vivo",
-					body: "Um parágrafo que evolui — onde o seu pet está agora, o que está ativo, o que observar — regerado a partir da linha do tempo inteira sempre que você pedir.",
+					title: "Resumo de saúde que evolui",
+					body: "Um parágrafo vivo — como o seu pet está agora, o que está em aberto, o que observar — refeito a partir da linha do tempo inteira sempre que você pedir.",
 				},
 				{
-					title: "Companheiro pixelado",
-					body: "Adicione à tela inicial. Um rostinho em pixel do seu pet que reage à agenda — dormindo de noite, preocupado quando o remédio atrasa.",
+					title: "Um companheiro na tela inicial",
+					body: "Um rostinho do seu pet, desenhado a partir da foto, que reage à rotina — dormindo de noite, com carinha de preocupado quando o remédio atrasa.",
 				},
 			],
 		},
@@ -350,7 +326,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 				{
 					n: "02",
 					title: "Apresente o seu pet",
-					body: "O agente faz algumas perguntas amigáveis — nome, raça, uma foto, as anotações do veterinário. Ele até desenha uma versão pixelada do seu pet a partir da foto.",
+					body: "O agente faz algumas perguntas amigáveis — nome, raça, uma foto, as anotações do veterinário. Ele até desenha uma versão do seu pet a partir da foto.",
 				},
 				{
 					n: "03",
@@ -414,7 +390,7 @@ export const CONTENT: Record<Lang, LandingContent> = {
 					a: "Cada pet ganha o seu próprio Tama — então você configura um por pet. Eles ficam totalmente separados, o que mantém cada um simples e pessoal. O agente configura outro do mesmo jeito fácil.",
 				},
 				{
-					q: "E se o rostinho em pixel do meu pet ficar estranho?",
+					q: "E se o rostinho do meu pet ficar estranho?",
 					a: "É só mandar outra foto e pedir um novo. Pode refazer quantas vezes quiser até ficar com a cara dele.",
 				},
 			],

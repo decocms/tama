@@ -9,6 +9,7 @@
 // components are reused verbatim for either language. Adding a locale = add
 // one entry to CONTENT; the components don't change.
 
+import { CompanionSprite } from "./CompanionSprite.tsx";
 import { type LandingContent, type Lang, type Segment } from "./content.ts";
 
 const REPO_URL = "https://github.com/decocms/tama";
@@ -25,15 +26,12 @@ const CONCEPT_META = [
 	{ emoji: "📥", color: "#c9b6f0" },
 ];
 const FEATURE_META = [
-	{ emoji: "📜", color: "#b6e3c8" },
-	{ emoji: "💊", color: "#ffbd8e" },
-	{ emoji: "📥", color: "#c9b6f0" },
 	{ emoji: "📈", color: "#dff5dc" },
 	{ emoji: "🩺", color: "#fde0e0" },
 	{ emoji: "🔔", color: "#fff1d6" },
 	{ emoji: "🔬", color: "#b6e3c8" },
 	{ emoji: "🧠", color: "#ffbd8e" },
-	{ emoji: "🐣", color: "#c9b6f0" },
+	{ emoji: "🐾", color: "#c9b6f0" },
 ];
 const PRIVACY_EMOJI = ["🔒", "🆓", "🛠️"];
 
@@ -149,7 +147,7 @@ function Hero({ c, lang }: { c: LandingContent; lang: Lang }) {
 				</div>
 			</nav>
 
-			<div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-10 md:gap-16 items-center">
+			<div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-[1.45fr_1fr] gap-10 md:gap-12 items-center">
 				<div>
 					<div className="inline-block mb-5 text-[11px] font-bold uppercase tracking-[0.22em] text-[#2a1f17]/55">
 						{c.hero.badge}
@@ -179,12 +177,12 @@ function Hero({ c, lang }: { c: LandingContent; lang: Lang }) {
 
 				<div className="flex items-center justify-center">
 					<div className="relative">
-						<div
-							className="face-cycle sprite"
-							style={{ width: 384, height: 384 }}
-							aria-hidden
-						/>
-						<div className="absolute -bottom-4 left-1/2 -translate-x-1/2 brut bg-[#b6e3c8] border-2 border-[#2a1f17] px-3 py-1 text-xs font-bold whitespace-nowrap">
+						{/* Pixel, rendered by the app's own SVG sprite renderer. Pale
+						    disc behind it so the white fur reads on the cream page. */}
+						<div className="brut rounded-full bg-[#e6ddca] border-2 border-[#2a1f17] w-56 h-56 md:w-64 md:h-64 flex items-center justify-center overflow-hidden">
+							<CompanionSprite className="w-[82%] h-[82%]" />
+						</div>
+						<div className="absolute -bottom-3 left-1/2 -translate-x-1/2 brut bg-[#b6e3c8] border-2 border-[#2a1f17] px-3 py-1 text-xs font-bold whitespace-nowrap">
 							{c.hero.petTag}
 						</div>
 					</div>
@@ -348,10 +346,9 @@ function LiveDemo({ c }: { c: LandingContent }) {
 				</div>
 				<div className="brut border-2 border-[#2a1f17] bg-[#fff8ee] p-4 aspect-video flex items-center justify-center">
 					<div className="text-center">
-						<div
-							className="face-cycle sprite mx-auto mb-2"
-							style={{ width: 128, height: 128 }}
-						/>
+						<div className="rounded-full bg-[#e6ddca] w-28 h-28 mx-auto mb-2 flex items-center justify-center overflow-hidden">
+							<CompanionSprite className="w-[82%] h-[82%]" />
+						</div>
 						<p className="text-xs text-[#2a1f17]/70 font-mono">
 							{c.liveDemo.caption}
 						</p>
