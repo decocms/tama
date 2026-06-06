@@ -68,10 +68,10 @@ function Hero() {
 						better life.
 					</h1>
 					<p className="text-lg md:text-xl text-[#2a1f17]/80 leading-snug mb-8 max-w-md">
-						Keep your pet's exams, medicines, and vet notes in one place —
-						and just talk to it like you'd text a friend who's great with
-						animals. It's free, it's yours, and the agent sets it all up
-						for you.
+						A complete health record for your pet — every visit, vaccine,
+						medicine, and lab result in one continuous timeline. And an AI
+						that knows the whole history, so you (and your vet) can
+						understand your pet holistically and decide together what's next.
 					</p>
 					<div className="flex flex-wrap gap-3">
 						<a
@@ -164,58 +164,58 @@ function TwoPaths() {
 
 const FEATURES = [
 	{
+		emoji: "📜",
+		color: "#b6e3c8",
+		title: "One continuous timeline",
+		body: "Every vet visit, vaccine, symptom, medicine, exam, and note in one chronological log. The whole story of your pet's life — so nothing about their health ever falls through the cracks.",
+	},
+	{
 		emoji: "💊",
 		color: "#ffbd8e",
 		title: "Medicine timetable",
-		body: "Confirmed prescriptions drive a live timetable. Doses given early or late shift the schedule to keep the interval — no math required.",
+		body: "A live schedule for every medicine and meal. Doses given early or late shift the schedule to keep the interval — no math, no missed doses.",
+	},
+	{
+		emoji: "📥",
+		color: "#c9b6f0",
+		title: "Assets — drop anything",
+		body: "Upload any document, lab report, vaccine card, or recording. The agent reads it and files it into the timeline automatically — as an exam, a visit, a vaccine, or a note.",
 	},
 	{
 		emoji: "📈",
-		color: "#b6e3c8",
+		color: "#dff5dc",
 		title: "Lab exam graphs",
-		body: "Upload exam PDFs or photos. Claude vision extracts every parameter, maps them to a canonical taxonomy, and charts evolution over time.",
+		body: "Lab values are extracted and charted over time, so you and your vet can see a trend — hemoglobin recovering, kidney values holding — at a glance.",
 	},
 	{
-		emoji: "📋",
-		color: "#c9b6f0",
-		title: "Prescription extraction",
-		body: "Snap a photo of a vet whiteboard or upload a PDF. Vision extracts medications + meals with dosing into a draft you review and confirm.",
-	},
-	{
-		emoji: "🎙",
+		emoji: "🩺",
 		color: "#fde0e0",
-		title: "Voice notes → transcripts",
-		body: "Record audio in chat, get a transcript and an AI summary. Apply the summary to episode history with one click.",
+		title: "An AI your vet can talk to",
+		body: "Your vet (or a second opinion) can ask the agent about your pet's full history in plain language, and collaborate on the case with the complete record in front of them.",
 	},
 	{
 		emoji: "🔔",
 		color: "#fff1d6",
 		title: "Push reminders",
-		body: "When a dose is due, your phone or laptop buzzes. Cron-driven, idempotent, works from the PWA on iOS + Android.",
+		body: "When a dose is due, your phone or laptop buzzes. Works from the home-screen app on iOS + Android.",
 	},
 	{
 		emoji: "🔬",
-		color: "#dff5dc",
+		color: "#b6e3c8",
 		title: "Grounded vet research",
-		body: "Ask drug interaction, side effect, or treatment questions in plain English. Perplexity searches the literature with your pet's active meds attached as context.",
+		body: "Ask about drug interactions, side effects, or what to expect — answers are searched against the literature with your pet's actual meds and history attached.",
 	},
 	{
 		emoji: "🧠",
 		color: "#ffbd8e",
-		title: "Episode insights",
-		body: "Each care episode gets an AI-generated bullet summary: status, what's working, what to watch for. Regenerate any time.",
-	},
-	{
-		emoji: "✨",
-		color: "#c9b6f0",
-		title: "AI breed research",
-		body: "When you adopt, the agent looks up your pet's breed, age, and known conditions. Saves findings + citations to the profile, used to ground every other tool.",
+		title: "Living health summary",
+		body: "One evolving paragraph — where your pet stands right now, what's active, what to watch — regenerated from the whole timeline whenever you ask.",
 	},
 	{
 		emoji: "🐣",
-		color: "#b6e3c8",
+		color: "#c9b6f0",
 		title: "Pixel companion",
-		body: "Add /companion to your home screen. A tiny pixel face of your pet that reacts to the schedule — sleeping at night, looking concerned when meds are late.",
+		body: "Add it to your home screen. A tiny pixel face of your pet that reacts to the schedule — sleeping at night, looking concerned when meds are late.",
 	},
 ];
 

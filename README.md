@@ -42,23 +42,28 @@ and do it by hand — every step is a real shell command.
 
 - **Cloudflare Worker** (`api/main.cf.ts`) — MCP server, REST endpoints,
   cron-driven push notifications, static asset serving.
-- **D1** (`api/db/schema.ts`) — singleton `pets` row + episodes / notes /
-  prescriptions / doses / schedule_state / recordings / exams / metrics.
-  Accessed via Drizzle ORM.
-- **R2** — uploaded files (prescription photos, exam PDFs, audio chunks,
-  per-pet sprite pack).
+- **D1** (`api/db/schema.ts`) — singleton `pets` row + notes / prescriptions /
+  doses / schedule_state / recordings / exams / metrics / vet_visits /
+  vaccines / symptoms. Accessed via Drizzle ORM.
+- **R2** — uploaded files (the Assets library: exam PDFs, vaccine cards,
+  audio chunks, per-pet sprite pack).
 - **Cloudflare AI Gateway** — routes Anthropic (vision extraction, exam
-  parsing, character sheet) and Perplexity (vet research). No API keys
-  live in the Worker; the gateway holds BYOK.
-- **Workers AI** — img2img for the sprite pipeline. Free tier covers a
-  one-time adopt run.
-- **React UI** (`web/`) — bundled to a single HTML by Vite. Dashboard,
-  exams page, episode dashboard, companion view all served from the
-  same Worker.
+  parsing, asset classification, character sheet) and Perplexity (vet
+  research). No API keys live in the Worker; the gateway holds BYOK.
+- **Workers AI** — img2img for the raster sprite pipeline. Free tier covers a
+  one-time adopt run. (The procedural SVG sprite path is instant + free.)
+- **React UI** (`web/`) — bundled to a single HTML by Vite. Three top-level
+  apps (Pet / Timeline / Timetable) + exams, companion, and sprite-lab, all
+  served from the same Worker.
 
-The repo is single-pet by design — every history table is keyed on
-`episode_id`; episodes hang off the singleton `pet_self`. No multi-tenant
-plumbing, no pet picker, no "which pet" question to ever ask.
+The repo is single-pet by design — there are no episodes; every record hangs
+off the singleton `pet_self` and the **timeline** is a query-time merge across
+the typed tables. No multi-tenant plumbing, no pet picker, no "which pet"
+question to ever ask.
+
+To explore with realistic data: `bun run seed:example` loads a synthetic
+example pet ("Pixel", an anemia-recovery case). To pull template updates into
+a fork: `bun run update` (see [docs/UPDATING.md](./docs/UPDATING.md)).
 
 ## Local development
 
@@ -114,30 +119,28 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 
 | Tool                        | What it does                                  |
 | --------------------------- | --------------------------------------------- |
-| `pet_profile`               | Read the singleton pet                        |
-| `pet_update`                | Patch pet fields                              |
-| `pet_enrich`                | Perplexity research → enrichmentJson          |
-| `pet_sprite_generate`       | Two-pass img2img → 6-state sprite pack in R2  |
-| `episode_start` / `_end`    | Lifecycle for a care episode                  |
-| `episode_get` / `_list`     | Read                                          |
-| `episode_add_note`          | Free-text or chatlog note                     |
-| `episode_update` / `_delete`| Patch / soft-delete                           |
-| `prescription_upload`       | Vision-extract a photo → draft prescription   |
-| `prescription_create`       | Structured (no OCR) prescription              |
-| `prescription_update`       | Edit / confirm / drop schedule items          |
-| `prescription_list` / `_delete` | Read / hard-delete (cascades to schedule)|
+| `app_pet` / `app_timeline` / `app_timetable` | The three top-level apps      |
+| `pet_profile` / `pet_update`| Read / patch the singleton pet                |
+| `pet_enrich`                | Perplexity breed/condition research           |
+| `pet_summary_refresh`       | Regenerate the one evolving health summary    |
+| `pet_sprite_generate` / `pet_sprite_svg_generate` | Raster / SVG 6-state sprite pack |
+| `sprite_compare`            | Both sprite methods side by side (sprite-lab) |
+| `timeline_get`              | The merged continuous timeline                |
+| `timeline_note_add`         | Add a free-form timeline note                 |
+| `vet_visit_add` / `_list`   | Log / read vet visits                         |
+| `vaccine_add` / `_list`     | Log / read vaccinations                       |
+| `symptom_add` / `_resolve` / `_list` | Log / resolve / read symptoms        |
+| `asset_upload` / `asset_list` | Drop any file → classified into the timeline |
+| `prescription_upload` / `_create` / `_update` / `_list` / `_delete` | Prescriptions |
 | `timetable_get`             | Derived live timetable for next N hours       |
 | `dose_log` / `dose_update`  | Log given / skipped / undone                  |
 | `schedule_state_list` / `_delete` | Read / remove live item state           |
 | `timetable_snooze` / `_set_anchor` / `_set_duration` / `_stop_item` | Per-item adjustments |
 | `recording_*`               | Audio chunked upload → whisper → summary      |
-| `exam_upload` / `_paste`    | PDF/photo/text → AI-extracted metrics         |
-| `exam_get` / `_list` / `_update` / `_delete` | Exam CRUD                    |
+| `exam_upload` / `_paste` / `_get` / `_list` / `_update` / `_delete` | Lab exams |
 | `exam_metric_series`        | Chart-shaped per-metric time series           |
-| `episode_insights`          | LLM-generated bullet summary of the episode   |
-| `vet_research`              | Perplexity with auto-attached pet + episode context |
+| `vet_research`              | Perplexity with auto-attached pet + meds context |
 | `push_*`                    | VAPID key, subscribe, unsubscribe, test       |
-| `dashboard`                 | Studio inline dashboard surface               |
 
 ## Tests
 

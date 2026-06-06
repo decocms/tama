@@ -17,6 +17,8 @@
 		"db:studio:local": "drizzle-kit studio",
 		"sync:to-prod": "bun run scripts/sync-to-prod.ts",
 		"sync:from-prod": "bun run scripts/sync-from-prod.ts",
+		"seed:example": "bun run scripts/seed-example.ts",
+		"update": "bun run scripts/update.ts",
 		"db:gc": "bun run scripts/db-gc.ts",
 		"db:gc:dry": "bun run scripts/db-gc.ts --dry-run",
 		"ci:check": "bunx biome ci .",

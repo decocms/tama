@@ -2,6 +2,14 @@
 
 // scripts/migrate-beto.ts
 //
+// ⚠ OUTDATED: this script was written for the episode-era schema (it filters
+// episodes and rewrites episode subtrees). The schema is now episode-free
+// (see migration 0014 — everything keys to `pet_self`, no episodes). Before
+// running Beto's real migration, rework this to map his legacy episode-shaped
+// prod data into the timeline shape: drop the episode filtering, re-key every
+// child table's pet_id to 'pet_self', and ignore episodes/episode_insights.
+// Kept as a reference for the data-mirroring + R2 + verification scaffolding.
+//
 // One-off migration: take Beto's data from the legacy myvet prod deploy and
 // reshape it for a fresh tama-shaped target deploy. Used exactly once during
 // the rebrand cutover — Beto's medical history is the only valuable data on

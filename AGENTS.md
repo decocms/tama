@@ -20,7 +20,8 @@ load-bearing front door; once steps 1–3 are done it stops being relevant and
 A single-pet care agent on Cloudflare Workers + D1 + R2. The deployed worker
 exposes:
 
-- `/` — the dashboard (pet profile, episodes, exams, prescriptions, timetable).
+- `/` — the Pet app (profile, health summary, companion, Assets library).
+  Plus `/timeline` (continuous life log) and `/timetable` (medicine schedule).
 - `/companion` — an ambient pixel-companion view, intended as a PWA `start_url`.
 - `/mcp` — the MCP server endpoint Studio imports to get chat-driven admin.
 - Cron-driven push notifications for medication reminders.
