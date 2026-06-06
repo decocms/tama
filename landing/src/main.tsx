@@ -27,8 +27,8 @@ const c = CONTENT[lang];
 document.documentElement.lang = lang === "pt" ? "pt-BR" : "en";
 document.title =
 	lang === "pt"
-		? "Tama — um agente pro seu pet viver melhor"
-		: "Tama — an agent for your pet to live a better life";
+		? "Tama — inteligência pro seu pet viver melhor"
+		: "Tama — intelligence for your pet to live better";
 const metaDesc = document.querySelector('meta[name="description"]');
 if (metaDesc) metaDesc.setAttribute("content", c.hero.sub);
 

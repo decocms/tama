@@ -61,8 +61,8 @@ export const CONTENT: Record<Lang, LandingContent> = {
 		nav: { demo: "Demo", github: "GitHub", cta: "Create yours →", switchTo: "PT" },
 		hero: {
 			badge: "Free · Private · Set up in minutes",
-			title: ["An agent for ", { mark: "your pet" }, " to live a better life."],
-			sub: "A complete health record for your pet — every visit, vaccine, medicine, and lab result in one continuous timeline. And an AI that knows the whole history, so you (and your vet) can understand your pet holistically and decide together what's next.",
+			title: ["Intelligence for ", { mark: "your pet" }, " to live better."],
+			sub: "Create an AI agent that looks after your pet alongside you. It keeps and actually understands their whole health history — every visit, vaccine, medicine, and lab result — and becomes a copilot that helps you and your vet catch problems early and treat with more precision.",
 			ctaPrimary: "Create your pet's agent, free →",
 			ctaSecondary: "See the live demo",
 			footnote: "Free forever · Your data lives in your own Cloudflare account",
@@ -246,8 +246,8 @@ export const CONTENT: Record<Lang, LandingContent> = {
 		nav: { demo: "Demo", github: "GitHub", cta: "Crie o seu →", switchTo: "EN" },
 		hero: {
 			badge: "Grátis · Privado · Pronto em minutos",
-			title: ["Um agente pro ", { mark: "seu pet" }, " viver melhor."],
-			sub: "Um histórico de saúde completo do seu pet — cada consulta, vacina, remédio e exame numa única linha do tempo contínua. E uma IA que conhece toda a história, pra você (e o seu veterinário) entenderem o seu pet por inteiro e decidirem juntos o próximo passo.",
+			title: ["Inteligência pro ", { mark: "seu pet" }, " viver melhor."],
+			sub: "Crie um agente de IA que cuida do seu pet junto com você. Ele guarda e realmente entende todo o histórico de saúde — cada consulta, vacina, remédio e exame — e vira um copiloto que ajuda você e o veterinário a prevenir problemas antes e tratar com mais precisão.",
 			ctaPrimary: "Crie o agente do seu pet, grátis →",
 			ctaSecondary: "Ver a demo ao vivo",
 			footnote: "Grátis pra sempre · Seus dados ficam na sua própria conta Cloudflare",
