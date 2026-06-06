@@ -88,6 +88,27 @@ export function annotatePendingReview(
 	});
 }
 
+// Platelets are conventionally charted in ×10³/µL (value ~50–1000). Labs that
+// report the raw count (~50,000–1,000,000) make one exam's value 1000× another's
+// and wreck the trend. Normalize the obvious raw counts to ×10³ (value + ref)
+// so platelets stay comparable across labs. (>5000 is unambiguously a raw count.)
+export function normalizeUnits(
+	metrics: ExtractedMetric[],
+): ExtractedMetric[] {
+	return metrics.map((m) => {
+		if (m.canonicalKey === "platelets" && (m.valueNum ?? 0) > 5000) {
+			return {
+				...m,
+				valueNum: (m.valueNum as number) / 1000,
+				refLow: m.refLow != null ? m.refLow / 1000 : m.refLow,
+				refHigh: m.refHigh != null ? m.refHigh / 1000 : m.refHigh,
+				unit: m.unit && /10\^?3|x10|mil/i.test(m.unit) ? m.unit : "10³/µL",
+			};
+		}
+		return m;
+	});
+}
+
 export async function extractExam(
 	env: Env,
 	input: ExtractExamInput,
@@ -186,7 +207,7 @@ export async function extractExam(
 
 	return {
 		exam: result.exam,
-		metrics: annotatePendingReview(result.metrics),
+		metrics: annotatePendingReview(normalizeUnits(result.metrics)),
 		rawAiText,
 	};
 }

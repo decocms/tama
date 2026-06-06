@@ -37,7 +37,10 @@ const PALETTE = [
 
 function fmtTick(iso: string): string {
 	try {
-		const d = new Date(iso);
+		// performedAt is a date-only string ("2026-06-05"); `new Date(that)`
+		// parses as UTC midnight and shifts a day back in negative-offset zones.
+		// Pin to local noon so the label shows the actual exam date.
+		const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
 		return d.toLocaleDateString(undefined, {
 			month: "short",
 			day: "numeric",
