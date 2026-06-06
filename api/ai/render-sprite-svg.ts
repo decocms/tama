@@ -202,20 +202,22 @@ function geomFor(character: CharacterSheet): Geom {
 	const shape = (character.headShape ?? "").toLowerCase();
 	const long = shape.includes("long") || shape.includes("narrow");
 	const boxy = shape.includes("boxy") || shape.includes("square") || shape.includes("broad");
-	const domeRx = long ? 15.5 : boxy ? 19 : 17.5;
-	const domeRy = long ? 16 : boxy ? 14.5 : 15.5;
+	// Rounder face: a near-circular dome that mostly contains the muzzle, so the
+	// snout reads as part of a round head (not a long face with a Santa beard).
+	const domeRx = long ? 16.5 : boxy ? 19.5 : 18;
+	const domeRy = long ? 17.5 : boxy ? 16 : 16.5;
 	return {
 		cx: 32,
-		domeCy: 27,
+		domeCy: 28,
 		domeRx,
 		domeRy,
-		muzzleCy: 41,
-		muzzleRx: boxy ? 11.5 : 10,
-		muzzleRy: 8.5,
-		eyeY: 29.5,
-		eyeDx: 8.8,
-		noseY: 39,
-		mouthY: 44,
+		muzzleCy: 40,
+		muzzleRx: boxy ? 11 : 9.5,
+		muzzleRy: 7.5,
+		eyeY: 30,
+		eyeDx: 9,
+		noseY: 38.5,
+		mouthY: 43,
 	};
 }
 
@@ -228,17 +230,20 @@ function furHalo(g: Geom, color: string): string {
 	for (let i = 0; i < n; i++) {
 		const a = (Math.PI * 2 * i) / n - Math.PI / 2;
 		const s = Math.sin(a);
-		const wave = i % 2 === 0 ? 1 : 0.45; // gentle, not jagged
-		// How far the coat pools: minimal on top, fullest at sides + bottom.
-		const region = s < -0.2 ? 0.4 : s > 0.3 ? 1 : 0.8;
-		const out = 1.2 + 3.4 * region * wave;
+		const wave = i % 2 === 0 ? 1 : 0.5; // gentle, not jagged
+		// A tight fur outline hugging the head — fullest at the cheeks, minimal
+		// at the chin (so it doesn't become a Santa beard) and at the crown
+		// (tucks behind the ears).
+		const region =
+			s < -0.2 ? 0.35 : s > 0.55 ? 0.4 : s > 0.15 ? 0.75 : 1;
+		const out = 0.8 + 2.1 * region * wave;
 		const rx = g.domeRx + 1 + out;
-		const ry = g.domeRy + 3 + out * (s > 0.3 ? 1.4 : 1); // longer chest fluff
+		const ry = g.domeRy + 1.5 + out;
 		const x = g.cx + Math.cos(a) * rx;
-		const y = g.domeCy + 5 + s * ry;
+		const y = g.domeCy + 2.5 + s * ry;
 		pts.push(`${r2(x)},${r2(y)}`);
 	}
-	return `<polygon points="${pts.join(" ")}" fill="${color}" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>`;
+	return `<polygon points="${pts.join(" ")}" fill="${color}" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>`;
 }
 
 // ---- ears ----
@@ -279,11 +284,11 @@ function ears(
 	// One canonical ear drawn around a local (0,0) base anchor pointing up and
 	// leaning slightly outward; the right ear is the SAME path mirrored with
 	// scale(-1,1) so the two are guaranteed-symmetric (no twisting).
-	const w = big ? 9 : 7; // half-width at base
-	const h = big ? 19 : 15; // height above the dome
-	const baseY = g.domeCy - g.domeRy * 0.5 + dy;
-	const lbx = g.cx - g.domeRx * 0.6;
-	const rbx = g.cx + g.domeRx * 0.6;
+	const w = big ? 10.5 : 8; // half-width at base
+	const h = big ? 23 : 18; // height above the dome
+	const baseY = g.domeCy - g.domeRy * 0.52 + dy;
+	const lbx = g.cx - g.domeRx * 0.64;
+	const rbx = g.cx + g.domeRx * 0.64;
 	const outer = `M ${r2(-w * 0.7)} 2 Q ${r2(-w)} ${r2(-h * 0.5)} ${r2(-w * 0.5)} ${r2(-h)} Q ${r2(w * 0.15)} ${r2(-h * 0.62)} ${r2(w * 0.62)} 2 Z`;
 	const inner = `M ${r2(-w * 0.34)} 0 Q ${r2(-w * 0.5)} ${r2(-h * 0.48)} ${r2(-w * 0.28)} ${r2(-h * 0.74)} Q ${r2(w * 0.06)} ${r2(-h * 0.5)} ${r2(w * 0.3)} 0 Z`;
 	const back = t.longCoat
@@ -310,13 +315,19 @@ function coat(p: PartsX, g: Geom): string {
 	const cx = g.cx;
 	const top = g.domeCy - g.domeRy;
 	if (p.hasCapEnabled) {
-		// Dark cap arcing over the top of the head, dipping low at the temples.
+		// Solid dark cap over the top of the head, lower edge a smooth shallow
+		// arc that frames the eyes (no central widow's-peak spike).
 		out.push(
-			`<path d="M ${cx - g.domeRx * 0.96} ${g.domeCy + 1} Q ${cx - g.domeRx} ${top + 1} ${cx} ${top - 1} Q ${cx + g.domeRx} ${top + 1} ${cx + g.domeRx * 0.96} ${g.domeCy + 1} Q ${cx + g.domeRx * 0.5} ${g.domeCy + 5} ${cx} ${g.domeCy + 4} Q ${cx - g.domeRx * 0.5} ${g.domeCy + 5} ${cx - g.domeRx * 0.96} ${g.domeCy + 1} Z" fill="${p.patch}"/>`,
+			`<path d="M ${cx - g.domeRx * 0.97} ${g.domeCy + 2} Q ${cx - g.domeRx} ${top + 1} ${cx} ${top - 1} Q ${cx + g.domeRx} ${top + 1} ${cx + g.domeRx * 0.97} ${g.domeCy + 2} Q ${cx} ${g.domeCy + 5} ${cx - g.domeRx * 0.97} ${g.domeCy + 2} Z" fill="${p.patch}"/>`,
 		);
-		// White blaze down the centre of the forehead.
+		// White blaze — a wedge that OPENS UPWARD: a point near the muzzle that
+		// widens to a rounded top on the forehead (real blaze direction; the old
+		// one narrowed upward).
+		const bw = 5;
+		const byTop = g.domeCy - g.domeRy * 0.45;
+		const byBot = g.domeCy + 8.5;
 		out.push(
-			`<path d="M ${cx} ${top + 2} Q ${cx - 3.4} ${g.domeCy} ${cx - 2.6} ${g.domeCy + 7} Q ${cx} ${g.domeCy + 10} ${cx + 2.6} ${g.domeCy + 7} Q ${cx + 3.4} ${g.domeCy} ${cx} ${top + 2} Z" fill="${p.muzzle}"/>`,
+			`<path d="M ${cx} ${byBot} C ${cx - 2} ${g.domeCy + 3} ${cx - bw} ${r2(byTop + 5)} ${cx - bw} ${r2(byTop)} Q ${cx} ${r2(byTop - 2.6)} ${cx + bw} ${r2(byTop)} C ${cx + bw} ${r2(byTop + 5)} ${cx + 2} ${g.domeCy + 3} ${cx} ${byBot} Z" fill="${p.muzzle}"/>`,
 		);
 	}
 	// Tan cheek fur just below the mask (black-and-tan / tricolor). Drawn before
@@ -329,9 +340,13 @@ function coat(p: PartsX, g: Geom): string {
 			`<ellipse cx="${cx + g.muzzleRx}" cy="${cy}" rx="5.6" ry="4.6" fill="${p.tan}" opacity="0.6"/>`,
 		);
 	}
-	// Light muzzle/chin area (always — gives the snout definition).
+	// Light muzzle/chin area (always — gives the snout definition), with a thin
+	// shaded outline + a soft under-shadow so the snout is delimited from the
+	// face and the fur ruff behind it.
 	out.push(
-		`<ellipse cx="${cx}" cy="${g.muzzleCy + 0.5}" rx="${g.muzzleRx - 0.5}" ry="${g.muzzleRy - 0.5}" fill="${p.muzzle}" opacity="0.92"/>`,
+		`<ellipse cx="${cx}" cy="${g.muzzleCy + 0.5}" rx="${g.muzzleRx}" ry="${g.muzzleRy}" fill="${p.muzzle}"/>`,
+		`<ellipse cx="${cx}" cy="${g.muzzleCy + 0.5}" rx="${g.muzzleRx}" ry="${g.muzzleRy}" fill="none" stroke="${p.bodyShade}" stroke-width="0.6" opacity="0.5"/>`,
+		`<path d="M ${r2(cx - g.muzzleRx * 0.82)} ${r2(g.muzzleCy + 2)} Q ${cx} ${r2(g.muzzleCy + g.muzzleRy + 2.5)} ${r2(cx + g.muzzleRx * 0.82)} ${r2(g.muzzleCy + 2)}" fill="none" stroke="${p.bodyShade}" stroke-width="1" opacity="0.4" stroke-linecap="round"/>`,
 	);
 	// Tan eyebrow dots above the eyes (on the dark mask) — the "yellowish
 	// eyebrows". Tilted slightly outward like real brow points.
