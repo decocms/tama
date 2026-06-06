@@ -523,6 +523,10 @@ export function renderSpriteSvg(
 	const gradId = `head-${state}`;
 	const haloColor = lighten(p.body, 0.08);
 
+	// The composition (esp. tall ears) sits high in the 0..64 box. Nudge the
+	// whole drawing down so the ears aren't clipped at the top and the slack is
+	// shared top/bottom rather than pooling under the chin.
+	const shift = 7;
 	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet">
 <defs>
 <radialGradient id="${gradId}" cx="42%" cy="34%" r="72%">
@@ -531,6 +535,7 @@ export function renderSpriteSvg(
 <stop offset="100%" stop-color="${p.bodyShade}"/>
 </radialGradient>
 </defs>
+<g transform="translate(0 ${shift})">
 ${t.longCoat ? furHalo(g, haloColor) : ""}
 ${ears(character, p, t, g, droop)}
 ${head(p, g, gradId)}
@@ -539,6 +544,7 @@ ${cheeks(state, p, g)}
 ${eyes(state, p, g)}
 ${muzzleFeatures(state, p, g)}
 ${extras(state, g)}
+</g>
 </svg>`;
 }
 
