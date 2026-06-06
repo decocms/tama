@@ -96,8 +96,17 @@ async function main() {
 				metrics?: unknown[];
 				pendingReviewCount?: number;
 			};
+			// Confirm it — these are real historical exams, and the metric-trend
+			// charts only plot confirmed exams. Without this they'd stay "draft"
+			// and never show up in the graphs.
+			if (out.exam?.id) {
+				await callTool("exam_update", {
+					examId: out.exam.id,
+					status: "confirmed",
+				});
+			}
 			console.log(
-				`ok — exam ${out.exam?.id ?? "?"} (${out.exam?.performedAt ?? "no date"}), ${out.metrics?.length ?? 0} metrics, ${out.pendingReviewCount ?? 0} pending review`,
+				`ok — exam ${out.exam?.id ?? "?"} (${out.exam?.performedAt ?? "no date"}), ${out.metrics?.length ?? 0} metrics, confirmed`,
 			);
 		} catch (err) {
 			console.log(`FAILED: ${(err as Error).message.split("\n")[0]}`);

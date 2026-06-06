@@ -4,6 +4,7 @@ import {
 	Line,
 	LineChart,
 	ReferenceArea,
+	ReferenceLine,
 	XAxis,
 	YAxis,
 } from "recharts";
@@ -46,13 +47,50 @@ function fmtTick(iso: string): string {
 	}
 }
 
+function median(nums: number[]): number {
+	if (nums.length === 0) return 0;
+	const s = [...nums].sort((a, b) => a - b);
+	return s[Math.floor(s.length / 2)];
+}
+
 export function MetricChart({
 	series,
 	keys,
 	height = 220,
 	showLegend = true,
 }: MetricChartProps) {
-	const { data, config, refBand } = useMemo(() => {
+	// When more than one metric shares a chart, their raw magnitudes can differ
+	// by orders (hemoglobin ~10 vs platelets ~400×10³), so a single linear axis
+	// flattens the small ones. In that case we plot each metric as "% of its
+	// normal range" (reference midpoint = 100%) — scale-free, and it reads
+	// medically (above/below the 100% normal line). A single-metric chart keeps
+	// raw values + the reference band.
+	const multi = keys.length > 1;
+
+	const { data, config, refBand, baseByKey } = useMemo(() => {
+		// Per-key normalization base: reference midpoint if available, else the
+		// metric's own median value (so it still scales to ~100%).
+		const baseByKey = new Map<string, number>();
+		if (multi) {
+			for (const k of keys) {
+				const pts = series.filter(
+					(p) => p.canonicalKey === k && p.valueNum != null,
+				);
+				if (pts.length === 0) continue;
+				const refs = pts.filter((p) => p.refLow != null && p.refHigh != null);
+				let base: number;
+				if (refs.length > 0) {
+					base =
+						(median(refs.map((p) => p.refLow as number)) +
+							median(refs.map((p) => p.refHigh as number))) /
+						2;
+				} else {
+					base = median(pts.map((p) => p.valueNum as number));
+				}
+				baseByKey.set(k, base || 1);
+			}
+		}
+
 		// Group points by performedAt (rounded to the day) so multiple metrics
 		// from the same exam land on one x-axis tick.
 		const byDate = new Map<string, Record<string, number | string>>();
@@ -63,7 +101,15 @@ export function MetricChart({
 			if (p.valueNum == null) continue;
 			const dayKey = p.performedAt.slice(0, 10);
 			const row = byDate.get(dayKey) ?? { date: dayKey };
-			row[p.canonicalKey] = p.valueNum;
+			if (multi) {
+				const base = baseByKey.get(p.canonicalKey) ?? 1;
+				row[p.canonicalKey] = Math.round((p.valueNum / base) * 1000) / 10;
+				// Keep raw value + unit for the tooltip.
+				row[`${p.canonicalKey}__raw`] = p.valueNum;
+				if (p.unit) row[`${p.canonicalKey}__unit`] = p.unit;
+			} else {
+				row[p.canonicalKey] = p.valueNum;
+			}
 			byDate.set(dayKey, row);
 			seenKeys.add(p.canonicalKey);
 		}
@@ -81,43 +127,29 @@ export function MetricChart({
 			};
 		});
 
-		// Reference band only when exactly one series is selected and refLow/refHigh
-		// are stable across points. Multiple series with different ranges would
-		// overlap and confuse the reader.
+		// Reference band only on a single-metric chart (raw values).
 		let refBand: { low: number; high: number } | null = null;
-		if (keys.length === 1) {
+		if (!multi && keys.length === 1) {
 			const key = keys[0];
 			const pts = series.filter(
-				(p) =>
-					p.canonicalKey === key && p.refLow != null && p.refHigh != null,
+				(p) => p.canonicalKey === key && p.refLow != null && p.refHigh != null,
 			);
 			if (pts.length > 0) {
-				const lows = new Set(pts.map((p) => p.refLow));
-				const highs = new Set(pts.map((p) => p.refHigh));
-				if (lows.size === 1 && highs.size === 1) {
-					refBand = {
-						low: pts[0].refLow as number,
-						high: pts[0].refHigh as number,
-					};
-				} else {
-					// Pick the median range as a compromise so the user still gets
-					// a visual cue even when ranges drift slightly between labs.
-					const sortedLows = pts
-						.map((p) => p.refLow as number)
-						.sort((a, b) => a - b);
-					const sortedHighs = pts
-						.map((p) => p.refHigh as number)
-						.sort((a, b) => a - b);
-					refBand = {
-						low: sortedLows[Math.floor(sortedLows.length / 2)],
-						high: sortedHighs[Math.floor(sortedHighs.length / 2)],
-					};
-				}
+				const sortedLows = pts
+					.map((p) => p.refLow as number)
+					.sort((a, b) => a - b);
+				const sortedHighs = pts
+					.map((p) => p.refHigh as number)
+					.sort((a, b) => a - b);
+				refBand = {
+					low: sortedLows[Math.floor(sortedLows.length / 2)],
+					high: sortedHighs[Math.floor(sortedHighs.length / 2)],
+				};
 			}
 		}
 
-		return { data, config, refBand };
-	}, [series, keys]);
+		return { data, config, refBand, baseByKey };
+	}, [series, keys, multi]);
 
 	if (data.length === 0) {
 		return (
@@ -142,7 +174,12 @@ export function MetricChart({
 					axisLine={false}
 					minTickGap={24}
 				/>
-				<YAxis tickLine={false} axisLine={false} width={36} />
+				<YAxis
+					tickLine={false}
+					axisLine={false}
+					width={multi ? 40 : 36}
+					tickFormatter={multi ? (v) => `${v}%` : undefined}
+				/>
 				{refBand ? (
 					<ReferenceArea
 						y1={refBand.low}
@@ -152,7 +189,45 @@ export function MetricChart({
 						stroke="none"
 					/>
 				) : null}
-				<ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+				{multi ? (
+					// 100% = middle of the normal range for every metric.
+					<ReferenceLine
+						y={100}
+						stroke="hsl(var(--muted-foreground))"
+						strokeDasharray="4 4"
+						strokeOpacity={0.5}
+					/>
+				) : null}
+				<ChartTooltip
+					content={
+						<ChartTooltipContent
+							indicator="dot"
+							// In normalized mode show the real value + unit, not the %.
+							formatter={
+								multi
+									? (value, name, item) => {
+											const row = (item?.payload ?? {}) as Record<
+												string,
+												unknown
+											>;
+											const raw = row[`${name}__raw`];
+											const unit = row[`${name}__unit`];
+											const label = config[name as string]?.label ?? name;
+											return (
+												<span className="flex w-full justify-between gap-3">
+													<span className="text-muted-foreground">{label}</span>
+													<span className="font-mono font-medium tabular-nums">
+														{raw != null ? String(raw) : String(value)}
+														{unit ? ` ${unit}` : ""}
+													</span>
+												</span>
+											);
+										}
+									: undefined
+							}
+						/>
+					}
+				/>
 				{Object.keys(config).map((k) => (
 					<Line
 						key={k}
