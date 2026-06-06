@@ -308,6 +308,20 @@ export const symptoms = sqliteTable("symptoms", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
+// Saved vet-research runs — history of grounded Q&A for the Pet page.
+export const researches = sqliteTable("researches", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id")
+		.notNull()
+		.references(() => pets.id, { onDelete: "cascade" }),
+	question: text("question").notNull(),
+	answer: text("answer").notNull(),
+	keyPointsJson: text("key_points_json"),
+	cautionsJson: text("cautions_json"),
+	citationsJson: text("citations_json"),
+	createdAt: text("created_at").notNull().default(nowSql),
+});
+
 // Idempotency log for the reminder cron. (scheduleStateId, plannedAt) is the
 // primary key — INSERT OR IGNORE guarantees a single send per dose slot even
 // if cron ticks overlap or retry.
@@ -349,3 +363,5 @@ export type Vaccine = typeof vaccines.$inferSelect;
 export type NewVaccine = typeof vaccines.$inferInsert;
 export type Symptom = typeof symptoms.$inferSelect;
 export type NewSymptom = typeof symptoms.$inferInsert;
+export type Research = typeof researches.$inferSelect;
+export type NewResearch = typeof researches.$inferInsert;

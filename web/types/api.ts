@@ -34,6 +34,16 @@ export interface PetProfile {
 	watchFor: string[];
 }
 
+export interface Research {
+	id: string;
+	question: string;
+	answer: string;
+	keyPoints: string[];
+	cautions: string[];
+	citations: { title: string; url: string }[];
+	createdAt: string;
+}
+
 export interface Pet {
 	id: string;
 	name: string;

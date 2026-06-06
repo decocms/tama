@@ -1,29 +1,31 @@
 import { Link } from "@tanstack/react-router";
 import {
+	ChevronDown,
 	ChevronRight,
 	FileText,
 	FlaskConical,
 	RefreshCw,
-	Sparkles,
+	Search,
 	Sprout,
 	Upload,
 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
+import { Input } from "@/components/ui/input.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { formatDateTime } from "@/lib/format.ts";
-import type { Asset, Enrichment, PetProfile } from "@/types/api.ts";
+import type { Asset, PetProfile, Research } from "@/types/api.ts";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
 import { Section } from "../components/Section.tsx";
 import {
 	useAssets,
-	useEnrichPet,
 	useExams,
 	usePet,
 	useRefreshProfile,
-	useRefreshSummary,
+	useResearches,
+	useRunResearch,
 	useUploadAsset,
 } from "../lib/queries.ts";
 
@@ -34,8 +36,6 @@ export function PetPage() {
 	const { data: pet, isLoading } = usePet();
 	const { data: exams } = useExams();
 	const { data: assets } = useAssets();
-	const enrich = useEnrichPet();
-	const refreshSummary = useRefreshSummary();
 	const refreshProfile = useRefreshProfile();
 
 	return (
@@ -48,36 +48,16 @@ export function PetPage() {
 					</>
 				) : (
 					<>
-						<PetHero
-							pet={pet}
-							onEnrich={() => {
-								enrich.mutate(undefined, {
-									onSuccess: () => toast.success("AI research updated"),
-									onError: (e) => toast.error((e as Error).message),
-								});
-							}}
-							enriching={enrich.isPending}
-							enrichError={enrich.error ? (enrich.error as Error).message : null}
-						/>
+						<PetHero pet={pet} />
 
-						<SummaryCard
-							summary={pet.summary ?? null}
-							summaryAt={pet.summaryAt ?? null}
-							refreshing={refreshSummary.isPending}
-							onRefresh={() =>
-								refreshSummary.mutate(undefined, {
-									onSuccess: () => toast.success("Summary updated"),
-									onError: (e) => toast.error((e as Error).message),
-								})
-							}
-						/>
+						<ResearchSection petName={pet.name} />
 
 						<CaseFileCard
 							profile={pet.profile ?? null}
 							refreshing={refreshProfile.isPending}
 							onRefresh={() =>
 								refreshProfile.mutate(undefined, {
-									onSuccess: () => toast.success("Case file updated"),
+									onSuccess: () => toast.success("Pet sheet updated"),
 									onError: (e) => toast.error((e as Error).message),
 								})
 							}
@@ -93,10 +73,6 @@ export function PetPage() {
 						/>
 
 						<AssetsCard assets={assets ?? []} />
-
-						{pet.enrichment ? (
-							<EnrichmentCard enrichment={pet.enrichment} />
-						) : null}
 					</>
 				)}
 			</div>
@@ -104,46 +80,151 @@ export function PetPage() {
 	);
 }
 
-function SummaryCard({
-	summary,
-	summaryAt,
-	refreshing,
-	onRefresh,
-}: {
-	summary: string | null;
-	summaryAt: string | null;
-	refreshing: boolean;
-	onRefresh: () => void;
-}) {
+// Research: ask a grounded vet-research question (auto-uses the pet sheet as
+// context) and browse the saved history of past questions + answers.
+function ResearchSection({ petName }: { petName: string }) {
+	const { data: researches } = useResearches();
+	const run = useRunResearch();
+	const [q, setQ] = useState("");
+
+	const ask = () => {
+		const question = q.trim();
+		if (question.length < 4) {
+			toast.error("Ask a fuller question");
+			return;
+		}
+		run.mutate(question, {
+			onSuccess: () => {
+				setQ("");
+				toast.success("Research saved");
+			},
+			onError: (e) => toast.error((e as Error).message),
+		});
+	};
+
 	return (
-		<div className="rounded-2xl bg-card surface p-5">
-			<div className="flex items-start justify-between gap-3 mb-2">
-				<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
-					How they're doing
-					{summaryAt ? ` · updated ${formatDateTime(summaryAt)}` : ""}
-				</div>
-				<Button
-					size="sm"
-					variant="ghost"
-					onClick={onRefresh}
-					disabled={refreshing}
-					className="h-7 gap-1.5 text-xs"
-				>
-					<RefreshCw
-						className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`}
+		<Section
+			title="Research"
+			eyebrow="Ask, grounded in the case"
+		>
+			<div className="rounded-2xl bg-card surface p-4 space-y-3">
+				<p className="text-xs text-muted-foreground">
+					Ask anything about {petName}'s health — drug interactions, what a
+					result means, what to expect. It's searched against the literature
+					with {petName}'s pet sheet + meds attached, and saved below. Research
+					to bring to your vet — not a diagnosis.
+				</p>
+				<div className="flex gap-2">
+					<Input
+						placeholder="e.g. Is Prednisolone safe long-term with his stomach issues?"
+						value={q}
+						onChange={(e) => setQ(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") ask();
+						}}
+						disabled={run.isPending}
 					/>
-					{refreshing ? "Thinking…" : "Refresh"}
-				</Button>
+					<Button onClick={ask} disabled={run.isPending} className="shrink-0">
+						<Search className="w-3.5 h-3.5" />
+						{run.isPending ? "Researching…" : "Research"}
+					</Button>
+				</div>
+				{run.isPending ? (
+					<p className="text-sm text-muted-foreground">
+						Searching reputable veterinary sources…
+					</p>
+				) : null}
 			</div>
-			<p className="text-sm text-foreground/85 whitespace-pre-wrap leading-relaxed">
-				{summary ??
-					"No summary yet. Hit Refresh once there's something on the timeline and the agent will write a status read."}
-			</p>
+
+			{(researches ?? []).length > 0 ? (
+				<div className="space-y-2 mt-3">
+					{(researches ?? []).map((r) => (
+						<ResearchItem key={r.id} research={r} />
+					))}
+				</div>
+			) : null}
+		</Section>
+	);
+}
+
+function ResearchItem({ research }: { research: Research }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="rounded-2xl bg-card surface p-4">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="w-full flex items-start gap-2 text-left"
+			>
+				<ChevronDown
+					className={`w-4 h-4 mt-0.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+				/>
+				<div className="flex-1 min-w-0">
+					<div className="font-medium text-sm leading-snug">
+						{research.question}
+					</div>
+					<div className="text-[10px] text-muted-foreground mt-0.5">
+						{formatDateTime(research.createdAt)}
+					</div>
+				</div>
+			</button>
+			{open ? (
+				<div className="mt-3 pl-6 space-y-3 text-sm">
+					<p className="text-foreground/85 leading-relaxed whitespace-pre-wrap">
+						{research.answer}
+					</p>
+					{research.keyPoints.length > 0 ? (
+						<ul className="space-y-1">
+							{research.keyPoints.map((k) => (
+								<li
+									key={k}
+									className="text-foreground/85 pl-4 relative before:content-['•'] before:absolute before:left-0 before:text-primary"
+								>
+									{k}
+								</li>
+							))}
+						</ul>
+					) : null}
+					{research.cautions.length > 0 ? (
+						<div className="rounded-lg p-3 text-xs" style={{ background: "var(--color-tint-overdue)" }}>
+							<div className="font-semibold uppercase tracking-wider text-[10px] mb-1 text-[color:var(--color-status-overdue)]">
+								Cautions
+							</div>
+							<ul className="space-y-0.5">
+								{research.cautions.map((c) => (
+									<li key={c}>{c}</li>
+								))}
+							</ul>
+						</div>
+					) : null}
+					{research.citations.length > 0 ? (
+						<div className="text-xs">
+							<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
+								Sources
+							</div>
+							<ul className="space-y-0.5">
+								{research.citations.map((c) => (
+									<li key={c.url}>
+										<a
+											href={c.url}
+											target="_blank"
+											rel="noreferrer"
+											className="text-primary hover:underline"
+										>
+											{c.title}
+										</a>
+									</li>
+								))}
+							</ul>
+						</div>
+					) : null}
+				</div>
+			) : null}
 		</div>
 	);
 }
 
-// The structured "case file" — the RPG-style overview of the pet's medical
+// The structured "pet sheet" — the RPG-style overview of the pet's medical
 // reality, synthesized by pet_profile_refresh and used as AI context.
 function CaseFileCard({
 	profile,
@@ -193,7 +274,7 @@ function CaseFileCard({
 		<div className="rounded-2xl bg-card surface p-5">
 			<div className="flex items-start justify-between gap-3 mb-2">
 				<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
-					Case file
+					Pet sheet
 				</div>
 				<Button
 					size="sm"
@@ -399,71 +480,5 @@ function AssetsCard({ assets }: { assets: Asset[] }) {
 				</div>
 			)}
 		</Section>
-	);
-}
-
-function EnrichmentCard({ enrichment }: { enrichment: Enrichment }) {
-	return (
-		<div className="rounded-2xl bg-card surface overflow-hidden">
-			<div className="flex items-center gap-2 px-5 py-3 border-b border-border/60">
-				<div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-					<Sparkles className="w-3.5 h-3.5" />
-				</div>
-				<div>
-					<div className="font-display text-base font-semibold leading-tight">
-						AI research
-					</div>
-					<div className="text-[10px] text-muted-foreground">
-						Generated {formatDateTime(enrichment.generatedAt)}
-					</div>
-				</div>
-			</div>
-			<div className="p-5 space-y-4 text-sm">
-				<EnrichmentSection title="Breed">{enrichment.breedNotes}</EnrichmentSection>
-				<EnrichmentSection title="Age">{enrichment.ageNotes}</EnrichmentSection>
-				<EnrichmentSection title="Current conditions">
-					{enrichment.conditionNotes}
-				</EnrichmentSection>
-				{enrichment.citations.length > 0 ? (
-					<div className="pt-1">
-						<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1.5">
-							Sources
-						</div>
-						<ul className="space-y-1 text-xs">
-							{enrichment.citations.map((c) => (
-								<li key={c.url}>
-									<a
-										href={c.url}
-										target="_blank"
-										rel="noreferrer"
-										className="text-primary hover:underline"
-									>
-										{c.title}
-									</a>
-								</li>
-							))}
-						</ul>
-					</div>
-				) : null}
-			</div>
-		</div>
-	);
-}
-
-function EnrichmentSection({
-	title,
-	children,
-}: {
-	title: string;
-	children: React.ReactNode;
-}) {
-	if (!children) return null;
-	return (
-		<div>
-			<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
-				{title}
-			</div>
-			<p className="whitespace-pre-wrap text-foreground/85">{children}</p>
-		</div>
 	);
 }

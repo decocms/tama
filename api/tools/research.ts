@@ -9,6 +9,7 @@ import {
 	listPrescriptions,
 	parseScheduleItems,
 } from "../storage/prescriptions.ts";
+import { addResearch, listResearches } from "../storage/researches.ts";
 import { listNotes } from "../storage/timeline.ts";
 
 export const vetResearchTool = (_env: Env) =>
@@ -111,6 +112,15 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 				recentNotes: recentNotes.length > 0 ? recentNotes : undefined,
 			});
 
+			// Persist the run so the Pet page's Research section shows a history.
+			await addResearch(env, {
+				question: context.question,
+				answer: result.answer,
+				keyPoints: result.keyPoints,
+				cautions: result.cautions,
+				citations: result.citations,
+			});
+
 			return {
 				answer: result.answer,
 				keyPoints: result.keyPoints,
@@ -118,6 +128,56 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 				citations: result.citations,
 				generatedAt: result.generatedAt,
 				sourceQuery: result.sourceQuery,
+			};
+		},
+	});
+
+const SavedResearchSchema = z.object({
+	id: z.string(),
+	question: z.string(),
+	answer: z.string(),
+	keyPoints: z.array(z.string()),
+	cautions: z.array(z.string()),
+	citations: z.array(z.object({ title: z.string(), url: z.string() })),
+	createdAt: z.string(),
+});
+
+export const researchListTool = (_env: Env) =>
+	createTool({
+		id: "research_list",
+		description:
+			"List past vet-research runs for this pet, newest first — the question asked plus the grounded answer, key points, cautions, and citations.",
+		inputSchema: z.object({}),
+		outputSchema: z.object({ researches: z.array(SavedResearchSchema) }),
+		annotations: { readOnlyHint: true },
+		execute: async ({ runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const rows = await listResearches(env);
+			const parse = (s: string | null): string[] => {
+				try {
+					return s ? JSON.parse(s) : [];
+				} catch {
+					return [];
+				}
+			};
+			// biome-ignore lint/suspicious/noExplicitAny: citations parsed from JSON
+			const parseCites = (s: string | null): any[] => {
+				try {
+					return s ? JSON.parse(s) : [];
+				} catch {
+					return [];
+				}
+			};
+			return {
+				researches: rows.map((r) => ({
+					id: r.id,
+					question: r.question,
+					answer: r.answer,
+					keyPoints: parse(r.keyPointsJson),
+					cautions: parse(r.cautionsJson),
+					citations: parseCites(r.citationsJson),
+					createdAt: r.createdAt,
+				})),
 			};
 		},
 	});

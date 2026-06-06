@@ -43,7 +43,7 @@ import {
 	recordingSummarizeTool,
 	recordingTranscribeTool,
 } from "./recording.ts";
-import { vetResearchTool } from "./research.ts";
+import { researchListTool, vetResearchTool } from "./research.ts";
 import {
 	petSpriteAdjustTool,
 	petSpriteGetTool,
@@ -136,6 +136,7 @@ export const tools = [
 	recordingListTool,
 	// Research + push
 	vetResearchTool,
+	researchListTool,
 	pushVapidPublicKeyTool,
 	pushSubscribeTool,
 	pushUnsubscribeTool,

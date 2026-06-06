@@ -9,6 +9,7 @@ import type {
 	Pet,
 	Prescription,
 	Recording,
+	Research,
 	ScheduleState,
 	Symptom,
 	TimelineEntry,
@@ -112,6 +113,30 @@ export function useRefreshProfile() {
 	return useMutation({
 		mutationFn: () => callTool(app, "pet_profile_refresh", {}),
 		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
+	});
+}
+
+// ---------- Research ----------
+
+export function useResearches() {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: ["researches"],
+		queryFn: () =>
+			callTool<{ researches: Research[] }>(app, "research_list", {}).then(
+				(r) => r.researches,
+			),
+		enabled: true,
+	});
+}
+
+export function useRunResearch() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (question: string) =>
+			callTool(app, "vet_research", { question }),
+		onSuccess: () => qc.invalidateQueries({ queryKey: ["researches"] }),
 	});
 }
 
