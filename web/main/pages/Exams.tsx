@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ExternalLink, FileText, FlaskConical, Sparkles } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { ExternalLink, FileText, FlaskConical } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -10,6 +10,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.t
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { formatDateTime } from "@/lib/format.ts";
 import type { Exam, ExamMetricSeriesPoint } from "@/types/api.ts";
+import {
+	ExplainButton,
+	InsightsCard,
+	useExplainState,
+} from "../components/ExamInsights.tsx";
 import { ExamReview } from "../components/ExamReview.tsx";
 import { ExamUploadQueue } from "../components/ExamUploadQueue.tsx";
 import { Layout } from "../components/Layout.tsx";
@@ -18,7 +23,6 @@ import { Section } from "../components/Section.tsx";
 import {
 	useExam,
 	useExams,
-	useExplainExams,
 	useMetricSeries,
 	usePasteExam,
 	usePet,
@@ -36,7 +40,7 @@ export function ExamsPage() {
 	const { data: exams, isLoading } = useExams();
 	const { data: series } = useMetricSeries([]);
 	const [reviewingId, setReviewingId] = useState<string | null>(null);
-	const explain = useExplainExams();
+	const explain = useExplainState();
 	const hasData = (series ?? []).length > 0;
 
 	return (
@@ -49,14 +53,11 @@ export function ExamsPage() {
 					eyebrow="Evolution"
 					action={
 						<div className="flex items-center gap-2">
-							<Button
-								size="sm"
-								onClick={() => explain.mutate()}
-								disabled={!hasData || explain.isPending}
-							>
-								<Sparkles className="w-3.5 h-3.5" />
-								{explain.isPending ? "Reading…" : "Explain with AI"}
-							</Button>
+							<ExplainButton
+								onClick={() => explain.run()}
+								pending={explain.pending}
+								disabled={!hasData}
+							/>
 							<Button
 								size="sm"
 								variant="outline"
@@ -82,26 +83,12 @@ export function ExamsPage() {
 						}
 					/>
 
-					{explain.isPending ? (
-						<div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-							Reading {pet?.name ?? "your pet"}'s lab trends…
-						</div>
-					) : explain.error ? (
-						<div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-							{(explain.error as Error).message}
-						</div>
-					) : explain.data ? (
-						<div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-							<div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-primary mb-2">
-								<Sparkles className="w-3 h-3" /> AI insights
-							</div>
-							<InsightsText text={explain.data} />
-							<p className="mt-3 text-[11px] text-muted-foreground">
-								AI explanation of the trends above — not a diagnosis. Confirm
-								anything important with your vet.
-							</p>
-						</div>
-					) : null}
+					<InsightsCard
+						pending={explain.pending}
+						error={explain.error}
+						text={explain.text}
+						petName={pet?.name}
+					/>
 				</Section>
 
 				<Section title="Upload a lab exam" eyebrow="New exam">
@@ -275,63 +262,6 @@ function PanelOverview({
 						</div>
 						<MetricChart series={series} keys={keys} height={160} />
 					</button>
-				);
-			})}
-		</div>
-	);
-}
-
-// Minimal renderer for the AI insights markdown subset the prompt emits:
-// `## headings`, `- bullets`, `**bold**`, and paragraphs. Avoids a markdown dep.
-function renderInline(text: string): ReactNode[] {
-	return text.split(/\*\*/).map((seg, i) =>
-		i % 2 === 1 ? (
-			// biome-ignore lint/suspicious/noArrayIndexKey: stable split order
-			<strong key={i}>{seg}</strong>
-		) : (
-			// biome-ignore lint/suspicious/noArrayIndexKey: stable split order
-			<span key={i}>{seg}</span>
-		),
-	);
-}
-
-function InsightsText({ text }: { text: string }) {
-	const lines = text.split("\n");
-	return (
-		<div className="space-y-1">
-			{lines.map((raw, i) => {
-				const line = raw.trim();
-				if (!line) return null;
-				if (line.startsWith("## ") || line.startsWith("# ")) {
-					return (
-						<h4
-							// biome-ignore lint/suspicious/noArrayIndexKey: stable line order
-							key={i}
-							className="font-display font-semibold text-sm mt-3 first:mt-0"
-						>
-							{renderInline(line.replace(/^#+\s/, ""))}
-						</h4>
-					);
-				}
-				if (/^[-*]\s/.test(line)) {
-					return (
-						<div
-							// biome-ignore lint/suspicious/noArrayIndexKey: stable line order
-							key={i}
-							className="text-sm text-foreground/85 leading-relaxed pl-4 relative before:content-['•'] before:absolute before:left-0 before:text-primary"
-						>
-							{renderInline(line.replace(/^[-*]\s/, ""))}
-						</div>
-					);
-				}
-				return (
-					<p
-						// biome-ignore lint/suspicious/noArrayIndexKey: stable line order
-						key={i}
-						className="text-sm text-foreground/85 leading-relaxed"
-					>
-						{renderInline(line)}
-					</p>
 				);
 			})}
 		</div>

@@ -165,6 +165,30 @@ export function parseSpritePack(pet: Pet): SpritePack | null {
 	}
 }
 
+// Structured case-file profile (JSON). See ai/pet-context.ts.
+// biome-ignore lint/suspicious/noExplicitAny: shape validated by PetProfileSchema at the edges
+export function parseProfile(pet: Pet): any | null {
+	if (!pet.profileJson) return null;
+	try {
+		return JSON.parse(pet.profileJson);
+	} catch {
+		return null;
+	}
+}
+
+export async function setProfile(
+	env: Env,
+	petId: string,
+	profile: unknown,
+): Promise<Pet | null> {
+	const [row] = await db(env)
+		.update(pets)
+		.set({ profileJson: JSON.stringify(profile) })
+		.where(eq(pets.id, petId))
+		.returning();
+	return row ?? null;
+}
+
 // The procedural SVG sprite pack — {state: svgString}. The sole sprite path.
 export function parseSvgPack(pet: Pet): Record<string, string> | null {
 	if (!pet.svgPackJson) return null;

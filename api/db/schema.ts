@@ -30,6 +30,10 @@ export const pets = sqliteTable("pets", {
 	// currentStatus — there are no episodes anymore, just a continuous life.
 	summary: text("summary"),
 	summaryAt: text("summary_at"),
+	// Structured "case file" — JSON of the pet's key medical facts (age, weight,
+	// allergies, chronic conditions, active concerns, past episodes, what to
+	// watch). Synthesized by pet_profile_refresh and injected into AI context.
+	profileJson: text("profile_json"),
 	createdAt: text("created_at").notNull().default(nowSql),
 	deletedAt: text("deleted_at"),
 });

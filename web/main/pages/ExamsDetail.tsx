@@ -3,6 +3,11 @@ import { useMemo } from "react";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import type { ExamMetricSeriesPoint } from "@/types/api.ts";
+import {
+	ExplainButton,
+	InsightsCard,
+	useExplainState,
+} from "../components/ExamInsights.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { MetricChart } from "../components/MetricChart.tsx";
 import { Section } from "../components/Section.tsx";
@@ -49,6 +54,7 @@ export function ExamsDetailPage() {
 
 	const byPanel = useMemo(() => groupByPanel(series ?? []), [series]);
 	const selectedArr = Array.from(selectedKeys);
+	const explain = useExplainState();
 
 	return (
 		<Layout
@@ -110,6 +116,14 @@ export function ExamsDetailPage() {
 										.join(" · ")
 						}
 						eyebrow="Evolution"
+						action={
+							selectedArr.length > 0 ? (
+								<ExplainButton
+									onClick={() => explain.run(selectedArr)}
+									pending={explain.pending}
+								/>
+							) : null
+						}
 					>
 						{isLoading ? (
 							<Skeleton className="h-64 w-full rounded-xl" />
@@ -130,6 +144,12 @@ export function ExamsDetailPage() {
 								/>
 							</div>
 						)}
+						<InsightsCard
+							pending={explain.pending}
+							error={explain.error}
+							text={explain.text}
+							petName={pet?.name}
+						/>
 					</Section>
 				</div>
 			</div>

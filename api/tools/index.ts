@@ -14,7 +14,12 @@ import {
 	examUpdateTool,
 	examUploadTool,
 } from "./exam.ts";
-import { petEnrichTool, petProfileTool, petUpdateTool } from "./pet.ts";
+import {
+	petEnrichTool,
+	petProfileRefreshTool,
+	petProfileTool,
+	petUpdateTool,
+} from "./pet.ts";
 import {
 	prescriptionCreateTool,
 	prescriptionDeleteTool,
@@ -77,6 +82,7 @@ export const tools = [
 	petProfileTool,
 	petUpdateTool,
 	petEnrichTool,
+	petProfileRefreshTool,
 	petSpriteSvgGenerateTool,
 	petSpriteGetTool,
 	petSpriteAdjustTool,

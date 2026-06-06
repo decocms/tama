@@ -18,6 +18,22 @@ export interface SpritePack {
 	size?: number;
 }
 
+// Structured "case file" — synthesized by pet_profile_refresh, shown on the
+// Pet page and injected into AI context.
+export interface PetProfile {
+	oneLiner: string;
+	sex?: string | null;
+	ageText?: string | null;
+	weightKg?: number | null;
+	diet?: string | null;
+	allergies: string[];
+	chronicConditions: string[];
+	activeConcerns: string[];
+	pastEpisodes: string[];
+	medications: string[];
+	watchFor: string[];
+}
+
 export interface Pet {
 	id: string;
 	name: string;
@@ -30,6 +46,7 @@ export interface Pet {
 	enrichment: Enrichment | null;
 	spritePack?: SpritePack | null;
 	svgPack?: Record<string, string> | null;
+	profile?: PetProfile | null;
 	summary?: string | null;
 	summaryAt?: string | null;
 	createdAt: string;

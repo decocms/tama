@@ -2,16 +2,6 @@ import type { Env } from "../env.ts";
 import type { MetricSeriesRow } from "../storage/exams.ts";
 import { anthropicMessages } from "./gateway.ts";
 
-export interface ExplainPetContext {
-	name: string;
-	species: string;
-	breed: string | null;
-	dob: string | null;
-	weightKg: number | null;
-	ownerNotes: string | null;
-	summary: string | null;
-}
-
 // Turn the metric series into a compact per-metric table the model can reason
 // over: each metric's values over time + its reference range.
 function buildTable(series: MetricSeriesRow[]): string {
@@ -56,23 +46,12 @@ Keep it tight — an owner should read the whole thing in under a minute. Output
 
 export async function explainExams(
 	env: Env,
-	input: { pet: ExplainPetContext; series: MetricSeriesRow[] },
+	input: { petContext: string; series: MetricSeriesRow[] },
 ): Promise<string> {
 	const table = buildTable(input.series);
 	if (!table.trim()) {
 		return "No numeric lab values to explain yet — upload an exam and confirm it first.";
 	}
-	const p = input.pet;
-	const profile = [
-		`Name: ${p.name}`,
-		`Species/breed: ${p.species}${p.breed ? ` (${p.breed})` : ""}`,
-		p.dob ? `DOB/age: ${p.dob}` : "",
-		p.weightKg ? `Weight: ${p.weightKg} kg` : "",
-		p.ownerNotes ? `Owner notes / known conditions: ${p.ownerNotes}` : "",
-		p.summary ? `Current summary: ${p.summary}` : "",
-	]
-		.filter(Boolean)
-		.join("\n");
 
 	const res = await anthropicMessages(env, {
 		model: "claude-opus-4-7",
@@ -81,7 +60,7 @@ export async function explainExams(
 		messages: [
 			{
 				role: "user",
-				content: `Pet profile:\n${profile}\n\nLab metrics over time:\n${table}`,
+				content: `Pet case file:\n${input.petContext}\n\nLab metrics over time:\n${table}`,
 			},
 		],
 	});

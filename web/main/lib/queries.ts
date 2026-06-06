@@ -106,6 +106,15 @@ export function useRefreshSummary() {
 	});
 }
 
+export function useRefreshProfile() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () => callTool(app, "pet_profile_refresh", {}),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
+	});
+}
+
 // ---------- Timeline ----------
 
 export function useTimeline(kinds?: TimelineType[]) {
@@ -512,10 +521,12 @@ export function usePasteExam() {
 export function useExplainExams() {
 	const app = useMcpApp();
 	return useMutation({
-		mutationFn: () =>
-			callTool<{ insights: string }>(app, "exam_explain", {}).then(
-				(r) => r.insights,
-			),
+		mutationFn: (canonicalKeys?: string[]) =>
+			callTool<{ insights: string }>(
+				app,
+				"exam_explain",
+				canonicalKeys && canonicalKeys.length ? { canonicalKeys } : {},
+			).then((r) => r.insights),
 	});
 }
 

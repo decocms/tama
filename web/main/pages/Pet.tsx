@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { formatDateTime } from "@/lib/format.ts";
-import type { Asset, Enrichment } from "@/types/api.ts";
+import type { Asset, Enrichment, PetProfile } from "@/types/api.ts";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
 import { Section } from "../components/Section.tsx";
@@ -22,6 +22,7 @@ import {
 	useEnrichPet,
 	useExams,
 	usePet,
+	useRefreshProfile,
 	useRefreshSummary,
 	useUploadAsset,
 } from "../lib/queries.ts";
@@ -35,6 +36,7 @@ export function PetPage() {
 	const { data: assets } = useAssets();
 	const enrich = useEnrichPet();
 	const refreshSummary = useRefreshSummary();
+	const refreshProfile = useRefreshProfile();
 
 	return (
 		<Layout>
@@ -65,6 +67,17 @@ export function PetPage() {
 							onRefresh={() =>
 								refreshSummary.mutate(undefined, {
 									onSuccess: () => toast.success("Summary updated"),
+									onError: (e) => toast.error((e as Error).message),
+								})
+							}
+						/>
+
+						<CaseFileCard
+							profile={pet.profile ?? null}
+							refreshing={refreshProfile.isPending}
+							onRefresh={() =>
+								refreshProfile.mutate(undefined, {
+									onSuccess: () => toast.success("Case file updated"),
 									onError: (e) => toast.error((e as Error).message),
 								})
 							}
@@ -127,6 +140,122 @@ function SummaryCard({
 					"No summary yet. Hit Refresh once there's something on the timeline and the agent will write a status read."}
 			</p>
 		</div>
+	);
+}
+
+// The structured "case file" — the RPG-style overview of the pet's medical
+// reality, synthesized by pet_profile_refresh and used as AI context.
+function CaseFileCard({
+	profile,
+	refreshing,
+	onRefresh,
+}: {
+	profile: PetProfile | null;
+	refreshing: boolean;
+	onRefresh: () => void;
+}) {
+	const groups: { label: string; items: string[]; tint: string }[] = profile
+		? [
+				{
+					label: "Allergies",
+					items: profile.allergies ?? [],
+					tint: "var(--color-tint-overdue)",
+				},
+				{
+					label: "Chronic",
+					items: profile.chronicConditions ?? [],
+					tint: "var(--color-tint-med)",
+				},
+				{
+					label: "Active concerns",
+					items: profile.activeConcerns ?? [],
+					tint: "var(--color-tint-upcoming)",
+				},
+				{
+					label: "Medications",
+					items: profile.medications ?? [],
+					tint: "var(--color-tint-given)",
+				},
+				{
+					label: "Watch for",
+					items: profile.watchFor ?? [],
+					tint: "var(--color-tint-pet)",
+				},
+				{
+					label: "Past episodes",
+					items: profile.pastEpisodes ?? [],
+					tint: "var(--color-tint-meal)",
+				},
+			].filter((g) => g.items.length > 0)
+		: [];
+
+	return (
+		<div className="rounded-2xl bg-card surface p-5">
+			<div className="flex items-start justify-between gap-3 mb-2">
+				<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+					Case file
+				</div>
+				<Button
+					size="sm"
+					variant="ghost"
+					onClick={onRefresh}
+					disabled={refreshing}
+					className="h-7 gap-1.5 text-xs"
+				>
+					<RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
+					{refreshing ? "Thinking…" : profile ? "Rebuild" : "Generate"}
+				</Button>
+			</div>
+
+			{!profile ? (
+				<p className="text-sm text-foreground/70 leading-relaxed">
+					A structured overview — age, weight, allergies, chronic conditions,
+					active concerns, meds, what to watch — built from the timeline and
+					exams. It's the context the AI uses for research and analysis. Hit{" "}
+					<strong>Generate</strong> to build it.
+				</p>
+			) : (
+				<div className="space-y-3">
+					{profile.oneLiner ? (
+						<p className="text-sm font-medium text-foreground">
+							{profile.oneLiner}
+						</p>
+					) : null}
+					<div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+						{profile.ageText ? <Fact>{profile.ageText}</Fact> : null}
+						{profile.weightKg ? <Fact>{profile.weightKg} kg</Fact> : null}
+						{profile.sex ? <Fact>{profile.sex}</Fact> : null}
+						{profile.diet ? <Fact>Diet: {profile.diet}</Fact> : null}
+					</div>
+					{groups.map((g) => (
+						<div key={g.label}>
+							<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
+								{g.label}
+							</div>
+							<div className="flex flex-wrap gap-1.5">
+								{g.items.map((it) => (
+									<span
+										key={it}
+										className="text-xs px-2 py-0.5 rounded-full border border-border/70"
+										style={{ backgroundColor: g.tint }}
+									>
+										{it}
+									</span>
+								))}
+							</div>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function Fact({ children }: { children: React.ReactNode }) {
+	return (
+		<span className="px-2 py-0.5 rounded-full bg-secondary/60 border border-border/60">
+			{children}
+		</span>
 	);
 }
 

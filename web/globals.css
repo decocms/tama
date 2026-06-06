@@ -3,20 +3,25 @@
 @custom-variant dark (&:is([data-theme="dark"] *));
 
 :root {
-	/* Warm paper palette */
-	--color-background-primary: #fbf7f0;
-	--color-background-secondary: #f4edde;
-	--color-background-tertiary: #ede4d0;
+	/* Landing-matched warm palette: cream paper, ink text, peach/lime accents. */
+	--color-background-primary: #fff8ee;
+	--color-background-secondary: #fbeede;
+	--color-background-tertiary: #f4e7d2;
 	--color-background-danger: #b7561e;
-	--color-text-primary: #1f1a14;
-	--color-text-secondary: #6b6258;
-	--color-border-primary: #efe8d5;
-	--color-border-secondary: #e8e0cb;
-	--color-ring-primary: #2f6b5c;
+	--color-text-primary: #2a1f17;
+	--color-text-secondary: #71665a;
+	--color-border-primary: #ecdfc8;
+	--color-border-secondary: #e2d3b9;
+	--color-border-strong: #2a1f17;
+	--color-ring-primary: #2a1f17;
 
-	/* Primary — sage / dependable */
-	--primary: #2f6b5c;
-	--primary-foreground: #fbf7f0;
+	/* Primary — ink (the landing's dark CTA), cream text on top. */
+	--primary: #2a1f17;
+	--primary-foreground: #fff8ee;
+
+	/* Landing accents */
+	--accent-peach: #ffbd8e;
+	--accent-lime: #c4e538;
 
 	/* Domain accents */
 	--color-accent-pet: #c75d5d;       /* terracotta */
@@ -35,8 +40,8 @@
 	--color-tint-meal: rgba(199, 122, 44, 0.08);
 	--color-tint-med: rgba(43, 91, 161, 0.07);
 
-	/* Typography */
-	--font-display: "Plus Jakarta Sans", "Inter", system-ui, -apple-system,
+	/* Typography — Bricolage display (matches the landing headlines). */
+	--font-display: "Bricolage Grotesque", "Plus Jakarta Sans", "Inter", system-ui, -apple-system,
 		"Segoe UI", sans-serif;
 	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 

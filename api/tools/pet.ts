@@ -1,15 +1,20 @@
 import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import { enrichPet } from "../ai/enrich-pet.ts";
+import { buildPetProfile, PetProfileSchema } from "../ai/pet-context.ts";
 import type { Env } from "../env.ts";
+import { getMetricSeriesForPet } from "../storage/exams.ts";
 import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
 import {
 	parseEnrichment,
+	parseProfile,
 	parseSpritePack,
 	parseSvgPack,
 	setEnrichment,
+	setProfile,
 	updatePet,
 } from "../storage/pets.ts";
+import { getTimeline } from "../storage/timeline.ts";
 import { EnrichmentSchema } from "./shared.ts";
 import { URI } from "./uris.ts";
 
@@ -35,6 +40,7 @@ const PetSchema = z.object({
 	enrichment: EnrichmentSchema.nullable(),
 	spritePack: SpritePackSchema.nullable(),
 	svgPack: z.record(z.string(), z.string()).nullable(),
+	profile: PetProfileSchema.nullable(),
 	createdAt: z.string(),
 });
 
@@ -51,6 +57,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		enrichment: parseEnrichment(p),
 		spritePack: parseSpritePack(p),
 		svgPack: parseSvgPack(p),
+		profile: parseProfile(p),
 		createdAt: p.createdAt,
 	};
 }
@@ -133,5 +140,73 @@ export const petEnrichTool = (_env: Env) =>
 			});
 			const saved = await setEnrichment(e, pet.id, enrichment);
 			return { pet: toPet(saved) };
+		},
+	});
+
+export const petProfileRefreshTool = (_env: Env) =>
+	createTool({
+		id: "pet_profile_refresh",
+		description:
+			"Rebuild the pet's structured case file (one-liner, age, weight, allergies, chronic conditions, active concerns, past episodes, current meds, what to watch) by synthesizing the owner notes + timeline + lab exams. This profile is the grounded context injected into all AI research and analysis. Run after big changes (new diagnosis, exams, meds).",
+		inputSchema: z.object({}),
+		outputSchema: z.object({ profile: PetProfileSchema }),
+		execute: async ({ runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const pet = await getSelfPet(env);
+			if (!pet) throw new Error("pet_self row missing");
+
+			const [timeline, series] = await Promise.all([
+				getTimeline(env, { limit: 80 }),
+				getMetricSeriesForPet(env),
+			]);
+
+			const timelineText =
+				timeline
+					.map(
+						(e) =>
+							`- ${(e.at ?? "").slice(0, 10)} [${e.type}] ${e.title}${e.detail ? `: ${e.detail}` : ""}`,
+					)
+					.join("\n") || "(no timeline entries)";
+
+			// Latest + range per metric, so the model sees current state + trend.
+			const byKey = new Map<string, typeof series>();
+			for (const r of series) {
+				if (r.valueNum == null) continue;
+				const arr = byKey.get(r.canonicalKey) ?? [];
+				arr.push(r);
+				byKey.set(r.canonicalKey, arr);
+			}
+			const examText =
+				Array.from(byKey.values())
+					.map((rows) => {
+						rows.sort((a, b) => a.performedAt.localeCompare(b.performedAt));
+						const last = rows[rows.length - 1];
+						const name = last.displayName || last.canonicalKey;
+						const u = last.unit ?? "";
+						const trend = rows.map((r) => `${r.valueNum}`).join("→");
+						const ref =
+							last.refLow != null && last.refHigh != null
+								? ` [normal ${last.refLow}-${last.refHigh}]`
+								: "";
+						return `- ${name}: ${trend}${u ? ` ${u}` : ""}${ref}`;
+					})
+					.join("\n") || "(no lab metrics)";
+
+			const sourceText = `Owner notes: ${pet.ownerNotes ?? "(none)"}\nCurrent status: ${pet.summary ?? "(none)"}\n\nTimeline (recent first):\n${timelineText}\n\nLab metrics (oldest→newest):\n${examText}`;
+
+			const profile = await buildPetProfile(env, {
+				pet: {
+					name: pet.name,
+					species: pet.species,
+					breed: pet.breed,
+					dob: pet.dob,
+					weightKg: pet.weightKg,
+					ownerNotes: pet.ownerNotes,
+					summary: pet.summary,
+				},
+				sourceText,
+			});
+			await setProfile(env, PET_SELF_ID, profile);
+			return { profile };
 		},
 	});

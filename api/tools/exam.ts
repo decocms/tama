@@ -2,9 +2,11 @@ import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
 import { explainExams } from "../ai/explain-exams.ts";
 import { extractExam } from "../ai/extract-exam.ts";
+import { petContextBlock } from "../ai/pet-context.ts";
 import type { Env } from "../env.ts";
 import { saveFile } from "../storage/files.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
+import { parseProfile } from "../storage/pets.ts";
 import {
 	createExamDraft,
 	deleteExam,
@@ -284,27 +286,24 @@ export const examExplainTool = (_env: Env) =>
 	createTool({
 		id: "exam_explain",
 		description:
-			"Explain the pet's lab trends in plain language. Reads every confirmed metric over time + the pet's profile and returns a short owner-friendly briefing grouped by body system (blood count, liver, kidney, …) — what moved, what's reassuring, what to watch — ending in a bottom line that defers to the vet. Used by the 'Explain with AI' button on the exams page.",
-		inputSchema: z.object({}),
+			"Explain the pet's lab trends in plain language, grounded in the pet's case file. Returns a short owner-friendly briefing grouped by body system (blood count, liver, kidney, …) — what moved, what's reassuring, what to watch — ending in a bottom line that defers to the vet. Pass canonicalKeys to explain only a chosen subset (the detail view does this); omit to cover every confirmed metric. Used by the 'Explain with AI' button.",
+		inputSchema: z.object({
+			canonicalKeys: z
+				.array(z.string())
+				.optional()
+				.describe("Only explain these metrics. Omit for all confirmed metrics."),
+		}),
 		outputSchema: z.object({ insights: z.string() }),
-		execute: async ({ runtimeContext }) => {
+		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
 			const [series, pet] = await Promise.all([
-				getMetricSeriesForPet(env),
+				getMetricSeriesForPet(env, context.canonicalKeys),
 				getSelfPet(env),
 			]);
-			const insights = await explainExams(env, {
-				pet: {
-					name: pet?.name ?? "your pet",
-					species: pet?.species ?? "pet",
-					breed: pet?.breed ?? null,
-					dob: pet?.dob ?? null,
-					weightKg: pet?.weightKg ?? null,
-					ownerNotes: pet?.ownerNotes ?? null,
-					summary: pet?.summary ?? null,
-				},
-				series,
-			});
+			const petContext = pet
+				? petContextBlock(pet, parseProfile(pet))
+				: "Unknown pet.";
+			const insights = await explainExams(env, { petContext, series });
 			return { insights };
 		},
 	});
