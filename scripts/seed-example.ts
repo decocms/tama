@@ -176,8 +176,15 @@ async function main() {
 	const file = join(dir, "seed.sql");
 	await writeFile(file, sql.join("\n"), "utf8");
 	const flag = REMOTE ? "--remote" : "--local";
+	// SEED_CONFIG lets the demo deploy point at wrangler.example.toml so the
+	// DB name resolves to the tama-example database (not myvet).
+	const config = process.env.SEED_CONFIG;
 	console.log(`Seeding "Pixel" into ${DB} (${flag})…`);
-	await $`bunx wrangler d1 execute ${DB} ${flag} --file ${file}`;
+	if (config) {
+		await $`bunx wrangler d1 execute ${DB} ${flag} -c ${config} --file ${file}`;
+	} else {
+		await $`bunx wrangler d1 execute ${DB} ${flag} --file ${file}`;
+	}
 	await rm(dir, { recursive: true, force: true });
 	console.log("✓ Example pet 'Pixel' seeded.");
 }

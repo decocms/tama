@@ -1,0 +1,30 @@
+# Separate config for the PUBLIC DEMO deploy (Pixel, the example pet). Kept
+# apart from wrangler.toml so it never touches Beto's `myvet` prod. Deploy with:
+#   wrangler deploy -c wrangler.example.toml
+#   wrangler d1 migrations apply tama-example --remote
+#   SEED_DB=tama-example bun run scripts/seed-example.ts --remote
+name = "tama-example"
+main = "api/main.cf.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+AI_GATEWAY_ACCOUNT_ID = "55dd6d847f366735ef6e0f860c7bdc51"
+AI_GATEWAY_NAME = "default"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tama-example"
+database_id = "c59a5ab3-0fc2-49eb-bd3d-8a0aefd587b4"
+migrations_dir = "api/db/migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "tama-example-files"
+
+[ai]
+binding = "AI"
+
+[assets]
+directory = "dist/client"
+binding = "ASSETS"

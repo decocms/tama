@@ -10,7 +10,7 @@ an ambient pixel companion at `/companion`, MCP server at `/mcp`. Free, MIT,
 your data lives in your account — we never see it.
 
 → Landing: <https://tama.vet>
-→ Demo: <https://tama-example.deco-ceo.workers.dev> *(coming soon)*
+→ Live demo: <https://tama-example.deco-ceo.workers.dev> (Pixel, an anemia-recovery case)
 
 ## What you get
 
