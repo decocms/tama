@@ -49,19 +49,6 @@ export function ExamsPage() {
 			}
 		>
 			<div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
-				<Section title="Upload a lab exam" eyebrow="New exam">
-					<UploadCard onCreated={(examId) => setReviewingId(examId)} />
-				</Section>
-
-				{reviewingId ? (
-					<Section title="Review extracted metrics" eyebrow="Draft">
-						<ExamReviewLoader
-							examId={reviewingId}
-							onClose={() => setReviewingId(null)}
-						/>
-					</Section>
-				) : null}
-
 				<Section
 					title="Panel overview"
 					eyebrow="Evolution"
@@ -90,6 +77,19 @@ export function ExamsPage() {
 						}
 					/>
 				</Section>
+
+				<Section title="Upload a lab exam" eyebrow="New exam">
+					<UploadCard onCreated={(examId) => setReviewingId(examId)} />
+				</Section>
+
+				{reviewingId ? (
+					<Section title="Review extracted metrics" eyebrow="Draft">
+						<ExamReviewLoader
+							examId={reviewingId}
+							onClose={() => setReviewingId(null)}
+						/>
+					</Section>
+				) : null}
 
 				<Section title="History" eyebrow={`${exams?.length ?? 0} exams`}>
 					{isLoading ? (
