@@ -105,6 +105,7 @@ interface Parts {
 	bodyShade: string;
 	patch: string | null; // secondary coat color for cap + ears (particolor)
 	patchInner: string;
+	tan: string | null; // tan/tricolor points (eyebrow dots + cheeks below mask)
 	earInner: string;
 	muzzle: string; // lighter muzzle/blaze
 	nose: string;
@@ -142,6 +143,14 @@ function analyze(character: CharacterSheet): { p: Parts; t: Traits } {
 				? shade(body, 0.38)
 				: null;
 
+	// Tan / tricolor points — the yellowish eyebrow dots + cheek fur below a
+	// dark mask that black-and-tan / tricolor pets have. Triggered by a "tan"
+	// secondary color or tan/tricolor/point markings.
+	const tanText = `${character.secondaryColor ?? ""} ${markingText} ${featText}`;
+	const tan = /tan|tricolor|tri-color|\bpoints?\b|eyebrow/.test(tanText)
+		? "#cf9a52"
+		: null;
+
 	const nose = bodyDark ? "#1c1814" : "#3a2c24";
 	const p: Parts = {
 		body,
@@ -149,6 +158,7 @@ function analyze(character: CharacterSheet): { p: Parts; t: Traits } {
 		bodyShade: shade(body, 0.86),
 		patch,
 		patchInner: patch ? lighten(patch, 0.16) : "#caa",
+		tan,
 		earInner: "#f1b7a6",
 		muzzle: bodyDark ? lighten(body, 0.5) : lighten(body, 0.28),
 		nose,
@@ -309,10 +319,30 @@ function coat(p: PartsX, g: Geom): string {
 			`<path d="M ${cx} ${top + 2} Q ${cx - 3.4} ${g.domeCy} ${cx - 2.6} ${g.domeCy + 7} Q ${cx} ${g.domeCy + 10} ${cx + 2.6} ${g.domeCy + 7} Q ${cx + 3.4} ${g.domeCy} ${cx} ${top + 2} Z" fill="${p.muzzle}"/>`,
 		);
 	}
+	// Tan cheek fur just below the mask (black-and-tan / tricolor). Drawn before
+	// the muzzle so the white snout covers the centre and tan stays on the
+	// cheeks. Soft so it melts into the coat.
+	if (p.tan) {
+		const cy = g.muzzleCy - 5;
+		out.push(
+			`<ellipse cx="${cx - g.muzzleRx}" cy="${cy}" rx="5.6" ry="4.6" fill="${p.tan}" opacity="0.6"/>`,
+			`<ellipse cx="${cx + g.muzzleRx}" cy="${cy}" rx="5.6" ry="4.6" fill="${p.tan}" opacity="0.6"/>`,
+		);
+	}
 	// Light muzzle/chin area (always — gives the snout definition).
 	out.push(
 		`<ellipse cx="${cx}" cy="${g.muzzleCy + 0.5}" rx="${g.muzzleRx - 0.5}" ry="${g.muzzleRy - 0.5}" fill="${p.muzzle}" opacity="0.92"/>`,
 	);
+	// Tan eyebrow dots above the eyes (on the dark mask) — the "yellowish
+	// eyebrows". Tilted slightly outward like real brow points.
+	if (p.tan) {
+		const by = g.eyeY - 5.4;
+		const bdx = g.eyeDx * 0.82;
+		out.push(
+			`<ellipse cx="${cx - bdx}" cy="${by}" rx="2.5" ry="1.5" fill="${p.tan}" transform="rotate(-16 ${r2(cx - bdx)} ${r2(by)})"/>`,
+			`<ellipse cx="${cx + bdx}" cy="${by}" rx="2.5" ry="1.5" fill="${p.tan}" transform="rotate(16 ${r2(cx + bdx)} ${r2(by)})"/>`,
+		);
+	}
 	return out.join("\n");
 }
 
