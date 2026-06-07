@@ -20,8 +20,22 @@ import { join } from "node:path";
 import { $ } from "bun";
 import { clearSyncCache, loadSyncedSet, recordSynced } from "./sync-cache.ts";
 
-const DB_NAME = "myvet";
-const BUCKET = "myvet-files";
+// Defaults target the legacy `myvet` prod (local `myvet` → remote `myvet`).
+// Override via env to push the local DB to a DIFFERENT remote deploy — e.g.
+// Beto's own worker, whose remote DB/bucket are named differently from the
+// local source:
+//   SYNC_DB=beto SYNC_BUCKET=beto-files SYNC_LOCAL_DB=myvet \
+//   SYNC_LOCAL_BUCKET=myvet-files SYNC_REMOTE_CONFIG=wrangler.beto.toml \
+//   SYNC_CACHE_NS=toBeto bun run scripts/sync-to-prod.ts
+const DB_NAME = process.env.SYNC_DB ?? "myvet"; // remote target DB
+const BUCKET = process.env.SYNC_BUCKET ?? "myvet-files"; // remote target bucket
+const LOCAL_DB = process.env.SYNC_LOCAL_DB ?? DB_NAME; // local source DB
+const LOCAL_BUCKET = process.env.SYNC_LOCAL_BUCKET ?? BUCKET; // local source bucket
+const CACHE_NS = process.env.SYNC_CACHE_NS ?? "toProd";
+// When the remote DB only resolves via a non-default wrangler config.
+const REMOTE_CFG = process.env.SYNC_REMOTE_CONFIG
+	? ["-c", process.env.SYNC_REMOTE_CONFIG]
+	: [];
 
 const FORCE = process.argv.includes("--force");
 
@@ -43,7 +57,7 @@ async function main() {
 async function syncD1(tmp: string) {
 	console.log("→ D1: exporting local…");
 	const rawDump = join(tmp, "local.sql");
-	await $`bunx wrangler d1 export ${DB_NAME} --local --no-schema --output ${rawDump}`.quiet();
+	await $`bunx wrangler d1 export ${LOCAL_DB} --local --no-schema --output ${rawDump}`.quiet();
 
 	const sql = await readFile(rawDump, "utf8");
 	const transformed = transformDump(sql);
@@ -59,14 +73,42 @@ async function syncD1(tmp: string) {
 	}
 
 	console.log("→ D1: applying to remote…");
-	await $`bunx wrangler d1 execute ${DB_NAME} --remote --file ${ready}`.quiet();
+	await $`bunx wrangler d1 execute ${DB_NAME} --remote ${REMOTE_CFG} --file ${ready}`.quiet();
 	console.log("  ✓ D1 in sync");
 }
 
+// Parent-before-child table order. Wrangler's remote `d1 execute --file` splits
+// the file into separate batches/transactions, so `PRAGMA defer_foreign_keys`
+// doesn't survive across the whole import — on a FRESH remote a child row can
+// land before its parent and trip a FK constraint. Emitting INSERTs in this
+// topological order keeps every parent ahead of its children. Tables not listed
+// are appended last (after `pets`/`files`, which everything else depends on).
+const TABLE_ORDER = [
+	"files",
+	"pets",
+	"notes",
+	"exams",
+	"exam_metrics",
+	"metric_aliases",
+	"prescriptions",
+	"doses",
+	"schedule_state",
+	"recordings",
+	"recording_chunks",
+	"vet_visits",
+	"vaccines",
+	"symptoms",
+	"researches",
+	"push_subscriptions",
+	"notifications_sent",
+];
+
 function transformDump(sql: string): string {
 	// `wrangler d1 export --no-schema` still emits some pragmas + transaction
-	// wrappers. We strip the schema-affecting statements and rewrite INSERTs.
-	const out: string[] = [];
+	// wrappers. We strip the schema-affecting statements, rewrite INSERTs to
+	// upserts, and bucket them by table so we can emit in dependency order.
+	const byTable = new Map<string, string[]>();
+	const other: string[] = [];
 	for (const line of sql.split("\n")) {
 		const trimmed = line.trim();
 		if (!trimmed) continue;
@@ -81,12 +123,34 @@ function transformDump(sql: string): string {
 			if (/INSERT\s+INTO\s+"?(sqlite_sequence|_cf_METADATA)"?/i.test(trimmed)) {
 				continue;
 			}
-			out.push(
-				line.replace(/^(\s*)INSERT\s+INTO/i, "$1INSERT OR REPLACE INTO"),
+			const table = trimmed
+				.replace(/^INSERT\s+INTO\s+/i, "")
+				.match(/^"?([A-Za-z0-9_]+)"?/)?.[1];
+			const upsert = line.replace(
+				/^(\s*)INSERT\s+INTO/i,
+				"$1INSERT OR REPLACE INTO",
 			);
+			const bucket = byTable.get(table ?? "") ?? [];
+			bucket.push(upsert);
+			byTable.set(table ?? "", bucket);
 			continue;
 		}
-		out.push(line);
+		other.push(line);
+	}
+
+	// Defer FK enforcement within each batch too (belt and suspenders alongside
+	// the ordering), then emit known tables in dependency order, unknown last.
+	const out: string[] = ["PRAGMA defer_foreign_keys=TRUE;", ...other];
+	const seen = new Set<string>();
+	for (const t of TABLE_ORDER) {
+		const rows = byTable.get(t);
+		if (rows) {
+			out.push(...rows);
+			seen.add(t);
+		}
+	}
+	for (const [t, rows] of byTable) {
+		if (!seen.has(t)) out.push(...rows);
 	}
 	return out.join("\n");
 }
@@ -107,10 +171,10 @@ async function syncR2(tmp: string) {
 	const rows = await queryLocalFiles();
 
 	if (FORCE) {
-		await clearSyncCache("toProd");
+		await clearSyncCache(CACHE_NS);
 		console.log("  (--force) cleared sync cache");
 	}
-	const alreadySynced = await loadSyncedSet("toProd");
+	const alreadySynced = await loadSyncedSet(CACHE_NS);
 	const toSync = rows.filter((r) => !alreadySynced.has(r.r2_key));
 	const skipped = rows.length - toSync.length;
 	console.log(
@@ -130,9 +194,9 @@ async function syncR2(tmp: string) {
 		const key = row.r2_key;
 		const localPath = join(tmp, `blob-${done}.bin`);
 		try {
-			await $`bunx wrangler r2 object get ${BUCKET}/${key} --local --file ${localPath}`.quiet();
+			await $`bunx wrangler r2 object get ${LOCAL_BUCKET}/${key} --local --file ${localPath}`.quiet();
 			await $`bunx wrangler r2 object put ${BUCKET}/${key} --remote --file ${localPath} --content-type ${row.mime_type}`.quiet();
-			await recordSynced("toProd", key);
+			await recordSynced(CACHE_NS, key);
 			console.log(`  [${done}/${toSync.length}] ${key}`);
 		} catch (err) {
 			// biome-ignore lint/suspicious/noExplicitAny: bun shell error has stderr
@@ -166,7 +230,7 @@ async function syncR2(tmp: string) {
 
 async function queryLocalFiles(): Promise<FileRow[]> {
 	const out =
-		await $`bunx wrangler d1 execute ${DB_NAME} --local --command ${"SELECT id, r2_key, mime_type FROM files;"} --json`.quiet();
+		await $`bunx wrangler d1 execute ${LOCAL_DB} --local --command ${"SELECT id, r2_key, mime_type FROM files;"} --json`.quiet();
 	const raw = out.stdout.toString();
 	// `wrangler d1 execute --json` prints a banner before the JSON. Find the
 	// first '['.
