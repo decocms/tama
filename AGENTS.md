@@ -10,8 +10,10 @@ described below. There is no `bun run adopt` script — you (the agent) make
 the edits yourself using your normal file/edit tools.
 
 **Do not modify code beyond what these steps require.** This file is the only
-load-bearing front door; once steps 1–3 are done it stops being relevant and
-[CLAUDE.md](./CLAUDE.md) takes over for ongoing development.
+load-bearing front door for setup, and also carries the architecture notes for
+ongoing development (see the end). Note: [CLAUDE.md](./CLAUDE.md) is **not** a
+dev guide — it's the **deployed agent's system prompt** (the pet's personality
+and medical grounding that Studio loads); you customize it in step 1.
 
 ---
 
@@ -67,6 +69,11 @@ questions at a time, like a person would. Collect:
    - Any "Tama" in `README.md`, page `<title>` tags, dashboard copy.
    - `api/db/migrations/0011_singleton_pet.sql` — the seed row's `name` so
      fresh deploys land with the right pet identity from minute one.
+   - `CLAUDE.md` — the **agent's system prompt**. Replace the `<placeholders>`
+     with the pet's real identity, active medical context, meds, diet, and
+     red-flag signs. This is what makes the deployed agent *know* the pet.
+   - `app.json` — set `name`/`friendlyName`/`description` and point
+     `connection.url` at the deployed worker's `/api/mcp`.
 3. Generate the sprite pack: call `pet_sprite_svg_generate` (this repo's MCP
    tool) with `imageBase64` of the photo and `mimeType`. One Claude vision
    call reads the photo into a character sheet, then 6 SVG states render
@@ -139,3 +146,73 @@ guidance on day-to-day development.
 - **Don't commit secrets.** Cloudflare secrets go through `wrangler secret
   put`, not `.dev.vars` (which is gitignored anyway, but the human should
   use `wrangler secret put` for prod).
+
+---
+
+## Architecture & ongoing development
+
+The Worker is three things at once: a single-page React app, an MCP server at
+`/api/mcp` (rewritten to `/mcp` internally), and a cron that fires medication
+push reminders. One deploy **is** one pet — every record hangs off the
+singleton `pet_self` (no `petId` arguments anywhere).
+
+### The seven apps
+
+Each top-level surface is its own **pinnable MCP app**, wired uniformly:
+
+`app_<x>` tool (`api/tools/app-surfaces.ts`) → `_meta.ui.resourceUri`
+(`ui://tama/<x>`, `api/tools/uris.ts`) → an HTML resource that serves the one
+bundle (`api/resources/ui.ts`) → a hash route (`web/main/App.tsx`), mapped from
+the opening tool in `web/app.tsx` (`TOOL_TO_ROUTE`).
+
+| App | Route | Tool |
+| --- | --- | --- |
+| Pet | `/` | `app_pet` |
+| Timeline | `/timeline` | `app_timeline` |
+| Timetable | `/timetable` | `app_timetable` |
+| Exams | `/exams` | `app_exams` |
+| Research | `/research` | `app_research` |
+| Recordings | `/recordings` | `app_recordings` |
+| Respiratory rate | `/breathing` | `app_breathing` |
+
+Non-app routes: `/companion` (ambient PWA `start_url`), `/sprite-lab`,
+`/subscribe`, `/exams/detail`.
+
+**To add an app:** add a `URI` entry; an `app_*` tool registered in
+`api/tools/index.ts`; an `htmlResource` in `api/resources/ui.ts`; a route in
+`web/main/App.tsx`; a `TOOL_TO_ROUTE` entry in `web/app.tsx`; and a `NAV` row in
+`web/main/components/Layout.tsx` for the standalone browser nav.
+
+### Embedded vs standalone chrome
+
+Inside studio (iframe), studio's pinned-app bar is the navigation, so `Layout`
+hides its own header (`isInIframe()`); a standalone browser tab shows the header
+tabs. Tool calls match: embedded → studio's MCP channel (`web/main/lib/mcp.ts`),
+standalone → direct `POST /api/mcp` (carrying the bearer token when set).
+
+### MCP bearer auth
+
+`/api/mcp` is gated by `mcpAuthRejection` in `api/app.ts`: requires
+`Authorization: Bearer <MCP_BEARER_TOKEN>` only when that secret is set; unset
+(local dev / fresh fork) leaves it open.
+
+### Data
+
+D1 + Drizzle (`api/db/schema.ts`), append-only migrations
+(`api/db/migrations`). The **timeline** is a query-time merge across typed
+tables — no generic events table, no episodes. R2 holds uploaded files. The
+sprite pack and structured "pet sheet" are JSON columns on the pet row.
+
+### Commands
+
+```bash
+bun run dev               # vite build --watch + wrangler dev (localhost:8788)
+bun run check             # tsc --noEmit
+bun test                  # unit tests
+bun run build             # single-file bundle → dist/client
+bun run deploy            # build + wrangler deploy (default wrangler.toml)
+bun run db:migrate:local  # apply migrations to local D1
+```
+
+Per-deploy config lives in its own `wrangler.<name>.toml`; deploy with
+`wrangler deploy -c wrangler.<name>.toml`.
