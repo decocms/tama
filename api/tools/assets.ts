@@ -7,7 +7,7 @@ import {
 	createExamDraft,
 	type ExamMetricInput,
 } from "../storage/exams.ts";
-import { listFiles, saveFile } from "../storage/files.ts";
+import { listAssetFiles, saveFile } from "../storage/files.ts";
 import type { FileRow } from "../db/schema.ts";
 import { addNote } from "../storage/timeline.ts";
 import { addVaccine } from "../storage/vaccines.ts";
@@ -161,7 +161,7 @@ export const assetListTool = (_env: Env) =>
 	createTool({
 		id: "asset_list",
 		description:
-			"List every raw uploaded file in the Assets library (newest first), with the kind tag and original name.",
+			"List the uploaded files in the Assets library (newest first), with the kind tag and original name. Recording chunks are excluded — they're transcription internals, not documents.",
 		inputSchema: z.object({}),
 		outputSchema: z.object({
 			assets: z.array(
@@ -176,7 +176,7 @@ export const assetListTool = (_env: Env) =>
 		}),
 		annotations: { readOnlyHint: true },
 		execute: async ({ runtimeContext }) => {
-			const files = await listFiles(runtimeContext.env as Env);
+			const files = await listAssetFiles(runtimeContext.env as Env);
 			return {
 				assets: files.map((f) => ({
 					id: f.id,

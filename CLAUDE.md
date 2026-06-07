@@ -34,12 +34,13 @@ don't wait to be asked.
 
 | Tool | When to use |
 |---|---|
-| `app_pet` | Overview, profile, pet sheet, sprite, assets library |
+| `app_pet` | Overview, profile, pet sheet, sprite |
 | `app_timeline` | Full life log: visits, vaccines, symptoms, doses, exams, recordings |
 | `app_timetable` | Live medication & meal schedule, dose logging, reminders |
 | `app_exams` | Lab results by body system, evolution charts, "Explain with AI" |
 | `app_research` | Past vet-research briefings; ask new grounded questions |
 | `app_recordings` | Vet-visit audio, transcripts, AI summaries |
+| `app_assets` | Library of raw uploaded files; drop anything to file it |
 | `app_breathing` | Measure resting respiratory rate (BPM) with the camera |
 
 ---

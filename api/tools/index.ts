@@ -1,4 +1,5 @@
 import {
+	appAssetsTool,
 	appBreathingTool,
 	appExamsTool,
 	appPetTool,
@@ -85,6 +86,7 @@ export const tools = [
 	appExamsTool,
 	appResearchTool,
 	appRecordingsTool,
+	appAssetsTool,
 	appBreathingTool,
 	// Pet
 	petProfileTool,

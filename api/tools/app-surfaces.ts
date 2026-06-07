@@ -8,16 +8,19 @@ import { URI } from "./uris.ts";
 // bundle. The agent rarely calls these — the human opens them directly. Studio
 // shows one tab per app, which is why the in-app header is hidden when embedded
 // (see web/main/components/Layout.tsx) — studio's tab bar is the navigation.
+//
+// `annotations.title` is the human label studio shows on the pinned tab (the
+// tool id like "app_exams" is the fallback, which reads as "App Exams").
 
 export const appPetTool = (_env: Env) =>
 	createTool({
 		id: "app_pet",
 		description:
-			"Open the Pet app — profile, evolving health summary, the pixel companion, and the Assets library (everything you've uploaded). The home base.",
+			"Open the Pet app — profile, the pet sheet, the evolving health summary, and the pixel companion. The home base.",
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.pet } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Pet", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -29,7 +32,7 @@ export const appTimelineTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.timeline } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Timeline", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -41,7 +44,7 @@ export const appTimetableTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.timetable } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Timetable", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -53,7 +56,7 @@ export const appExamsTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.exams } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Exams", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -65,7 +68,7 @@ export const appResearchTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.research } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Research", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -77,7 +80,19 @@ export const appRecordingsTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.recordings } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Recordings", readOnlyHint: true },
+		execute: async () => ({}),
+	});
+
+export const appAssetsTool = (_env: Env) =>
+	createTool({
+		id: "app_assets",
+		description:
+			"Open the Assets app — the library of raw uploaded files (lab PDFs, photos, documents). Drop anything and the agent files it into the timeline.",
+		inputSchema: z.object({}),
+		outputSchema: z.object({}),
+		_meta: { ui: { resourceUri: URI.assets } },
+		annotations: { title: "Assets", readOnlyHint: true },
 		execute: async () => ({}),
 	});
 
@@ -89,6 +104,6 @@ export const appBreathingTool = (_env: Env) =>
 		inputSchema: z.object({}),
 		outputSchema: z.object({}),
 		_meta: { ui: { resourceUri: URI.breathing } },
-		annotations: { readOnlyHint: true },
+		annotations: { title: "Respiratory rate", readOnlyHint: true },
 		execute: async () => ({}),
 	});

@@ -18,6 +18,7 @@ const TOOL_TO_ROUTE: Record<string, string> = {
 	app_exams: "/exams",
 	app_research: "/research",
 	app_recordings: "/recordings",
+	app_assets: "/assets",
 	app_breathing: "/breathing",
 	timeline_get: "/timeline",
 	timetable_get: "/timetable",

@@ -156,7 +156,7 @@ The Worker is three things at once: a single-page React app, an MCP server at
 push reminders. One deploy **is** one pet — every record hangs off the
 singleton `pet_self` (no `petId` arguments anywhere).
 
-### The seven apps
+### The apps
 
 Each top-level surface is its own **pinnable MCP app**, wired uniformly:
 
@@ -173,6 +173,7 @@ the opening tool in `web/app.tsx` (`TOOL_TO_ROUTE`).
 | Exams | `/exams` | `app_exams` |
 | Research | `/research` | `app_research` |
 | Recordings | `/recordings` | `app_recordings` |
+| Assets | `/assets` | `app_assets` |
 | Respiratory rate | `/breathing` | `app_breathing` |
 
 Non-app routes: `/companion` (ambient PWA `start_url`), `/sprite-lab`,

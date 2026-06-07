@@ -1,35 +1,19 @@
 import { Link } from "@tanstack/react-router";
-import {
-	ChevronRight,
-	FileText,
-	FlaskConical,
-	RefreshCw,
-	Upload,
-} from "lucide-react";
-import { useRef } from "react";
+import { ChevronRight, FlaskConical, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { formatDateTime } from "@/lib/format.ts";
-import type { Asset, PetProfile } from "@/types/api.ts";
+import type { PetProfile } from "@/types/api.ts";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
-import { Section } from "../components/Section.tsx";
-import {
-	useAssets,
-	useExams,
-	usePet,
-	useRefreshProfile,
-	useUploadAsset,
-} from "../lib/queries.ts";
+import { useExams, usePet, useRefreshProfile } from "../lib/queries.ts";
 
-// The Pet app: profile, the one evolving health summary, the companion link,
-// the Assets library (drop anything → it's filed into the timeline), and a
-// shortcut to exams. No episodes — the life lives on the Timeline.
+// The Pet app: profile, the pet sheet, the evolving health summary, the
+// companion (tap the avatar), and a shortcut to exams. Assets live in their own
+// app now; the life itself lives on the Timeline. No episodes.
 export function PetPage() {
 	const { data: pet, isLoading } = usePet();
 	const { data: exams } = useExams();
-	const { data: assets } = useAssets();
 	const refreshProfile = useRefreshProfile();
 
 	return (
@@ -61,8 +45,6 @@ export function PetPage() {
 							}
 							draftCount={(exams ?? []).filter((e) => e.status === "draft").length}
 						/>
-
-						<AssetsCard assets={assets ?? []} />
 					</>
 				)}
 			</div>
@@ -219,88 +201,3 @@ function ExamsCard({
 	);
 }
 
-function AssetsCard({ assets }: { assets: Asset[] }) {
-	const upload = useUploadAsset();
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	const handleFile = async (file: File) => {
-		try {
-			const buf = await file.arrayBuffer();
-			const bytes = new Uint8Array(buf);
-			let binary = "";
-			const chunk = 0x8000;
-			for (let i = 0; i < bytes.length; i += chunk) {
-				binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-			}
-			const result = await upload.mutateAsync({
-				imageBase64: btoa(binary),
-				mimeType: file.type || "application/octet-stream",
-				originalName: file.name,
-			});
-			toast.success(`Filed as ${result.assetType.replace("_", " ")}`);
-		} catch (e) {
-			toast.error((e as Error).message);
-		}
-	};
-
-	return (
-		<Section
-			title="Assets"
-			eyebrow={`${assets.length} files`}
-			action={
-				<>
-					<input
-						ref={inputRef}
-						type="file"
-						accept="image/*,application/pdf"
-						className="sr-only"
-						disabled={upload.isPending}
-						onChange={(e) => {
-							const f = e.target.files?.[0];
-							if (f) handleFile(f);
-							e.target.value = "";
-						}}
-					/>
-					<Button
-						size="sm"
-						disabled={upload.isPending}
-						onClick={() => inputRef.current?.click()}
-					>
-						<Upload className="w-3.5 h-3.5" />
-						{upload.isPending ? "Filing…" : "Upload"}
-					</Button>
-				</>
-			}
-		>
-			<p className="text-xs text-muted-foreground mb-3">
-				Drop any document, lab report, vaccine card, or photo — the agent
-				files it into the timeline automatically.
-			</p>
-			{assets.length === 0 ? (
-				<p className="rounded-lg border border-dashed p-5 text-sm text-muted-foreground bg-secondary/40">
-					Nothing uploaded yet.
-				</p>
-			) : (
-				<div className="space-y-2">
-					{assets.map((a) => (
-						<a
-							key={a.id}
-							href={`/api/files/${a.id}`}
-							target="_blank"
-							rel="noreferrer"
-							className="flex items-center gap-3 rounded-xl bg-card surface p-3 hover:border-primary/30 transition-colors"
-						>
-							<FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-							<span className="flex-1 min-w-0 truncate text-sm">
-								{a.originalName ?? a.id}
-							</span>
-							<span className="text-[10px] text-muted-foreground">
-								{formatDateTime(a.uploadedAt)}
-							</span>
-						</a>
-					))}
-				</div>
-			)}
-		</Section>
-	);
-}

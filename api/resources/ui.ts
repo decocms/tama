@@ -61,6 +61,11 @@ export const uiResources = [
 		"Vet-visit audio recordings with transcripts and AI summaries.",
 	),
 	htmlResource(
+		URI.assets,
+		"Assets",
+		"Library of raw uploaded files; drop anything and it's filed into the timeline.",
+	),
+	htmlResource(
 		URI.breathing,
 		"Respiratory rate",
 		"Measure resting breaths-per-minute with the camera.",

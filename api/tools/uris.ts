@@ -14,6 +14,7 @@ export const URI = {
 	exams: "ui://tama/exams",
 	research: "ui://tama/research",
 	recordings: "ui://tama/recordings",
+	assets: "ui://tama/assets",
 	breathing: "ui://tama/breathing",
 	// Inline tool surfaces
 	petGet: "ui://tama/pet-get",
