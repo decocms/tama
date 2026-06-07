@@ -5,28 +5,11 @@ import {
 	type CompanionState,
 	deriveCompanionStatus,
 } from "@/companion/state.ts";
-import type { SpritePack } from "@/types/api.ts";
 import { usePet, useTimetable } from "../lib/queries.ts";
 
-// Tiny pixel-companion view. The PWA manifest points `start_url`
+// Tiny companion view. The PWA manifest points `start_url`
 // here so when the app is launched from the dock/home-screen it lands in
 // the ambient view rather than the full dashboard.
-
-const STATE_TO_CELL: Record<CompanionState, number> = {
-	idle: 0,
-	happy: 1,
-	hungry: 2,
-	"pill-time": 3,
-	sleeping: 4,
-};
-
-const STATE_TO_PACK_KEY: Record<CompanionState, keyof SpritePack> = {
-	idle: "idle",
-	happy: "happy",
-	hungry: "hungry",
-	"pill-time": "pill-time",
-	sleeping: "sleeping",
-};
 
 const STATE_BG: Record<CompanionState, string> = {
 	idle: "#fff8ee",
@@ -35,8 +18,6 @@ const STATE_BG: Record<CompanionState, string> = {
 	"pill-time": "#ffe6cf",
 	sleeping: "#e6e0f5",
 };
-
-const SPRITE_URL = "/companion-sprite.svg";
 
 function browserTimeZone(): string {
 	try {
@@ -85,7 +66,7 @@ export function CompanionPage() {
 			onDoubleClick={openFullDashboard}
 		>
 			<div className="flex flex-col items-center gap-5 px-6 text-center">
-				<CreatureFace state={status.state} pack={pet?.spritePack ?? null} />
+				<CreatureFace state={status.state} svgPack={pet?.svgPack ?? null} />
 				<div className="space-y-1 max-w-xs">
 					<div
 						className="font-display text-lg font-semibold leading-tight"
@@ -118,73 +99,33 @@ export function CompanionPage() {
 
 function CreatureFace({
 	state,
-	pack,
+	svgPack,
 }: {
 	state: CompanionState;
-	pack: SpritePack | null;
+	svgPack: Record<string, string> | null;
 }) {
-	const cell = STATE_TO_CELL[state];
-	// Prefer the AI-generated per-pet pack when available, fall back to the
-	// static 6-cell placeholder sheet baked into public/.
-	const usingPack = pack != null && pack[STATE_TO_PACK_KEY[state]];
-	const bgStyle = usingPack
-		? {
-				backgroundImage: `url(${pack[STATE_TO_PACK_KEY[state]]})`,
-				backgroundSize: "256px 256px",
-				backgroundPosition: "0 0",
-				backgroundRepeat: "no-repeat" as const,
-			}
-		: {
-				backgroundImage: `url(${SPRITE_URL})`,
-				backgroundSize: "1536px 256px",
-				backgroundPosition: `${-cell * 256}px 0`,
-			};
+	const svg = svgPack?.[state];
+	if (!svg) {
+		// No sprite yet (pet not set up) — a soft neutral disc.
+		return (
+			<div
+				className="rounded-full bg-[#e7dfce]"
+				style={{ width: 256, height: 256 }}
+				aria-label="companion"
+			/>
+		);
+	}
 	return (
 		<div
-			className="relative"
-			aria-label={`Tama is ${state}`}
+			aria-label={`${state}`}
+			className="[&>svg]:w-full [&>svg]:h-full"
 			style={{
 				width: 256,
 				height: 256,
-				...bgStyle,
-				imageRendering: "pixelated",
-				animation: "tama-breathe 2.4s ease-in-out infinite",
+				animation: "breathe 2.6s ease-in-out infinite",
 			}}
-		>
-			{state === "sleeping" ? <SleepingParticles /> : null}
-			<style>{`
-				@keyframes tama-breathe {
-					0%, 100% { transform: translateY(0) scaleY(1); }
-					50% { transform: translateY(-2px) scaleY(1.02); }
-				}
-				@keyframes tama-zfloat {
-					0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
-					20%  { opacity: 0.9; }
-					100% { transform: translate(14px, -28px) rotate(15deg); opacity: 0; }
-				}
-			`}</style>
-		</div>
-	);
-}
-
-function SleepingParticles() {
-	return (
-		<>
-			{[0, 1, 2].map((i) => (
-				<span
-					key={i}
-					className="absolute font-mono font-bold text-[#6b8cc8]"
-					style={{
-						top: `${30 + i * 8}px`,
-						left: `${165 - i * 4}px`,
-						fontSize: `${18 - i * 2}px`,
-						animation: "tama-zfloat 3.2s ease-out infinite",
-						animationDelay: `${i * 0.8}s`,
-					}}
-				>
-					z
-				</span>
-			))}
-		</>
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
 	);
 }
