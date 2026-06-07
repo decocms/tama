@@ -15,8 +15,10 @@ import {
 } from "../lib/queries.ts";
 
 export function TimetablePage() {
-	const { data: entries, isLoading } = useTimetable();
-	const { data: states } = useScheduleStates();
+	const { data: entries, isPending: ttPending } = useTimetable();
+	const { data: states, isPending: ssPending } = useScheduleStates();
+	// Gate on BOTH so the schedule list doesn't pop in after the dose sections.
+	const isLoading = ttPending || ssPending;
 
 	const now = Date.now();
 	const pending = (entries ?? []).filter((e) => e.status === "pending");

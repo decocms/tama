@@ -38,7 +38,7 @@ export function ExamsPage() {
 	const navigate = useNavigate();
 	const { data: pet } = usePet();
 	const { data: exams, isLoading } = useExams();
-	const { data: series } = useMetricSeries([]);
+	const { data: series, isPending: seriesPending } = useMetricSeries([]);
 	const [reviewingId, setReviewingId] = useState<string | null>(null);
 	const explain = useExplainState();
 	const hasData = (series ?? []).length > 0;
@@ -80,15 +80,22 @@ export function ExamsPage() {
 						petName={pet?.name}
 					/>
 
-					<PanelOverview
-						series={series ?? []}
-						onSelectPanel={(panel) =>
-							navigate({
-								to: "/exams/detail",
-								search: { keys: PANEL_DEFAULT_KEYS[panel].join(",") },
-							})
-						}
-					/>
+					{seriesPending ? (
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<Skeleton className="h-48 w-full rounded-2xl" />
+							<Skeleton className="h-48 w-full rounded-2xl" />
+						</div>
+					) : (
+						<PanelOverview
+							series={series ?? []}
+							onSelectPanel={(panel) =>
+								navigate({
+									to: "/exams/detail",
+									search: { keys: PANEL_DEFAULT_KEYS[panel].join(",") },
+								})
+							}
+						/>
+					)}
 				</Section>
 
 				<Section title="Upload a lab exam" eyebrow="New exam">

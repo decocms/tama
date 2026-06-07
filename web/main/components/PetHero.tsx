@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import { Badge } from "@/components/ui/badge.tsx";
 import { deriveCompanionStatus } from "@/companion/state.ts";
-import type { Pet } from "@/types/api.ts";
-import { useTimetable } from "../lib/queries.ts";
+import type { Pet, TimetableEntry } from "@/types/api.ts";
 import { Avatar } from "./Avatar.tsx";
 
 function browserTimeZone(): string {
@@ -15,9 +14,16 @@ function browserTimeZone(): string {
 	}
 }
 
-export function PetHero({ pet }: { pet: Pet }) {
-	const { data: entries } = useTimetable();
-
+// `entries` is passed in (the Pet page loads the timetable once and gates the
+// whole view on it) so the avatar's mood is correct on first paint — no fetch
+// here, no pop-in after the skeleton clears.
+export function PetHero({
+	pet,
+	entries = [],
+}: {
+	pet: Pet;
+	entries?: TimetableEntry[];
+}) {
 	// Re-tick each minute so the avatar's mood tracks the live schedule
 	// ("due in 5 min" → "overdue") without waiting for a refetch.
 	const [tick, setTick] = useState(0);
@@ -29,7 +35,7 @@ export function PetHero({ pet }: { pet: Pet }) {
 	const status = useMemo(
 		() =>
 			deriveCompanionStatus({
-				entries: entries ?? [],
+				entries,
 				petName: pet.name ?? "Tama",
 				summary: pet.summary ?? null,
 				now: new Date(),

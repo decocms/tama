@@ -12,22 +12,28 @@ import { usePet, useRefreshProfile, useTimetable } from "../lib/queries.ts";
 // companion (tap the avatar). Exams, Assets, etc. are their own apps now; the
 // life itself lives on the Timeline. No episodes.
 export function PetPage() {
-	const { data: pet, isLoading } = usePet();
+	const { data: pet, isLoading: petLoading } = usePet();
+	// Load the timetable here too and gate the whole page on BOTH — otherwise
+	// the hero avatar and the status card would each fetch on their own and pop
+	// in a beat after the skeleton clears. One skeleton, then the finished view.
+	const { data: entries, isPending: ttPending } = useTimetable();
 	const refreshProfile = useRefreshProfile();
+	const loading = petLoading || ttPending || !pet;
 
 	return (
 		<Layout>
 			<div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
-				{isLoading || !pet ? (
+				{loading ? (
 					<>
 						<Skeleton className="h-44 w-full rounded-2xl" />
-						<Skeleton className="h-24 w-full rounded-xl" />
+						<Skeleton className="h-[72px] w-full rounded-2xl" />
+						<Skeleton className="h-64 w-full rounded-2xl" />
 					</>
 				) : (
 					<>
-						<PetHero pet={pet} />
+						<PetHero pet={pet} entries={entries ?? []} />
 
-						<TimetableStatusCard />
+						<TimetableStatusCard entries={entries ?? []} />
 
 						<CaseFileCard
 							profile={pet.profile ?? null}
@@ -58,10 +64,9 @@ function fmtWhen(iso: string): string {
 	});
 }
 
-function TimetableStatusCard() {
-	const { data: entries } = useTimetable();
+function TimetableStatusCard({ entries }: { entries: TimetableEntry[] }) {
 	const now = Date.now();
-	const pending = (entries ?? []).filter((e) => e.status === "pending");
+	const pending = entries.filter((e) => e.status === "pending");
 	const overdue = pending
 		.filter((e) => new Date(e.scheduledAt).getTime() < now)
 		.sort((a, b) => (a.scheduledAt < b.scheduledAt ? -1 : 1));
@@ -142,45 +147,40 @@ function CaseFileCard({
 	refreshing: boolean;
 	onRefresh: () => void;
 }) {
-	const groups: { label: string; items: string[]; tint: string }[] = profile
+	// Bright landing-palette pastels per category (cream/peach/mint/lavender/
+	// rose), with dark ink text — legible and lively, unlike the old ~8%-opacity
+	// tints that washed out. `ink` text reads on every pastel and in dark mode.
+	const groups: { label: string; items: string[]; bg: string }[] = profile
 		? [
-				{
-					label: "Allergies",
-					items: profile.allergies ?? [],
-					tint: "var(--color-tint-overdue)",
-				},
+				{ label: "Allergies", items: profile.allergies ?? [], bg: "#fde0e0" },
 				{
 					label: "Chronic",
 					items: profile.chronicConditions ?? [],
-					tint: "var(--color-tint-med)",
+					bg: "#fff1d6",
 				},
 				{
 					label: "Active concerns",
 					items: profile.activeConcerns ?? [],
-					tint: "var(--color-tint-upcoming)",
+					bg: "#ffbd8e",
 				},
 				{
 					label: "Medications",
 					items: profile.medications ?? [],
-					tint: "var(--color-tint-given)",
+					bg: "#b6e3c8",
 				},
-				{
-					label: "Watch for",
-					items: profile.watchFor ?? [],
-					tint: "var(--color-tint-pet)",
-				},
+				{ label: "Watch for", items: profile.watchFor ?? [], bg: "#c9b6f0" },
 				{
 					label: "Past episodes",
 					items: profile.pastEpisodes ?? [],
-					tint: "var(--color-tint-meal)",
+					bg: "#e6ddca",
 				},
 			].filter((g) => g.items.length > 0)
 		: [];
 
 	return (
-		<div className="rounded-2xl bg-card surface p-5">
-			<div className="flex items-start justify-between gap-3 mb-2">
-				<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+		<div className="rounded-2xl bg-card surface p-5 sm:p-6">
+			<div className="flex items-start justify-between gap-3 mb-3">
+				<div className="text-xs uppercase tracking-[0.14em] text-[#b88858] font-bold">
 					Pet sheet
 				</div>
 				<Button
@@ -203,13 +203,13 @@ function CaseFileCard({
 					<strong>Generate</strong> to build it.
 				</p>
 			) : (
-				<div className="space-y-3">
+				<div className="space-y-4">
 					{profile.oneLiner ? (
-						<p className="text-sm font-medium text-foreground">
+						<p className="text-base font-semibold text-foreground leading-relaxed">
 							{profile.oneLiner}
 						</p>
 					) : null}
-					<div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+					<div className="flex flex-wrap gap-2">
 						{profile.ageText ? <Fact>{profile.ageText}</Fact> : null}
 						{profile.weightKg ? <Fact>{profile.weightKg} kg</Fact> : null}
 						{profile.sex ? <Fact>{profile.sex}</Fact> : null}
@@ -217,15 +217,15 @@ function CaseFileCard({
 					</div>
 					{groups.map((g) => (
 						<div key={g.label}>
-							<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-1">
+							<div className="text-[11px] uppercase tracking-[0.12em] text-foreground/60 font-bold mb-1.5">
 								{g.label}
 							</div>
-							<div className="flex flex-wrap gap-1.5">
+							<div className="flex flex-wrap gap-2">
 								{g.items.map((it) => (
 									<span
 										key={it}
-										className="text-xs px-2 py-0.5 rounded-full border border-border/70"
-										style={{ backgroundColor: g.tint }}
+										className="text-sm leading-snug px-3 py-1.5 rounded-full border border-[#2a1f17]/12 font-medium text-[#2a1f17]"
+										style={{ backgroundColor: g.bg }}
 									>
 										{it}
 									</span>
@@ -241,7 +241,7 @@ function CaseFileCard({
 
 function Fact({ children }: { children: React.ReactNode }) {
 	return (
-		<span className="px-2 py-0.5 rounded-full bg-secondary/60 border border-border/60">
+		<span className="text-sm px-3 py-1.5 rounded-full bg-[#fbeede] border border-[#2a1f17]/12 font-medium text-foreground/80">
 			{children}
 		</span>
 	);
