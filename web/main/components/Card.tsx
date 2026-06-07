@@ -46,14 +46,17 @@ export function Row({
 }
 
 // Prominent time block: 24h digital-clock face on the left of a schedule row.
-// `tone` tints the box for overdue (rust) / done (moss); default is ink.
+// `tone` tints it — overdue (rust), soon ≤1h (saffron), done (moss); the
+// resting "upcoming" is a calm warm-neutral (not a loud blue).
+export type TimeBoxTone = "upcoming" | "soon" | "overdue" | "done" | "default";
+
 export function TimeBox({
 	iso,
-	tone = "default",
+	tone = "upcoming",
 	timeZone,
 }: {
 	iso: string;
-	tone?: "default" | "overdue" | "done" | "upcoming";
+	tone?: TimeBoxTone;
 	timeZone?: string;
 }) {
 	const d = new Date(iso);
@@ -68,25 +71,26 @@ export function TimeBox({
 		.toUpperCase();
 
 	const palette = {
-		default: { border: "#2a1f17", bg: "#fff8ee", text: "#2a1f17" },
+		default: { border: "#d8c9ad", bg: "#fffaf0", text: "#2a1f17" },
+		upcoming: { border: "#d8c9ad", bg: "#fffaf0", text: "#2a1f17" },
+		soon: { border: "#c08a1e", bg: "#faf0d2", text: "#8a6310" },
 		overdue: { border: "#b7561e", bg: "#fbe7da", text: "#b7561e" },
-		done: { border: "#4a7c59", bg: "#e3efe6", text: "#3f6b4d" },
-		upcoming: { border: "#2b5ba1", bg: "#e7eef8", text: "#2b5ba1" },
+		done: { border: "#7fae8c", bg: "#e9f1ea", text: "#3f6b4d" },
 	}[tone];
 
 	return (
 		<div
-			className="shrink-0 flex flex-col items-center justify-center px-2.5 py-1.5 border-2 min-w-[68px]"
+			className="shrink-0 flex flex-col items-center justify-center px-3 py-2 border-2 min-w-[80px]"
 			style={{ borderColor: palette.border, backgroundColor: palette.bg }}
 		>
 			<span
-				className="font-time text-xl font-bold tabular-nums leading-none"
+				className="font-time text-2xl font-bold tabular-nums leading-none"
 				style={{ color: palette.text }}
 			>
 				{time}
 			</span>
 			<span
-				className="font-time text-[9px] font-bold tracking-[0.12em] mt-0.5 opacity-70"
+				className="font-time text-[10px] font-bold tracking-[0.18em] mt-1 opacity-55"
 				style={{ color: palette.text }}
 			>
 				{day}

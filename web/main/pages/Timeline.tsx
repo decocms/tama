@@ -160,9 +160,12 @@ function EntryRow({
 	const readable = !!entry.detail && entry.detail.length > 0;
 	return (
 		<li
-			className={`flex items-start gap-3 rounded-xl bg-card surface p-3 ${
-				readable ? "cursor-pointer hover:border-primary/30 transition-colors" : ""
+			className={`flex items-start gap-3 bg-card surface p-3 ${
+				readable ? "cursor-pointer surface-hover transition-shadow" : ""
 			}`}
+			// A colored left bar in the entry's type color — the timeline reads as
+			// a color-coded stream at a glance (meds blue, exams green, …).
+			style={{ borderLeftWidth: 3, borderLeftColor: m.color }}
 			onClick={readable ? onOpen : undefined}
 			onKeyDown={
 				readable
@@ -179,30 +182,41 @@ function EntryRow({
 			tabIndex={readable ? 0 : undefined}
 		>
 			<div
-				className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5"
-				style={{ backgroundColor: `${m.color}1a`, color: m.color }}
+				className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5"
+				style={{ backgroundColor: `${m.color}1f`, color: m.color }}
 			>
-				<Icon className="w-3.5 h-3.5" />
+				<Icon className="w-4 h-4" />
 			</div>
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2 flex-wrap">
-					<span className="font-medium text-sm">{entry.title}</span>
+					<span
+						className="text-[10px] uppercase tracking-[0.12em] font-bold"
+						style={{ color: m.color }}
+					>
+						{m.label}
+					</span>
 					{entry.status && entry.type !== "dose" ? (
 						<Badge variant="outline" className="text-[10px]">
 							{entry.status}
 						</Badge>
 					) : null}
 				</div>
+				{entry.title && entry.title !== m.label ? (
+					<div className="font-semibold text-sm leading-snug">
+						{entry.title}
+					</div>
+				) : null}
 				{entry.detail ? (
 					<p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
 						{entry.detail}
 					</p>
 				) : null}
 			</div>
-			<span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+			<span className="font-time text-xs text-muted-foreground tabular-nums shrink-0">
 				{new Date(entry.at).toLocaleTimeString(undefined, {
 					hour: "2-digit",
 					minute: "2-digit",
+					hour12: false,
 				})}
 			</span>
 		</li>

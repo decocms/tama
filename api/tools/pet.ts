@@ -210,3 +210,38 @@ export const petProfileRefreshTool = (_env: Env) =>
 			return { profile };
 		},
 	});
+
+export const petProfileUpdateTool = (_env: Env) =>
+	createTool({
+		id: "pet_profile_update",
+		description:
+			"Directly edit specific fields of the pet's case file (pet sheet) WITHOUT regenerating from the timeline. Only the fields you pass change; everything else is preserved. Array fields (allergies, chronicConditions, activeConcerns, pastEpisodes, medications, watchFor) REPLACE the whole list — read pet_profile first, edit the list, send it back. Use this for surgical fixes (e.g. drop a discontinued medication, fix one allergy) instead of pet_profile_refresh.",
+		inputSchema: z.object({
+			oneLiner: z.string().optional(),
+			sex: z.string().nullable().optional(),
+			ageText: z.string().nullable().optional(),
+			weightKg: z.number().nullable().optional(),
+			diet: z.string().nullable().optional(),
+			allergies: z.array(z.string()).optional(),
+			chronicConditions: z.array(z.string()).optional(),
+			activeConcerns: z.array(z.string()).optional(),
+			pastEpisodes: z.array(z.string()).optional(),
+			medications: z.array(z.string()).optional(),
+			watchFor: z.array(z.string()).optional(),
+		}),
+		outputSchema: z.object({ profile: PetProfileSchema }),
+		execute: async ({ context, runtimeContext }) => {
+			const env = runtimeContext.env as Env;
+			const pet = await getSelfPet(env);
+			if (!pet) throw new Error("pet_self row missing");
+			// Start from the current sheet (or an empty one) and overlay ONLY the
+			// keys actually provided, so unspecified fields/arrays are untouched.
+			const base = parseProfile(pet) ?? PetProfileSchema.parse({ oneLiner: "" });
+			const patch = Object.fromEntries(
+				Object.entries(context).filter(([, v]) => v !== undefined),
+			);
+			const merged = PetProfileSchema.parse({ ...base, ...patch });
+			await setProfile(env, PET_SELF_ID, merged);
+			return { profile: merged };
+		},
+	});

@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { Cake, Globe } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import { deriveCompanionStatus } from "@/companion/state.ts";
@@ -11,6 +12,12 @@ function browserTimeZone(): string {
 	} catch {
 		return "UTC";
 	}
+}
+
+// "America/Sao_Paulo" → "São Paulo" (drop the technical region prefix).
+function friendlyTz(tz: string): string {
+	const city = tz.split("/").pop() ?? tz;
+	return city.replace(/_/g, " ").replace("Sao ", "São ");
 }
 
 // `entries` is passed in (the Pet page loads the timetable once and gates the
@@ -84,10 +91,18 @@ export function PetHero({
 					<div className="flex flex-wrap items-center gap-2 mt-3">
 						<Chip bg="#ffbd8e">{pet.species}</Chip>
 						{pet.breed ? <Chip bg="#b6e3c8">{pet.breed}</Chip> : null}
-						{pet.dob ? <Chip>{pet.dob}</Chip> : null}
+						{pet.dob ? (
+							<Chip>
+								<Cake className="w-3.5 h-3.5 opacity-70" />
+								{pet.dob}
+							</Chip>
+						) : null}
 						{pet.weightKg ? <Chip>{pet.weightKg} kg</Chip> : null}
 						{pet.timezone ? (
-							<Chip className="font-time">{pet.timezone}</Chip>
+							<Chip>
+								<Globe className="w-3.5 h-3.5 opacity-70" />
+								{friendlyTz(pet.timezone)}
+							</Chip>
 						) : null}
 					</div>
 				</div>
@@ -110,7 +125,7 @@ function Chip({
 	return (
 		<span
 			className={cn(
-				"text-sm px-3 py-1 rounded-full border border-[#2a1f17]/12 font-medium text-[#2a1f17]",
+				"inline-flex items-center gap-1.5 text-sm px-3 py-1 rounded-full border border-[#2a1f17]/12 font-medium text-[#2a1f17]",
 				className,
 			)}
 			style={{ backgroundColor: bg ? `${bg}99` : "#fff8eecc" }}

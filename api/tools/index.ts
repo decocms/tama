@@ -23,6 +23,7 @@ import {
 	petEnrichTool,
 	petProfileRefreshTool,
 	petProfileTool,
+	petProfileUpdateTool,
 	petUpdateTool,
 } from "./pet.ts";
 import {
@@ -93,6 +94,7 @@ export const tools = [
 	petUpdateTool,
 	petEnrichTool,
 	petProfileRefreshTool,
+	petProfileUpdateTool,
 	petSpriteSvgGenerateTool,
 	petSpriteGetTool,
 	petSpriteAdjustTool,

@@ -164,11 +164,13 @@
 	   the admin. Subtle enough for list rows; pair with `.brut` for hero /
 	   feature cards that want the full bold offset. */
 	.surface {
-		border: 1px solid rgba(42, 31, 23, 0.12);
+		/* Warm tan hairline (a design-system token, not a cold grey) + a small
+		   hard offset. */
+		border: 1px solid var(--color-border-secondary);
 		box-shadow: 2px 2px 0 rgba(42, 31, 23, 0.05);
 	}
 	.surface-hover:hover {
-		border-color: rgba(42, 31, 23, 0.24);
+		border-color: var(--color-border-strong);
 		box-shadow: 3px 3px 0 rgba(42, 31, 23, 0.1);
 	}
 	/* Bold brutalist card — thick ink border + hard offset, like the landing's

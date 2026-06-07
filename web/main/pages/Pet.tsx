@@ -68,8 +68,11 @@ function TimetableStatusCard({ entries }: { entries: TimetableEntry[] }) {
 		.sort((a, b) => (a.scheduledAt < b.scheduledAt ? -1 : 1));
 
 	const featured = overdue[0] ?? upcoming[0] ?? null;
-	const tboxTone: "overdue" | "upcoming" | "done" =
-		overdue.length > 0 ? "overdue" : "upcoming";
+	const soon =
+		upcoming[0] &&
+		new Date(upcoming[0].scheduledAt).getTime() - now <= 60 * 60 * 1000;
+	const tboxTone: "overdue" | "soon" | "upcoming" =
+		overdue.length > 0 ? "overdue" : soon ? "soon" : "upcoming";
 
 	let headline = "All caught up";
 	let detail = "Nothing due in the window.";
@@ -137,35 +140,50 @@ function CaseFileCard({
 	// Bright landing-palette pastels per category (cream/peach/mint/lavender/
 	// rose), with dark ink text — legible and lively, unlike the old ~8%-opacity
 	// tints that washed out. `ink` text reads on every pastel and in dark mode.
-	const groups: { label: string; items: string[]; bg: string }[] = profile
+	// Each section is a colored, bulleted list (no pills) — a scannable chart of
+	// the case. Diet is its own section alongside allergies/chronic/etc.
+	const groups: { label: string; items: string[]; color: string }[] = profile
 		? [
-				{ label: "Allergies", items: profile.allergies ?? [], bg: "#fde0e0" },
+				{ label: "Alergias", items: profile.allergies ?? [], color: "#c0492b" },
 				{
-					label: "Chronic",
+					label: "Crônico",
 					items: profile.chronicConditions ?? [],
-					bg: "#fff1d6",
+					color: "#b07d1a",
 				},
 				{
-					label: "Active concerns",
+					label: "Em aberto",
 					items: profile.activeConcerns ?? [],
-					bg: "#ffbd8e",
+					color: "#c2410c",
 				},
 				{
-					label: "Medications",
+					label: "Dieta",
+					items: profile.diet ? [profile.diet] : [],
+					color: "#0f766e",
+				},
+				{
+					label: "Medicações",
 					items: profile.medications ?? [],
-					bg: "#b6e3c8",
+					color: "#2f6b4d",
 				},
-				{ label: "Watch for", items: profile.watchFor ?? [], bg: "#c9b6f0" },
+				{ label: "De olho em", items: profile.watchFor ?? [], color: "#7c5cc4" },
 				{
-					label: "Past episodes",
+					label: "Episódios passados",
 					items: profile.pastEpisodes ?? [],
-					bg: "#e6ddca",
+					color: "#8a6f4a",
 				},
 			].filter((g) => g.items.length > 0)
 		: [];
 
+	const meta = profile
+		? [
+				profile.ageText,
+				profile.weightKg ? `${profile.weightKg} kg` : null,
+				profile.sex,
+			].filter(Boolean)
+		: [];
+
 	return (
-		<div className="rounded-2xl bg-card surface p-5 sm:p-6">
+		<div className="bg-card surface p-5 sm:p-6">
 			<div className="flex items-start justify-between gap-3 mb-3">
 				<div className="text-xs uppercase tracking-[0.14em] text-[#b88858] font-bold">
 					Pet sheet
@@ -196,42 +214,44 @@ function CaseFileCard({
 							{profile.oneLiner}
 						</p>
 					) : null}
-					<div className="flex flex-wrap gap-2">
-						{profile.ageText ? <Fact>{profile.ageText}</Fact> : null}
-						{profile.weightKg ? <Fact>{profile.weightKg} kg</Fact> : null}
-						{profile.sex ? <Fact>{profile.sex}</Fact> : null}
-						{profile.diet ? <Fact>Diet: {profile.diet}</Fact> : null}
-					</div>
-					{groups.map((g) => (
-						<div key={g.label}>
-							<div className="text-[11px] uppercase tracking-[0.12em] text-foreground/60 font-bold mb-1.5">
-								{g.label}
-							</div>
-							<div className="flex flex-wrap gap-2">
-								{g.items.map((it) => (
-									<span
-										key={it}
-										className="text-sm leading-snug px-3 py-1.5 rounded-full border border-[#2a1f17]/10 font-medium text-[#2a1f17]"
-										// ~60% over the cream card → softer pastel, dark text stays legible.
-										style={{ backgroundColor: `${g.bg}99` }}
-									>
-										{it}
-									</span>
-								))}
-							</div>
+					{meta.length ? (
+						<div className="text-sm font-medium text-muted-foreground">
+							{meta.join("  ·  ")}
 						</div>
-					))}
+					) : null}
+					<div className="space-y-3.5">
+						{groups.map((g) => (
+							<div
+								key={g.label}
+								className="pl-3 border-l-[3px]"
+								style={{ borderColor: g.color }}
+							>
+								<div
+									className="text-[11px] uppercase tracking-[0.14em] font-bold mb-1"
+									style={{ color: g.color }}
+								>
+									{g.label}
+								</div>
+								<ul className="space-y-1">
+									{g.items.map((it) => (
+										<li
+											key={it}
+											className="flex gap-2.5 text-sm leading-snug text-foreground/85"
+										>
+											<span
+												className="mt-[6px] w-1.5 h-1.5 shrink-0"
+												style={{ backgroundColor: g.color }}
+											/>
+											<span>{it}</span>
+										</li>
+									))}
+								</ul>
+							</div>
+						))}
+					</div>
 				</div>
 			)}
 		</div>
-	);
-}
-
-function Fact({ children }: { children: React.ReactNode }) {
-	return (
-		<span className="text-sm px-3 py-1.5 rounded-full bg-[#fbeede] border border-[#2a1f17]/12 font-medium text-foreground/80">
-			{children}
-		</span>
 	);
 }
 

@@ -112,13 +112,15 @@ function DoseRow({
 			},
 		);
 
-	const tone =
-		overdue
-			? "overdue"
-			: entry.status === "given"
-				? "done"
-				: entry.status === "skipped"
-					? "default"
+	const msUntil = new Date(entry.scheduledAt).getTime() - Date.now();
+	const tone = overdue
+		? "overdue"
+		: entry.status === "given"
+			? "done"
+			: entry.status === "skipped"
+				? "default"
+				: msUntil <= 60 * 60 * 1000
+					? "soon"
 					: "upcoming";
 
 	return (

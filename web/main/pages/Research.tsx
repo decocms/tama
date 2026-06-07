@@ -99,20 +99,26 @@ function ResearchItem({ research }: { research: Research }) {
 		}
 	})();
 	return (
-		<div className="rounded-2xl bg-card surface p-4">
+		<div
+			className="bg-card surface surface-hover transition-shadow p-4"
+			style={{ borderLeftWidth: 3, borderLeftColor: "#7c5cc4" }}
+		>
 			<button
 				type="button"
 				onClick={() => setOpen((v) => !v)}
 				className="w-full flex items-start gap-2 text-left"
 			>
 				<ChevronDown
-					className={`w-4 h-4 mt-0.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+					className={`w-4 h-4 mt-0.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+					style={{ color: "#7c5cc4" }}
 				/>
 				<div className="flex-1 min-w-0">
-					<div className="font-medium text-sm leading-snug">
+					<div className="font-semibold text-sm leading-snug">
 						{research.question}
 					</div>
-					<div className="text-[10px] text-muted-foreground mt-0.5">{date}</div>
+					<div className="font-time text-[10px] text-muted-foreground mt-0.5">
+						{date}
+					</div>
 				</div>
 			</button>
 			{open ? (

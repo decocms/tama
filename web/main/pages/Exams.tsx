@@ -34,6 +34,18 @@ import {
 	TAXONOMY_BY_KEY,
 } from "../lib/taxonomy.ts";
 
+// Per-body-system accent colors — the panels read as a color-coded chart.
+const PANEL_COLOR: Record<string, string> = {
+	cbc: "#c0492b",
+	"biochem-liver": "#b07d1a",
+	"biochem-kidney": "#2b5ba1",
+	"biochem-protein": "#2f6b4d",
+	pancreas: "#7c5cc4",
+	glucose: "#c2410c",
+	electrolytes: "#0f766e",
+	other: "#8a6f4a",
+};
+
 export function ExamsPage() {
 	const navigate = useNavigate();
 	const { data: pet } = usePet();
@@ -252,18 +264,23 @@ function PanelOverview({
 		<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 			{visiblePanels.map((panel) => {
 				const keys = PANEL_DEFAULT_KEYS[panel].filter((k) => seenKeys.has(k));
+				const color = PANEL_COLOR[panel] ?? "#8a6f4a";
 				return (
 					<button
 						type="button"
 						key={panel}
 						onClick={() => onSelectPanel(panel)}
-						className="text-left rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors space-y-2 min-w-0"
+						className="text-left bg-card surface surface-hover transition-shadow p-4 space-y-2 min-w-0"
+						style={{ borderLeftWidth: 3, borderLeftColor: color }}
 					>
-						<div className="flex items-center justify-between">
-							<div className="font-display font-semibold">
+						<div className="flex items-center justify-between gap-2">
+							<div
+								className="font-display font-bold uppercase tracking-[0.04em] text-sm"
+								style={{ color }}
+							>
 								{PANEL_LABEL[panel]}
 							</div>
-							<div className="text-[10px] text-muted-foreground">
+							<div className="text-[10px] text-muted-foreground truncate">
 								{keys.map((k) => TAXONOMY_BY_KEY[k]?.label).join(" · ")}
 							</div>
 						</div>
