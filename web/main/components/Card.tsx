@@ -80,28 +80,30 @@ export function TimeBox({
 
 	return (
 		<div
-			className="shrink-0 flex flex-col items-center justify-center py-1.5 sm:py-2 border-2 w-[84px] sm:w-[104px]"
+			className="shrink-0 flex flex-col items-center justify-center py-1.5 border-2 w-[72px] sm:w-[84px]"
 			style={{ borderColor: palette.border, backgroundColor: palette.bg }}
 		>
 			{/* DS-Digital isn't monospaced, so lay each glyph in an equal-width
-			    cell — every time is exactly 5 cells wide, so the boxes match. */}
+			    cell — every time is exactly 5 cells wide, so the boxes match.
+			    Right-align each glyph so a narrow "1" sits to the right of its
+			    cell like a real LCD clock, not floating in the middle. */}
 			<span
-				className="font-digital text-2xl sm:text-3xl leading-none flex"
+				className="font-digital text-xl sm:text-2xl leading-none flex"
 				style={{ color: palette.text }}
 			>
 				{time.split("").map((ch, i) => (
 					<span
 						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-position clock glyphs
 						key={i}
-						className="inline-block text-center"
-						style={{ width: "0.62em" }}
+						className={ch === ":" ? "inline-block text-center" : "inline-block text-right"}
+						style={{ width: ch === ":" ? "0.22em" : "0.56em" }}
 					>
 						{ch}
 					</span>
 				))}
 			</span>
 			<span
-				className="font-time text-[9px] sm:text-[10px] font-bold tracking-[0.16em] mt-1 sm:mt-1.5 opacity-55"
+				className="font-time text-xs font-bold tracking-[0.08em] mt-1 opacity-65"
 				style={{ color: palette.text }}
 			>
 				{day}

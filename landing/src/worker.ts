@@ -31,7 +31,12 @@ export default {
 		const ct = res.headers.get("content-type") ?? "";
 		if (!ct.includes("text/html")) return res;
 
-		const m = url.pathname.startsWith("/pt") ? META.pt : META.en;
+		const isPt = url.pathname.startsWith("/pt");
+		const m = isPt ? META.pt : META.en;
+		// Absolute image URL on whatever origin is serving us (tama-landing.…
+		// .workers.dev today, tama.vet once the domain is live) so the social
+		// crawler can always fetch it.
+		const ogImage = `${url.origin}/og-${isPt ? "pt" : "en"}.png`;
 		return new HTMLRewriter()
 			.on("html", {
 				element(e) {
@@ -61,6 +66,26 @@ export default {
 			.on('meta[property="og:url"]', {
 				element(e) {
 					e.setAttribute("content", m.url);
+				},
+			})
+			.on('meta[property="og:image"]', {
+				element(e) {
+					e.setAttribute("content", ogImage);
+				},
+			})
+			.on('meta[name="twitter:image"]', {
+				element(e) {
+					e.setAttribute("content", ogImage);
+				},
+			})
+			.on('meta[name="twitter:title"]', {
+				element(e) {
+					e.setAttribute("content", m.title);
+				},
+			})
+			.on('meta[name="twitter:description"]', {
+				element(e) {
+					e.setAttribute("content", m.desc);
 				},
 			})
 			.on('meta[property="og:locale"]', {
