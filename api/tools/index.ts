@@ -1,5 +1,9 @@
 import {
+	appBreathingTool,
+	appExamsTool,
 	appPetTool,
+	appRecordingsTool,
+	appResearchTool,
 	appTimelineTool,
 	appTimetableTool,
 } from "./app-surfaces.ts";
@@ -74,10 +78,14 @@ import {
 } from "./timeline.ts";
 
 export const tools = [
-	// Top-level apps
+	// Top-level apps (one pinnable tab each in studio)
 	appPetTool,
 	appTimelineTool,
 	appTimetableTool,
+	appExamsTool,
+	appResearchTool,
+	appRecordingsTool,
+	appBreathingTool,
 	// Pet
 	petProfileTool,
 	petUpdateTool,

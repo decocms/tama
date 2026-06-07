@@ -62,9 +62,13 @@ flow, in your editor. Cursor, Aider, or doing it by hand from
   research). No API keys live in the Worker; the gateway holds BYOK.
 - **Workers AI** — Whisper transcription for audio recordings. (The companion
   sprite is procedural SVG — no image model, instant + free.)
-- **React UI** (`web/`) — bundled to a single HTML by Vite. Three top-level
-  apps (Pet / Timeline / Timetable) + exams, companion, and sprite-lab, all
-  served from the same Worker.
+- **React UI** (`web/`) — bundled to a single HTML by Vite. **Seven top-level
+  apps** — Pet, Timeline, Timetable, Exams, Research, Recordings, and
+  Respiratory rate — each a pinnable MCP app (`app_*` tool → `ui://tama/*`
+  resource → a hash route in the one bundle). Plus the ambient `/companion`
+  and `/sprite-lab`, all served from the same Worker. When embedded in studio,
+  studio's pinned-app bar is the navigation, so the in-app header is hidden;
+  in a standalone browser tab the header provides the tab nav.
 
 The repo is single-pet by design — there are no episodes; every record hangs
 off the singleton `pet_self` and the **timeline** is a query-time merge across
@@ -140,7 +144,7 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 
 | Tool                        | What it does                                  |
 | --------------------------- | --------------------------------------------- |
-| `app_pet` / `app_timeline` / `app_timetable` | The three top-level apps      |
+| `app_pet` / `app_timeline` / `app_timetable` / `app_exams` / `app_research` / `app_recordings` / `app_breathing` | The seven pinnable top-level apps |
 | `pet_profile` / `pet_update`| Read / patch the singleton pet                |
 | `pet_enrich`                | Perplexity breed/condition research           |
 | `pet_summary_refresh`       | Regenerate the one evolving health summary    |

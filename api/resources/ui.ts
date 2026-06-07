@@ -45,6 +45,26 @@ export const uiResources = [
 		"Timetable",
 		"Live medication & meal schedule with dose logging.",
 	),
+	htmlResource(
+		URI.exams,
+		"Exams",
+		"Lab results by body system, evolution charts, and AI explanations.",
+	),
+	htmlResource(
+		URI.research,
+		"Research",
+		"Vet-research briefings grounded in the pet's case; ask new ones.",
+	),
+	htmlResource(
+		URI.recordings,
+		"Recordings",
+		"Vet-visit audio recordings with transcripts and AI summaries.",
+	),
+	htmlResource(
+		URI.breathing,
+		"Respiratory rate",
+		"Measure resting breaths-per-minute with the camera.",
+	),
 	// Inline tool surfaces.
 	htmlResource(
 		URI.petEnrich,

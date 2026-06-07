@@ -14,6 +14,7 @@ import {
 	isStandalone,
 	registerServiceWorker,
 } from "./lib/push.ts";
+import { BreathingPage } from "./pages/Breathing.tsx";
 import { CompanionPage } from "./pages/Companion.tsx";
 import { ExamsPage } from "./pages/Exams.tsx";
 import { ExamsDetailPage } from "./pages/ExamsDetail.tsx";
@@ -82,6 +83,12 @@ const companion = createRoute({
 	component: CompanionPage,
 });
 
+const breathing = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/breathing",
+	component: BreathingPage,
+});
+
 const spriteLab = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/sprite-lab",
@@ -108,6 +115,7 @@ const routeTree = rootRoute.addChildren([
 	recordings,
 	research,
 	companion,
+	breathing,
 	spriteLab,
 	subscribe,
 ]);

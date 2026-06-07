@@ -7,10 +7,14 @@
 // The remaining URIs are inline per-tool result surfaces.
 
 export const URI = {
-	// Top-level apps
+	// Top-level apps (each is a pinnable tab in studio)
 	pet: "ui://tama/pet",
 	timeline: "ui://tama/timeline",
 	timetable: "ui://tama/timetable",
+	exams: "ui://tama/exams",
+	research: "ui://tama/research",
+	recordings: "ui://tama/recordings",
+	breathing: "ui://tama/breathing",
 	// Inline tool surfaces
 	petGet: "ui://tama/pet-get",
 	petEnrich: "ui://tama/pet-enrich",
