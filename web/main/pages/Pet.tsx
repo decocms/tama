@@ -224,8 +224,9 @@ function CaseFileCard({
 								{g.items.map((it) => (
 									<span
 										key={it}
-										className="text-sm leading-snug px-3 py-1.5 rounded-full border border-[#2a1f17]/12 font-medium text-[#2a1f17]"
-										style={{ backgroundColor: g.bg }}
+										className="text-sm leading-snug px-3 py-1.5 rounded-full border border-[#2a1f17]/10 font-medium text-[#2a1f17]"
+										// ~60% over the cream card → softer pastel, dark text stays legible.
+										style={{ backgroundColor: `${g.bg}99` }}
 									>
 										{it}
 									</span>

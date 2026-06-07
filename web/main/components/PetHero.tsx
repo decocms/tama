@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
-import { Badge } from "@/components/ui/badge.tsx";
 import { deriveCompanionStatus } from "@/companion/state.ts";
 import type { Pet, TimetableEntry } from "@/types/api.ts";
 import { Avatar } from "./Avatar.tsx";
@@ -49,23 +48,29 @@ export function PetHero({
 	const heroSvg = pet.svgPack?.[status.state] ?? pet.svgPack?.idle ?? null;
 
 	return (
-		<div className="rounded-2xl bg-card surface overflow-hidden">
-			<div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
+		<div
+			className="rounded-3xl brut overflow-hidden"
+			style={{
+				background:
+					"linear-gradient(135deg, #fff8ee 0%, #fdeede 55%, #fbe7d6 100%)",
+			}}
+		>
+			<div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6">
 				{heroSvg ? (
 					<Link
 						to="/companion"
 						aria-label={`Open ${pet.name} full screen — ${status.headline}`}
 						title={status.headline}
-						className="group relative shrink-0 mx-auto sm:mx-0 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-[#e7dfce] border border-border/60 flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+						className="group relative shrink-0 mx-auto sm:mx-0 w-40 h-40 sm:w-48 sm:h-48 rounded-full bg-[#efe6d3] border-2 border-[#2a1f17] flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2a1f17]"
 					>
 						{/* biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer */}
 						<div
 							key={status.state}
-							className="w-[88%] h-[88%] [&>svg]:w-full [&>svg]:h-full"
+							className="w-[90%] h-[90%] [&>svg]:w-full [&>svg]:h-full"
 							style={{ animation: "breathe 3s ease-in-out infinite" }}
 							dangerouslySetInnerHTML={{ __html: heroSvg }}
 						/>
-						<span className="absolute inset-x-0 bottom-0 py-1 bg-black/30 text-white text-[9px] uppercase tracking-wider text-center opacity-0 group-hover:opacity-100 transition-opacity">
+						<span className="absolute inset-x-0 bottom-0 py-1 bg-[#2a1f17]/70 text-[#fff8ee] text-[9px] font-bold uppercase tracking-wider text-center opacity-0 group-hover:opacity-100 transition-opacity">
 							Tap to open
 						</span>
 					</Link>
@@ -73,18 +78,16 @@ export function PetHero({
 					<Avatar name={pet.name} size="xl" />
 				)}
 				<div className="flex-1 min-w-0">
-					<h1 className="font-display text-3xl sm:text-4xl font-semibold leading-none">
+					<h1 className="font-display text-4xl sm:text-5xl font-bold leading-none tracking-[-0.02em] text-[#2a1f17]">
 						{pet.name}
 					</h1>
-					<div className="flex flex-wrap items-center gap-1.5 mt-2">
-						<Chip>{pet.species}</Chip>
-						{pet.breed ? <Chip>{pet.breed}</Chip> : null}
-						{pet.dob ? <Chip muted>{pet.dob}</Chip> : null}
-						{pet.weightKg ? <Chip muted>{pet.weightKg} kg</Chip> : null}
+					<div className="flex flex-wrap items-center gap-2 mt-3">
+						<Chip bg="#ffbd8e">{pet.species}</Chip>
+						{pet.breed ? <Chip bg="#b6e3c8">{pet.breed}</Chip> : null}
+						{pet.dob ? <Chip>{pet.dob}</Chip> : null}
+						{pet.weightKg ? <Chip>{pet.weightKg} kg</Chip> : null}
 						{pet.timezone ? (
-							<Chip muted className="font-time text-xs">
-								{pet.timezone}
-							</Chip>
+							<Chip className="font-time">{pet.timezone}</Chip>
 						) : null}
 					</div>
 				</div>
@@ -93,25 +96,26 @@ export function PetHero({
 	);
 }
 
+// Soft pill. `bg` (a landing pastel) tints the primary facts (species/breed);
+// the rest fall back to a warm cream. Dark-ink text reads on every option.
 function Chip({
 	children,
-	muted,
+	bg,
 	className,
 }: {
 	children: React.ReactNode;
-	muted?: boolean;
+	bg?: string;
 	className?: string;
 }) {
 	return (
-		<Badge
-			variant="outline"
+		<span
 			className={cn(
-				"text-xs font-normal",
-				muted ? "text-muted-foreground" : "",
+				"text-sm px-3 py-1 rounded-full border border-[#2a1f17]/12 font-medium text-[#2a1f17]",
 				className,
 			)}
+			style={{ backgroundColor: bg ? `${bg}99` : "#fff8eecc" }}
 		>
 			{children}
-		</Badge>
+		</span>
 	);
 }

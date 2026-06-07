@@ -1,5 +1,5 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
@@ -85,7 +85,18 @@ export function ExamsDetailPage() {
 				    dump every metric checkbox above the chart). */}
 				<aside className="hidden md:block space-y-4">{selector}</aside>
 
-				<div className="space-y-4">
+				{/* min-w-0: let this 1fr column shrink below the chart's intrinsic
+				    width so Recharts' ResponsiveContainer resizes instead of the
+				    graph collapsing to ~0 at narrow widths. */}
+				<div className="space-y-4 min-w-0">
+					<Link
+						to="/exams"
+						className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+					>
+						<ArrowLeft className="w-4 h-4" />
+						Back to overview
+					</Link>
+
 					{/* Mobile: the chart leads; metrics are a collapsed disclosure. */}
 					<div className="md:hidden">
 						<Button

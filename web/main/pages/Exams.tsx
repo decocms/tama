@@ -257,7 +257,7 @@ function PanelOverview({
 						type="button"
 						key={panel}
 						onClick={() => onSelectPanel(panel)}
-						className="text-left rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors space-y-2"
+						className="text-left rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors space-y-2 min-w-0"
 					>
 						<div className="flex items-center justify-between">
 							<div className="font-display font-semibold">

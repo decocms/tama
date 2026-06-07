@@ -23,11 +23,11 @@ export function Section({
 			<div className="flex items-end justify-between gap-3">
 				<div>
 					{eyebrow ? (
-						<div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold mb-0.5">
+						<div className="text-[11px] uppercase tracking-[0.16em] text-[#b88858] font-bold mb-0.5">
 							{eyebrow}
 						</div>
 					) : null}
-					<h2 className="font-display text-xl font-semibold leading-tight">
+					<h2 className="font-display text-xl sm:text-2xl font-bold leading-tight tracking-[-0.01em]">
 						{title}
 					</h2>
 				</div>
