@@ -73,6 +73,7 @@ export interface UpdatePetInput {
 	ownerNotes?: string | null;
 	timezone?: string | null;
 	location?: string | null;
+	companionState?: string | null;
 }
 
 export async function updatePet(
@@ -89,6 +90,13 @@ export async function updatePet(
 	if (patch.ownerNotes !== undefined) writable.ownerNotes = patch.ownerNotes;
 	if (patch.timezone !== undefined) writable.timezone = patch.timezone;
 	if (patch.location !== undefined) writable.location = patch.location;
+	if (patch.companionState !== undefined) {
+		writable.companionState = patch.companionState;
+		// Stamp when it changed so the companion can age it out (~12h).
+		writable.companionStateAt = patch.companionState
+			? new Date().toISOString()
+			: null;
+	}
 	if (Object.keys(writable).length === 0) return getPet(env, id);
 	const [row] = await db(env)
 		.update(pets)

@@ -38,6 +38,8 @@ const PetSchema = z.object({
 	spritePack: SpritePackSchema.nullable(),
 	svgPack: z.record(z.string(), z.string()).nullable(),
 	profile: PetProfileSchema.nullable(),
+	companionState: z.string().nullable(),
+	companionStateAt: z.string().nullable(),
 	createdAt: z.string(),
 });
 
@@ -55,6 +57,8 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		spritePack: parseSpritePack(p),
 		svgPack: parseSvgPack(p),
 		profile: parseProfile(p),
+		companionState: p.companionState,
+		companionStateAt: p.companionStateAt,
 		createdAt: p.createdAt,
 	};
 }
@@ -96,6 +100,13 @@ export const petUpdateTool = (_env: Env) =>
 				.nullable()
 				.optional()
 				.describe("Owner-facing city/location, e.g. 'Rio de Janeiro'."),
+			companionState: z
+				.enum(["idle", "sleeping", "happy", "hungry", "pill-time", "sad"])
+				.nullable()
+				.optional()
+				.describe(
+					"The companion's current mood the owner is declaring (asleep/happy/etc.). Sets the baseline the ambient companion shows; live schedule events (meal soon, med overdue) override it and it ages out after ~12h. null to clear.",
+				),
 		}),
 		outputSchema: z.object({ pet: PetSchema.nullable() }),
 		execute: async ({ context, runtimeContext }) => {

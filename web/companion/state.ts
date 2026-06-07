@@ -1,31 +1,27 @@
-// Pure state derivation for the companion (pixel-pet) view. Driven by the
-// live timetable entries + a short status string from the pet sheet (its
-// one-liner + active concerns) — no episode container, no separate summary.
+// Pure state derivation for the companion (pixel-pet) view.
 //
-// Priority (highest wins): pill-time > hungry > happy > sleeping > idle.
+// Two inputs decide the mood:
+//  1. the LIVE schedule (meal due soon, medicine overdue) — actionable nudges
+//     that always win, because the whole point of the companion is to prompt you.
+//  2. a MANUAL state the owner set ("he's asleep", "doing great") — the baseline
+//     when nothing urgent is happening. It's the owner's call, not a guess from
+//     the medical record (a chronically-ill pet is not "sad" 24/7).
+//
+// Priority (highest wins):
+//   pill-time (med overdue/soon, or ≥2 doses overdue)
+//   > hungry (meal overdue/soon)
+//   > the owner's manual state (while fresh)
+//   > happy (just dosed) > sleeping (night) > idle
 
-import type { PetProfile, TimetableEntry } from "@/types/api.ts";
-
-// The pet sheet, distilled to a short string the mood derivation scans for
-// illness signals: the one-liner + whatever's actively a concern / on watch.
-export function statusTextFromProfile(
-	profile: PetProfile | null | undefined,
-): string | null {
-	if (!profile) return null;
-	const parts = [
-		profile.oneLiner,
-		...(profile.activeConcerns ?? []),
-		...(profile.watchFor ?? []),
-	].filter(Boolean);
-	return parts.length ? parts.join(". ") : null;
-}
+import type { TimetableEntry } from "@/types/api.ts";
 
 export type CompanionState =
 	| "idle"
 	| "sleeping"
 	| "happy"
 	| "hungry"
-	| "pill-time";
+	| "pill-time"
+	| "sad";
 
 export interface CompanionStatus {
 	state: CompanionState;
@@ -35,12 +31,32 @@ export interface CompanionStatus {
 
 const MINUTE = 60_000;
 
+// A manually-set state stays in effect for this long, then the companion falls
+// back to the ambient default — so a "sleeping" set last night doesn't still
+// show tomorrow afternoon. Urgent schedule events override it regardless.
+export const MANUAL_STATE_TTL_MS = 12 * 60 * 60 * 1000;
+
+// The moods the owner can set by hand on the companion view. (pill-time is
+// derived from the schedule, never set manually.)
+export const SETTABLE_STATES: {
+	state: CompanionState;
+	emoji: string;
+	label: string;
+}[] = [
+	{ state: "happy", emoji: "😄", label: "Great" },
+	{ state: "idle", emoji: "😌", label: "Calm" },
+	{ state: "sleeping", emoji: "😴", label: "Asleep" },
+	{ state: "hungry", emoji: "🍗", label: "Hungry" },
+	{ state: "sad", emoji: "🤒", label: "Unwell" },
+];
+
 interface DeriveInput {
 	entries: TimetableEntry[];
 	petName: string;
-	/** Short status text scanned for illness signals — the pet sheet's
-	 * one-liner joined with its active concerns / watch-for items. */
-	statusText: string | null;
+	/** The owner-set state (pet.companionState), or null. */
+	manualState?: CompanionState | null;
+	/** When it was set, in ms (Date.parse of pet.companionStateAt), or null. */
+	manualStateAtMs?: number | null;
 	now: Date;
 	timeZone: string;
 }
@@ -65,8 +81,29 @@ function isNighttime(d: Date, tz: string): boolean {
 	return h >= 22 || h < 7;
 }
 
+function manualStatus(state: CompanionState, name: string): CompanionStatus {
+	switch (state) {
+		case "sleeping":
+			return { state, headline: `${name} is asleep`, subline: null };
+		case "happy":
+			return { state, headline: `${name} is doing great`, subline: null };
+		case "hungry":
+			return { state, headline: `${name} is hungry`, subline: null };
+		case "sad":
+			return {
+				state,
+				headline: `${name} isn't feeling great`,
+				subline: "Check the pet sheet on the Pet page",
+			};
+		case "pill-time":
+			return { state, headline: `${name} needs attention`, subline: null };
+		default:
+			return { state: "idle", headline: `${name} is hanging out`, subline: null };
+	}
+}
+
 export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
-	const { entries, petName, statusText, now } = input;
+	const { entries, petName, manualState, manualStateAtMs, now } = input;
 	const name = petName || "Tama";
 
 	const pending = entries.filter((e) => e.status === "pending");
@@ -74,35 +111,13 @@ export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
 		const diff = new Date(e.scheduledAt).getTime() - now.getTime();
 		return { e, diff, overdue: diff < 0, soon: diff >= 0 && diff <= 60 * MINUTE };
 	};
-	const meds = pending
-		.filter((e) => e.kind === "medication")
-		.map(classify);
+	const meds = pending.filter((e) => e.kind === "medication").map(classify);
 	const meals = pending.filter((e) => e.kind === "meal").map(classify);
 	const overdueCount = pending.filter(
 		(e) => new Date(e.scheduledAt).getTime() < now.getTime(),
 	).length;
 
-	// CONCERNED (pill-time face) — the pet sheet flags illness, or doses piling up.
-	const sick =
-		/vomit|leth|diarr|seizur|emerg|not eating|crash|vômito|letárg|diarr|convuls|emerg|não com/i.test(
-			statusText ?? "",
-		);
-	if (sick) {
-		return {
-			state: "pill-time",
-			headline: `${name} isn't feeling great`,
-			subline: "Check the pet sheet on the Pet page",
-		};
-	}
-	if (overdueCount >= 2) {
-		return {
-			state: "pill-time",
-			headline: `${name} is waiting on you`,
-			subline: `${overdueCount} doses overdue`,
-		};
-	}
-
-	// PILL-TIME — a med overdue or due within 30 min.
+	// PILL-TIME — a med overdue or due within 30 min, or doses piling up.
 	const pill = [
 		...meds.filter((m) => m.overdue),
 		...meds.filter((m) => m.soon && m.diff <= 30 * MINUTE),
@@ -116,6 +131,13 @@ export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
 			subline: pill.overdue ? "Tap to open the timetable" : null,
 		};
 	}
+	if (overdueCount >= 2) {
+		return {
+			state: "pill-time",
+			headline: `${name} is waiting on you`,
+			subline: `${overdueCount} doses overdue`,
+		};
+	}
 
 	// HUNGRY — a meal overdue or due within the hour.
 	const meal = [...meals.filter((m) => m.overdue), ...meals.filter((m) => m.soon)][0];
@@ -127,6 +149,15 @@ export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
 				: `${meal.e.itemName} soon`,
 			subline: null,
 		};
+	}
+
+	// MANUAL — the owner's declared state, while still fresh.
+	if (
+		manualState &&
+		manualStateAtMs != null &&
+		now.getTime() - manualStateAtMs < MANUAL_STATE_TTL_MS
+	) {
+		return manualStatus(manualState, name);
 	}
 
 	// HAPPY — something was given recently and nothing's overdue.

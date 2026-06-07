@@ -94,6 +94,20 @@ export function useRefreshProfile() {
 	});
 }
 
+// Owner sets the companion's current mood (asleep/happy/…). Persisted via
+// pet_update; the server stamps companionStateAt.
+export function useSetCompanionState() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (companionState: string) =>
+			callTool<{ pet: Pet | null }>(app, "pet_update", { companionState }).then(
+				(r) => r.pet,
+			),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
+	});
+}
+
 // ---------- Research ----------
 
 export function useResearches() {

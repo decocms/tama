@@ -36,6 +36,11 @@ export const pets = sqliteTable("pets", {
 	// which is now the single source. Columns kept inert so old rows still read.
 	summary: text("summary"),
 	summaryAt: text("summary_at"),
+	// Owner-set companion mood ("asleep", "happy", …) + when it was set. The
+	// companion view shows this as the baseline; live schedule events (meal soon,
+	// med overdue) override it temporarily, and it goes stale after ~12h.
+	companionState: text("companion_state"),
+	companionStateAt: text("companion_state_at"),
 	// Structured "case file" — JSON of the pet's key medical facts (age, weight,
 	// allergies, chronic conditions, active concerns, past episodes, what to
 	// watch). Synthesized by pet_profile_refresh and injected into AI context.

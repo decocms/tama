@@ -1,16 +1,20 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button.tsx";
 import {
 	type CompanionState,
 	deriveCompanionStatus,
-	statusTextFromProfile,
+	SETTABLE_STATES,
 } from "@/companion/state.ts";
-import { usePet, useTimetable } from "../lib/queries.ts";
+import { cn } from "@/lib/utils.ts";
+import { usePet, useSetCompanionState, useTimetable } from "../lib/queries.ts";
 
-// Tiny companion view. The PWA manifest points `start_url`
-// here so when the app is launched from the dock/home-screen it lands in
-// the ambient view rather than the full dashboard.
+// Tiny companion view. The PWA manifest points `start_url` here so when the app
+// is launched from the dock/home-screen it lands in the ambient view rather
+// than the full dashboard. The owner can SET the mood here (emoji buttons +
+// save); live schedule events still override it.
 
 const STATE_BG: Record<CompanionState, string> = {
 	idle: "#fff8ee",
@@ -18,6 +22,7 @@ const STATE_BG: Record<CompanionState, string> = {
 	hungry: "#fff1d6",
 	"pill-time": "#ffe6cf",
 	sleeping: "#e6e0f5",
+	sad: "#fbe9e4",
 };
 
 function browserTimeZone(): string {
@@ -32,6 +37,10 @@ export function CompanionPage() {
 	const navigate = useNavigate();
 	const { data: pet } = usePet();
 	const { data: entries } = useTimetable();
+	const setState = useSetCompanionState();
+
+	// A locally-previewed pick before the owner commits it with Save.
+	const [pending, setPending] = useState<CompanionState | null>(null);
 
 	// Re-tick once a minute so state ("due in 5 minutes" → "overdue") updates
 	// without waiting for the next query refetch.
@@ -41,12 +50,18 @@ export function CompanionPage() {
 		return () => clearInterval(id);
 	}, []);
 
+	const manualState = (pet?.companionState ?? null) as CompanionState | null;
+	const manualStateAtMs = pet?.companionStateAt
+		? new Date(pet.companionStateAt).getTime()
+		: null;
+
 	const status = useMemo(
 		() =>
 			deriveCompanionStatus({
 				entries: entries ?? [],
 				petName: pet?.name ?? "Tama",
-				statusText: statusTextFromProfile(pet?.profile),
+				manualState,
+				manualStateAtMs,
 				now: new Date(),
 				timeZone: pet?.timezone ?? browserTimeZone(),
 			}),
@@ -55,9 +70,12 @@ export function CompanionPage() {
 		[entries, pet, tick],
 	);
 
-	const openFullDashboard = () => {
-		navigate({ to: "/" });
-	};
+	const name = pet?.name ?? "Tama";
+	const previewing = pending != null && pending !== status.state;
+	const displayState = pending ?? status.state;
+	const pendingLabel = SETTABLE_STATES.find((s) => s.state === pending)?.label;
+
+	const openFullDashboard = () => navigate({ to: "/" });
 
 	// Esc closes the full-screen view (the browser/phone back button already
 	// pops this route since we navigated here).
@@ -70,40 +88,101 @@ export function CompanionPage() {
 		// biome-ignore lint/correctness/useExhaustiveDependencies: openFullDashboard is stable enough here
 	}, []);
 
+	const handleSave = () => {
+		if (!pending) return;
+		setState.mutate(pending, {
+			onSuccess: () => {
+				toast.success(`${name} set as ${pendingLabel ?? pending}`);
+				setPending(null);
+			},
+			onError: (e) => toast.error((e as Error).message),
+		});
+	};
+
 	return (
-		// biome-ignore lint/a11y/useKeyWithClickEvents: tiny ambient surface
 		<div
-			className="min-h-dvh flex items-center justify-center transition-colors duration-700 select-none companion-backdrop-in"
-			style={{ backgroundColor: STATE_BG[status.state] }}
-			onDoubleClick={openFullDashboard}
+			className="min-h-dvh flex flex-col select-none companion-backdrop-in transition-colors duration-700"
+			style={{ backgroundColor: STATE_BG[displayState] }}
 		>
-			<div className="flex flex-col items-center gap-5 px-6 text-center companion-stage-in">
-				<CreatureFace state={status.state} svgPack={pet?.svgPack ?? null} />
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: tiny ambient surface */}
+			<div
+				className="flex-1 flex flex-col items-center justify-center gap-4 sm:gap-6 px-6 py-8 text-center companion-stage-in"
+				onDoubleClick={openFullDashboard}
+			>
+				<CreatureFace state={displayState} svgPack={pet?.svgPack ?? null} />
+
 				<div className="space-y-1 max-w-xs">
 					<div
-						className="font-display text-lg font-semibold leading-tight"
+						className="font-display text-lg sm:text-xl font-semibold leading-tight"
 						style={{ color: "#2a1f17" }}
 					>
-						{status.headline}
+						{previewing ? `Set ${name} as ${pendingLabel}?` : status.headline}
 					</div>
-					{status.subline ? (
-						<div className="text-xs text-muted-foreground">
-							{status.subline}
-						</div>
-					) : null}
+					<div className="text-xs sm:text-sm text-muted-foreground min-h-[1rem]">
+						{previewing
+							? "Tap Save to make this the current state"
+							: (status.subline ?? "")}
+					</div>
 				</div>
-				<div className="absolute bottom-4 right-4">
-					<Link
-						to="/"
-						className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
-						aria-label="Open full dashboard"
-					>
-						Dashboard <ArrowUpRight className="w-3 h-3" />
-					</Link>
+
+				{/* Mood picker: tap an emoji to preview, then Save to declare it. */}
+				<div className="flex flex-col items-center gap-3">
+					<div className="flex items-center gap-2 sm:gap-2.5">
+						{SETTABLE_STATES.map((s) => {
+							const active = displayState === s.state;
+							return (
+								<button
+									key={s.state}
+									type="button"
+									aria-label={s.label}
+									title={s.label}
+									onClick={() => setPending(s.state)}
+									className={cn(
+										"w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-xl border-2 transition-transform",
+										active
+											? "border-[#2a1f17] bg-white scale-110 shadow-sm"
+											: "border-transparent bg-white/55 hover:bg-white hover:scale-105",
+									)}
+								>
+									<span>{s.emoji}</span>
+								</button>
+							);
+						})}
+					</div>
+					<div className="h-8 flex items-center">
+						{previewing ? (
+							<div className="flex items-center gap-2">
+								<Button
+									size="sm"
+									onClick={handleSave}
+									disabled={setState.isPending}
+								>
+									{setState.isPending ? "Saving…" : "Save as current"}
+								</Button>
+								<button
+									type="button"
+									onClick={() => setPending(null)}
+									className="text-xs text-muted-foreground hover:text-foreground"
+								>
+									Cancel
+								</button>
+							</div>
+						) : null}
+					</div>
 				</div>
-				<p className="absolute bottom-4 left-4 text-[10px] text-muted-foreground/70">
-					Esc or back to close
-				</p>
+			</div>
+
+			{/* Footer in normal flow (not absolute) so it never crowds the centered
+			    content on small screens. */}
+			<div className="flex items-center justify-between gap-3 px-4 py-3 text-[10px] uppercase tracking-wider text-muted-foreground/70">
+				<span>Esc or back to close</span>
+				<Link
+					to="/"
+					className="inline-flex items-center gap-1 hover:text-foreground"
+					aria-label="Open full dashboard"
+				>
+					Dashboard <ArrowUpRight className="w-3 h-3" />
+				</Link>
 			</div>
 		</div>
 	);
@@ -117,7 +196,8 @@ function CreatureFace({
 	svgPack: Record<string, string> | null;
 }) {
 	const svg = svgPack?.[state];
-	const size = "min(72vw, 60vh, 440px)";
+	// Smaller than before so the mood picker + footer fit on a phone screen.
+	const size = "min(58vw, 42vh, 380px)";
 	if (!svg) {
 		// No sprite yet (pet not set up) — a soft neutral disc.
 		return (

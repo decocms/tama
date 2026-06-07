@@ -3,8 +3,8 @@ import { Cake, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import {
+	type CompanionState,
 	deriveCompanionStatus,
-	statusTextFromProfile,
 } from "@/companion/state.ts";
 import type { Pet, TimetableEntry } from "@/types/api.ts";
 import { Avatar } from "./Avatar.tsx";
@@ -46,7 +46,10 @@ export function PetHero({
 			deriveCompanionStatus({
 				entries,
 				petName: pet.name ?? "Tama",
-				statusText: statusTextFromProfile(pet.profile),
+				manualState: (pet.companionState ?? null) as CompanionState | null,
+				manualStateAtMs: pet.companionStateAt
+					? new Date(pet.companionStateAt).getTime()
+					: null,
 				now: new Date(),
 				timeZone: pet.timezone ?? browserTimeZone(),
 			}),

@@ -100,13 +100,38 @@ function stripFence(text: string): string {
 		.trim();
 }
 
+// Parse the model's JSON, salvaging a TRUNCATED object if the response was cut
+// off mid-string (the case file for a complex pet can run long). We close any
+// dangling string, balance the brackets/braces, and drop a trailing comma —
+// enough to recover a valid-but-shorter sheet instead of failing the tool.
+function parseLoose(raw: string): unknown {
+	try {
+		return JSON.parse(raw);
+	} catch {
+		let s = raw.trim();
+		// Close an unterminated string (odd count of unescaped quotes).
+		const quotes = (s.match(/(?<!\\)"/g) ?? []).length;
+		if (quotes % 2 === 1) s += '"';
+		// Balance arrays/objects.
+		const open = (c: string) => (s.match(new RegExp(`\\${c}`, "g")) ?? []).length;
+		s += "]".repeat(Math.max(0, open("[") - open("]")));
+		s += "}".repeat(Math.max(0, open("{") - open("}")));
+		// Strip a trailing comma left before the synthesized close.
+		s = s.replace(/,\s*([}\]])/g, "$1");
+		return JSON.parse(s);
+	}
+}
+
 export async function buildPetProfile(
 	env: Env,
 	input: { pet: BasePet; sourceText: string },
 ): Promise<PetProfile> {
 	const res = await anthropicMessages(env, {
 		model: "claude-opus-4-7",
-		max_tokens: 1600,
+		// Generous headroom: a complex pet's case file (many conditions, meds,
+		// watch-for items in Portuguese) overran the old 1600 cap and the JSON
+		// got truncated mid-string. 4096 leaves ample room.
+		max_tokens: 4096,
 		system: SYSTEM,
 		messages: [
 			{
@@ -116,5 +141,5 @@ export async function buildPetProfile(
 		],
 	});
 	const text = res.content.find((c) => c.type === "text")?.text ?? "";
-	return PetProfileSchema.parse(JSON.parse(stripFence(text)));
+	return PetProfileSchema.parse(parseLoose(stripFence(text)));
 }

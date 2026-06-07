@@ -48,6 +48,8 @@ export interface Pet {
 	spritePack?: SpritePack | null;
 	svgPack?: Record<string, string> | null;
 	profile?: PetProfile | null;
+	companionState?: string | null;
+	companionStateAt?: string | null;
 	createdAt: string;
 }
 
