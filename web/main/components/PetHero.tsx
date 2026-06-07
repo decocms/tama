@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils.ts";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { Pet } from "@/types/api.ts";
@@ -8,14 +9,21 @@ export function PetHero({ pet }: { pet: Pet }) {
 		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
 				{pet.svgPack?.idle ? (
-					<div className="shrink-0 mx-auto sm:mx-0 w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#e7dfce] border border-border/60 flex items-center justify-center overflow-hidden">
+					<Link
+						to="/companion"
+						aria-label={`Open ${pet.name} full screen`}
+						className="group relative shrink-0 mx-auto sm:mx-0 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-[#e7dfce] border border-border/60 flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+					>
 						{/* biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer */}
 						<div
 							className="w-[88%] h-[88%] [&>svg]:w-full [&>svg]:h-full"
-							aria-label={pet.name}
+							style={{ animation: "breathe 3s ease-in-out infinite" }}
 							dangerouslySetInnerHTML={{ __html: pet.svgPack.idle }}
 						/>
-					</div>
+						<span className="absolute inset-x-0 bottom-0 py-1 bg-black/30 text-white text-[9px] uppercase tracking-wider text-center opacity-0 group-hover:opacity-100 transition-opacity">
+							Tap to open
+						</span>
+					</Link>
 				) : (
 					<Avatar name={pet.name} size="xl" />
 				)}

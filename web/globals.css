@@ -135,6 +135,30 @@
 		animation: overdue-pulse 1.6s ease-in-out infinite;
 	}
 
+	/* Companion "breathing" — a gentle living sway. Used wherever the sprite
+	   appears at rest (Pet hero, the fullscreen companion stage). */
+	@keyframes breathe {
+		0%, 100% { transform: translateY(0) scale(1); }
+		50%      { transform: translateY(-1.5%) scale(1.025); }
+	}
+
+	/* Fullscreen companion stage entrance: the sprite swells up from the
+	   tapped avatar while the backdrop fades in. */
+	@keyframes companion-backdrop-in {
+		from { opacity: 0; }
+		to   { opacity: 1; }
+	}
+	@keyframes companion-stage-in {
+		from { opacity: 0; transform: scale(0.6); }
+		to   { opacity: 1; transform: scale(1); }
+	}
+	.companion-backdrop-in {
+		animation: companion-backdrop-in 0.28s ease-out both;
+	}
+	.companion-stage-in {
+		animation: companion-stage-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
 	/* Soft "lifted card" shadow — replaces the harsh 1px borders that
 	   used to delineate every surface. A near-invisible hairline ring
 	   (inset-equivalent via spread) plus a tight tucked drop shadow that

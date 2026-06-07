@@ -58,14 +58,25 @@ export function CompanionPage() {
 		navigate({ to: "/" });
 	};
 
+	// Esc closes the full-screen view (the browser/phone back button already
+	// pops this route since we navigated here).
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") openFullDashboard();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+		// biome-ignore lint/correctness/useExhaustiveDependencies: openFullDashboard is stable enough here
+	}, []);
+
 	return (
 		// biome-ignore lint/a11y/useKeyWithClickEvents: tiny ambient surface
 		<div
-			className="min-h-dvh flex items-center justify-center transition-colors duration-700 select-none"
+			className="min-h-dvh flex items-center justify-center transition-colors duration-700 select-none companion-backdrop-in"
 			style={{ backgroundColor: STATE_BG[status.state] }}
 			onDoubleClick={openFullDashboard}
 		>
-			<div className="flex flex-col items-center gap-5 px-6 text-center">
+			<div className="flex flex-col items-center gap-5 px-6 text-center companion-stage-in">
 				<CreatureFace state={status.state} svgPack={pet?.svgPack ?? null} />
 				<div className="space-y-1 max-w-xs">
 					<div
@@ -90,7 +101,7 @@ export function CompanionPage() {
 					</Link>
 				</div>
 				<p className="absolute bottom-4 left-4 text-[10px] text-muted-foreground/70">
-					Double-tap to expand
+					Esc or back to close
 				</p>
 			</div>
 		</div>
@@ -105,12 +116,13 @@ function CreatureFace({
 	svgPack: Record<string, string> | null;
 }) {
 	const svg = svgPack?.[state];
+	const size = "min(72vw, 60vh, 440px)";
 	if (!svg) {
 		// No sprite yet (pet not set up) — a soft neutral disc.
 		return (
 			<div
 				className="rounded-full bg-[#e7dfce]"
-				style={{ width: 256, height: 256 }}
+				style={{ width: size, height: size }}
 				aria-label="companion"
 			/>
 		);
@@ -120,8 +132,8 @@ function CreatureFace({
 			aria-label={`${state}`}
 			className="[&>svg]:w-full [&>svg]:h-full"
 			style={{
-				width: 256,
-				height: 256,
+				width: size,
+				height: size,
 				animation: "breathe 2.6s ease-in-out infinite",
 			}}
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer

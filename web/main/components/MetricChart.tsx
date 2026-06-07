@@ -130,7 +130,10 @@ export function MetricChart({
 			};
 		});
 
-		// Reference band only on a single-metric chart (raw values).
+		// The "healthy zone" band. On a single-metric chart it's the raw normal
+		// range. On a multi-metric chart every series is normalized so its normal
+		// midpoint sits at 100% — so the band becomes the (median) normalized
+		// normal range across the metrics, i.e. the green zone they should sit in.
 		let refBand: { low: number; high: number } | null = null;
 		if (!multi && keys.length === 1) {
 			const key = keys[0];
@@ -138,16 +141,27 @@ export function MetricChart({
 				(p) => p.canonicalKey === key && p.refLow != null && p.refHigh != null,
 			);
 			if (pts.length > 0) {
-				const sortedLows = pts
-					.map((p) => p.refLow as number)
-					.sort((a, b) => a - b);
-				const sortedHighs = pts
-					.map((p) => p.refHigh as number)
-					.sort((a, b) => a - b);
 				refBand = {
-					low: sortedLows[Math.floor(sortedLows.length / 2)],
-					high: sortedHighs[Math.floor(sortedHighs.length / 2)],
+					low: median(pts.map((p) => p.refLow as number)),
+					high: median(pts.map((p) => p.refHigh as number)),
 				};
+			}
+		} else if (multi) {
+			const lows: number[] = [];
+			const highs: number[] = [];
+			for (const k of keys) {
+				const base = baseByKey.get(k);
+				if (!base) continue;
+				const refs = series.filter(
+					(p) =>
+						p.canonicalKey === k && p.refLow != null && p.refHigh != null,
+				);
+				if (refs.length === 0) continue;
+				lows.push((median(refs.map((p) => p.refLow as number)) / base) * 100);
+				highs.push((median(refs.map((p) => p.refHigh as number)) / base) * 100);
+			}
+			if (lows.length > 0) {
+				refBand = { low: median(lows), high: median(highs) };
 			}
 		}
 
@@ -184,12 +198,15 @@ export function MetricChart({
 					tickFormatter={multi ? (v) => `${v}%` : undefined}
 				/>
 				{refBand ? (
+					// The "healthy zone" — a soft light-green band over the normal range.
 					<ReferenceArea
 						y1={refBand.low}
 						y2={refBand.high}
-						fill="hsl(var(--muted))"
-						fillOpacity={0.35}
-						stroke="none"
+						fill="#22c55e"
+						fillOpacity={0.1}
+						stroke="#22c55e"
+						strokeOpacity={0.25}
+						strokeDasharray="3 3"
 					/>
 				) : null}
 				{multi ? (
