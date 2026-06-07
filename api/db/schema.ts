@@ -13,6 +13,8 @@ export const pets = sqliteTable("pets", {
 	ownerNotes: text("owner_notes"),
 	enrichmentJson: text("enrichment_json"),
 	timezone: text("timezone"),
+	// Owner-facing city/location label, distinct from the IANA timezone.
+	location: text("location"),
 	// Per-pet pixel sprite pack — JSON map of {idle, happy, ...} → R2 URL.
 	// Legacy raster (img2img) pack — no longer written; the SVG pack below is
 	// the sole sprite path now. Column kept so old rows still read.

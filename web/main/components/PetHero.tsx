@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Cake, Globe } from "lucide-react";
+import { Cake, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import { deriveCompanionStatus } from "@/companion/state.ts";
@@ -98,10 +98,10 @@ export function PetHero({
 							</Chip>
 						) : null}
 						{pet.weightKg ? <Chip>{pet.weightKg} kg</Chip> : null}
-						{pet.timezone ? (
+						{pet.location || pet.timezone ? (
 							<Chip>
-								<Globe className="w-3.5 h-3.5 opacity-70" />
-								{friendlyTz(pet.timezone)}
+								<MapPin className="w-3.5 h-3.5 opacity-70" />
+								{pet.location ?? friendlyTz(pet.timezone as string)}
 							</Chip>
 						) : null}
 					</div>

@@ -80,17 +80,17 @@ export function TimeBox({
 
 	return (
 		<div
-			className="shrink-0 flex flex-col items-center justify-center px-3 py-2 border-2 min-w-[80px]"
+			className="shrink-0 flex flex-col items-center justify-center px-2 sm:px-3 py-1.5 sm:py-2 border-2 min-w-[64px] sm:min-w-[80px]"
 			style={{ borderColor: palette.border, backgroundColor: palette.bg }}
 		>
 			<span
-				className="font-time text-2xl font-bold tabular-nums leading-none"
+				className="font-digital text-2xl sm:text-3xl leading-none"
 				style={{ color: palette.text }}
 			>
 				{time}
 			</span>
 			<span
-				className="font-time text-[10px] font-bold tracking-[0.18em] mt-1 opacity-55"
+				className="font-time text-[9px] sm:text-[10px] font-bold tracking-[0.16em] mt-1 sm:mt-1.5 opacity-55"
 				style={{ color: palette.text }}
 			>
 				{day}

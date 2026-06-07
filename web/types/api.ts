@@ -53,6 +53,7 @@ export interface Pet {
 	weightKg: number | null;
 	ownerNotes: string | null;
 	timezone: string | null;
+	location?: string | null;
 	enrichment: Enrichment | null;
 	spritePack?: SpritePack | null;
 	svgPack?: Record<string, string> | null;

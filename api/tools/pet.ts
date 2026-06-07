@@ -37,6 +37,7 @@ const PetSchema = z.object({
 	weightKg: z.number().nullable(),
 	ownerNotes: z.string().nullable(),
 	timezone: z.string().nullable(),
+	location: z.string().nullable(),
 	enrichment: EnrichmentSchema.nullable(),
 	spritePack: SpritePackSchema.nullable(),
 	svgPack: z.record(z.string(), z.string()).nullable(),
@@ -54,6 +55,7 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		weightKg: p.weightKg,
 		ownerNotes: p.ownerNotes,
 		timezone: p.timezone,
+		location: p.location,
 		enrichment: parseEnrichment(p),
 		spritePack: parseSpritePack(p),
 		svgPack: parseSvgPack(p),
@@ -94,6 +96,11 @@ export const petUpdateTool = (_env: Env) =>
 			weightKg: z.number().nullable().optional(),
 			ownerNotes: z.string().nullable().optional(),
 			timezone: z.string().nullable().optional(),
+			location: z
+				.string()
+				.nullable()
+				.optional()
+				.describe("Owner-facing city/location, e.g. 'Rio de Janeiro'."),
 		}),
 		outputSchema: z.object({ pet: PetSchema.nullable() }),
 		execute: async ({ context, runtimeContext }) => {

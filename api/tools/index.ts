@@ -80,10 +80,11 @@ import {
 } from "./timeline.ts";
 
 export const tools = [
-	// Top-level apps (one pinnable tab each in studio)
+	// Top-level apps (one pinnable tab each in studio) — order matters: this is
+	// the order studio lists them. Pet → Timetable → Timeline → Exams → …
 	appPetTool,
-	appTimelineTool,
 	appTimetableTool,
+	appTimelineTool,
 	appExamsTool,
 	appResearchTool,
 	appRecordingsTool,

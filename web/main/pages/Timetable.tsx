@@ -124,11 +124,12 @@ function DoseRow({
 					: "upcoming";
 
 	return (
-		<div className="flex items-center gap-3 bg-card surface p-3">
+		<div className="flex items-center gap-2.5 sm:gap-3 bg-card surface p-3">
 			<TimeBox iso={entry.scheduledAt} tone={tone} />
+			{/* Type icon is a nicety — hidden on phones so the name gets the room. */}
 			<div
 				className={cn(
-					"shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+					"shrink-0 w-8 h-8 rounded-full hidden sm:flex items-center justify-center",
 					isMeal
 						? "bg-[var(--color-tint-meal,#fff1d6)] text-[var(--color-accent-meal,#ea580c)]"
 						: "bg-[var(--color-tint-med,#dbeafe)] text-[var(--color-accent-med,#2563eb)]",
@@ -141,11 +142,11 @@ function DoseRow({
 				)}
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="font-semibold text-sm sm:text-base truncate">
+				<div className="font-semibold text-sm sm:text-base leading-snug">
 					{entry.itemName}
 				</div>
 				{entry.dosage ? (
-					<div className="text-sm text-muted-foreground truncate">
+					<div className="text-xs sm:text-sm text-muted-foreground">
 						{entry.dosage}
 					</div>
 				) : null}
@@ -156,14 +157,17 @@ function DoseRow({
 						size="sm"
 						disabled={log.isPending}
 						onClick={() => give("given")}
+						aria-label="Mark given"
 					>
-						<Check className="w-3.5 h-3.5" /> Give
+						<Check className="w-3.5 h-3.5" />
+						<span className="hidden sm:inline">Give</span>
 					</Button>
 					<Button
 						size="sm"
 						variant="outline"
 						disabled={log.isPending}
 						onClick={() => give("skipped")}
+						aria-label="Skip"
 					>
 						<SkipForward className="w-3.5 h-3.5" />
 					</Button>

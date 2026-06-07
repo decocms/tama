@@ -78,11 +78,14 @@ function TimetableStatusCard({ entries }: { entries: TimetableEntry[] }) {
 	let detail = "Nothing due in the window.";
 	if (overdue.length > 0) {
 		const first = overdue[0] as TimetableEntry;
-		headline =
-			overdue.length === 1
-				? `${first.itemName} is overdue`
-				: `${overdue.length} doses overdue`;
-		detail = `${first.itemName}${first.dosage ? ` · ${first.dosage}` : ""}`;
+		if (overdue.length === 1) {
+			// Headline already names it — don't repeat in the detail.
+			headline = `${first.itemName} is overdue`;
+			detail = first.dosage ?? "Tap to open the timetable";
+		} else {
+			headline = `${overdue.length} doses overdue`;
+			detail = `${first.itemName}${first.dosage ? ` · ${first.dosage}` : ""} + ${overdue.length - 1} more`;
+		}
 	} else if (upcoming.length > 0) {
 		const first = upcoming[0] as TimetableEntry;
 		headline = `Next: ${first.itemName}`;
@@ -219,7 +222,7 @@ function CaseFileCard({
 							{meta.join("  ·  ")}
 						</div>
 					) : null}
-					<div className="space-y-3.5">
+					<div className="space-y-5">
 						{groups.map((g) => (
 							<div
 								key={g.label}
@@ -227,7 +230,7 @@ function CaseFileCard({
 								style={{ borderColor: g.color }}
 							>
 								<div
-									className="text-[11px] uppercase tracking-[0.14em] font-bold mb-1"
+									className="text-[13px] uppercase tracking-[0.12em] font-bold mb-1.5"
 									style={{ color: g.color }}
 								>
 									{g.label}

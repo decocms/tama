@@ -12,8 +12,8 @@ import { usePet } from "../lib/queries.ts";
 // app's own navigation.
 const NAV = [
 	["/", "Pet"],
-	["/timeline", "Timeline"],
 	["/timetable", "Timetable"],
+	["/timeline", "Timeline"],
 	["/exams", "Exams"],
 	["/research", "Research"],
 	["/recordings", "Recordings"],

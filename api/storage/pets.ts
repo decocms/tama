@@ -104,6 +104,7 @@ export interface UpdatePetInput {
 	weightKg?: number | null;
 	ownerNotes?: string | null;
 	timezone?: string | null;
+	location?: string | null;
 }
 
 export async function updatePet(
@@ -119,6 +120,7 @@ export async function updatePet(
 	if (patch.weightKg !== undefined) writable.weightKg = patch.weightKg;
 	if (patch.ownerNotes !== undefined) writable.ownerNotes = patch.ownerNotes;
 	if (patch.timezone !== undefined) writable.timezone = patch.timezone;
+	if (patch.location !== undefined) writable.location = patch.location;
 	if (Object.keys(writable).length === 0) return getPet(env, id);
 	const [row] = await db(env)
 		.update(pets)
