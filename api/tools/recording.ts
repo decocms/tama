@@ -189,115 +189,11 @@ export const recordingTranscribeTool = (_env: Env) =>
 		},
 	});
 
-export const recordingSummarizeTool = (_env: Env) =>
-	createTool({
-		id: "recording_summarize",
-		description:
-			"Read the full transcript and produce three review-ready outputs: a brief summary, an update to the pet's long-term profile, and a timeline note. Does NOT apply them — call recording_apply after review.",
-		inputSchema: z.object({ recordingId: z.string() }),
-		outputSchema: z.object({ recording: RecordingSchema }),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const rec = await getRecording(env, context.recordingId);
-			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
-			if (!rec.fullTranscript) {
-				throw new Error("Transcript not ready — call recording_transcribe first");
-			}
-			const pet = await getSelfPet(env);
-			if (!pet) throw new Error("Pet not found");
-
-			const notesRows = await listNotes(env);
-			const out = await summarizeRecording(env, {
-				petContext: {
-					name: pet.name,
-					species: pet.species,
-					breed: pet.breed,
-					dob: pet.dob,
-					weightKg: pet.weightKg,
-					ownerNotes: pet.ownerNotes,
-				},
-				episodeContext: {
-					title: `${pet.name}'s timeline`,
-					summary: parseProfile(pet)?.oneLiner ?? null,
-					existingNotes: notesRows.slice(0, 20).map((n) => n.content),
-				},
-				transcript: rec.fullTranscript,
-			});
-
-			const updated = await updateRecording(env, rec.id, {
-				status: "summarized",
-				summary: out.summary,
-				historyUpdate: out.historyUpdate,
-			});
-			return { recording: updated ?? rec };
-		},
-	});
-
 export const recordingApplyTool = (_env: Env) =>
 	createTool({
 		id: "recording_apply",
 		description:
-			"Apply the (optionally edited) summary outputs from a recording. Appends historyUpdate to the pet's owner notes and adds the summary as a timeline note.",
-		inputSchema: z.object({
-			recordingId: z.string(),
-			historyUpdate: z
-				.string()
-				.optional()
-				.describe("Override the AI-proposed history update. Empty string = skip."),
-			episodeNote: z
-				.string()
-				.optional()
-				.describe("Override the AI-proposed timeline note. Empty string = skip."),
-		}),
-		outputSchema: z.object({ recording: RecordingSchema }),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const rec = await getRecording(env, context.recordingId);
-			if (!rec) throw new Error(`Recording not found: ${context.recordingId}`);
-			const pet = await getSelfPet(env);
-			if (!pet) throw new Error("Pet not found");
-
-			const history =
-				context.historyUpdate !== undefined
-					? context.historyUpdate
-					: (rec.historyUpdate ?? "");
-			const noteText =
-				context.episodeNote !== undefined
-					? context.episodeNote
-					: (rec.summary ?? "");
-
-			if (history.trim()) {
-				const stamp = new Date().toISOString().slice(0, 10);
-				const appended =
-					(pet.ownerNotes ? `${pet.ownerNotes}\n\n` : "") +
-					`[${stamp} from recording]\n${history.trim()}`;
-				await updatePet(env, pet.id, { ownerNotes: appended });
-			}
-
-			let episodeNoteId: string | null = rec.episodeNoteId;
-			if (noteText.trim()) {
-				const n = await addNote(env, {
-					kind: "ai-summary",
-					content: noteText.trim(),
-				});
-				episodeNoteId = n.id;
-			}
-
-			const updated = await updateRecording(env, rec.id, {
-				status: "applied",
-				historyUpdate: history,
-				summary: noteText,
-				episodeNoteId,
-			});
-			return { recording: updated ?? rec };
-		},
-	});
-
-export const recordingApplyGroupTool = (_env: Env) =>
-	createTool({
-		id: "recording_apply_group",
-		description:
-			"Combine the transcripts of one or more recordings into a SINGLE analysis, then auto-apply: appends the long-term history update to pet.ownerNotes and inserts one ai-summary timeline note. All recordings in the group are marked status='applied' and linked to that note.",
+			"Analyze one or more transcribed recordings and apply the result to the pet's record in one step: combines their transcripts into a SINGLE analysis (summary + long-term history update), appends the history update to pet.ownerNotes, and inserts one ai-summary timeline note. All recordings in the group are marked status='applied' and linked to that note. (This is the only apply step — it summarizes internally, so there's no separate summarize call.)",
 		inputSchema: z.object({
 			recordingIds: z
 				.array(z.string())

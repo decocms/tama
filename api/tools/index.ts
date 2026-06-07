@@ -10,14 +10,13 @@ import {
 } from "./app-surfaces.ts";
 import { assetListTool, assetUploadTool } from "./assets.ts";
 import {
+	examAddTool,
 	examDeleteTool,
 	examExplainTool,
 	examGetTool,
 	examListTool,
 	examMetricSeriesTool,
-	examPasteTool,
 	examUpdateTool,
-	examUploadTool,
 } from "./exam.ts";
 import {
 	petProfileRefreshTool,
@@ -40,12 +39,10 @@ import {
 } from "./push.ts";
 import {
 	recordingAddChunkTool,
-	recordingApplyGroupTool,
 	recordingApplyTool,
 	recordingCreateTool,
 	recordingGetTool,
 	recordingListTool,
-	recordingSummarizeTool,
 	recordingTranscribeTool,
 } from "./recording.ts";
 import { researchListTool, vetResearchTool } from "./research.ts";
@@ -57,13 +54,10 @@ import {
 import {
 	doseLogTool,
 	doseUpdateTool,
-	scheduleStateDeleteTool,
 	scheduleStateListTool,
 	timetableGetTool,
-	timetableSetAnchorTool,
-	timetableSetDurationTool,
-	timetableSnoozeTool,
-	timetableStopItemTool,
+	timetableRescheduleTool,
+	timetableSetBoundsTool,
 } from "./timetable.ts";
 import {
 	symptomAddTool,
@@ -117,32 +111,27 @@ export const tools = [
 	prescriptionUpdateTool,
 	prescriptionListTool,
 	prescriptionDeleteTool,
-	// Exams
-	examUploadTool,
-	examPasteTool,
+	// Exams — one intake (file or text), separate read/get, edit/delete, charts, explain.
+	examAddTool,
 	examUpdateTool,
 	examDeleteTool,
 	examGetTool,
 	examListTool,
 	examMetricSeriesTool,
 	examExplainTool,
-	// Timetable
+	// Timetable — get/list reads, dose log/update, plus two lifecycle ops:
+	// reschedule (when's the next dose) and set_bounds (start/stop/extend/remove).
 	timetableGetTool,
 	scheduleStateListTool,
-	scheduleStateDeleteTool,
 	doseLogTool,
 	doseUpdateTool,
-	timetableSnoozeTool,
-	timetableSetAnchorTool,
-	timetableStopItemTool,
-	timetableSetDurationTool,
-	// Recordings
+	timetableRescheduleTool,
+	timetableSetBoundsTool,
+	// Recordings — chunked upload → transcribe → apply (summarizes inline).
 	recordingCreateTool,
 	recordingAddChunkTool,
 	recordingTranscribeTool,
-	recordingSummarizeTool,
 	recordingApplyTool,
-	recordingApplyGroupTool,
 	recordingGetTool,
 	recordingListTool,
 	// Research + push

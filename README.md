@@ -138,7 +138,7 @@ exist in the new schema (so `episode_id` is dropped and everything re-keys onto
 idempotent. See [`scripts/migrate-beto.ts`](./scripts/migrate-beto.ts).
 
 To (re-)extract lab PDFs into charted metrics — e.g. a hemoglobin trend the old
-deploy never captured — run the worker and feed the files through `exam_upload`:
+deploy never captured — run the worker and feed the files through `exam_add`:
 
 ```bash
 bun run dev   # worker on :8788, in another terminal
@@ -166,10 +166,12 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | `prescription_upload` / `_create` / `_update` / `_list` / `_delete` | Prescriptions |
 | `timetable_get`             | Derived live timetable for next N hours       |
 | `dose_log` / `dose_update`  | Log given / skipped / undone                  |
-| `schedule_state_list` / `_delete` | Read / remove live item state           |
-| `timetable_snooze` / `_set_anchor` / `_set_duration` / `_stop_item` | Per-item adjustments |
-| `recording_*`               | Audio chunked upload → whisper → summary      |
-| `exam_upload` / `_paste` / `_get` / `_list` / `_update` / `_delete` | Lab exams |
+| `schedule_state_list`       | Read live item state                          |
+| `timetable_reschedule`      | Move the next dose (snooze / absolute time)   |
+| `timetable_set_bounds`      | Treatment lifecycle: stop / extend / re-open / remove |
+| `recording_*`               | Audio chunked upload → transcribe → apply (summarizes inline) |
+| `exam_add`                  | Add a lab exam from a file or pasted text     |
+| `exam_get` / `_list` / `_update` / `_delete` | Read one / list / edit / remove |
 | `exam_metric_series`        | Chart-shaped per-metric time series           |
 | `vet_research`              | Perplexity with auto-attached pet + meds context |
 | `push_*`                    | VAPID key, subscribe, unsubscribe, test       |

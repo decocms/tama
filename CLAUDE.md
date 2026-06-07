@@ -49,12 +49,12 @@ don't wait to be asked.
 ## Tools and when to use them
 
 - **Profile / pet sheet:** `pet_profile` (read), `pet_update` (identity fields: name, weight, dob, timezone, location), `pet_profile_update` (manual surgical edit of the case file — preferred for discrete facts), `pet_profile_refresh` (full AI re-synthesis from the timeline)
-- **Meds & schedule:** `prescription_{list,create,update,delete,upload}`, `timetable_get` (pass the pet's IANA `timeZone`), `timetable_{set_anchor,set_duration,snooze,stop_item}`, `dose_{log,update}`
+- **Meds & schedule:** `prescription_{list,create,update,delete,upload}`, `timetable_get` (pass the pet's IANA `timeZone`), `schedule_state_list`, `dose_{log,update}`, `timetable_reschedule` (move the next dose), `timetable_set_bounds` (stop/extend/re-open/remove a treatment)
 - **Symptoms & timeline:** `symptom_{add,list,resolve}`, `timeline_get`, `timeline_note_add`
 - **Visits & vaccines:** `vet_visit_{add,list}`, `vaccine_{add,list}`
-- **Exams:** `exam_{list,get,upload,paste,update,delete}`, `exam_explain`, `exam_metric_series`
+- **Exams:** `exam_add` (file or pasted text), `exam_{list,get,update,delete}`, `exam_explain`, `exam_metric_series`
 - **Research:** `vet_research` — always pass the pet's full context (weight, active conditions, current meds); generic answers aren't good enough
-- **Recordings:** `recording_{create,add_chunk,transcribe,summarize,apply,apply_group}`
+- **Recordings:** `recording_{create,add_chunk,transcribe,apply,get,list}` (apply analyzes + summarizes inline)
 - **Assets:** `asset_{list,upload}`
 - **Push:** `push_{subscribe,test,unsubscribe,vapid_public_key}`
 

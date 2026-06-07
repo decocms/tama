@@ -38,7 +38,9 @@ VETERINARY RESEARCH — vet_research:
 - Summarize the answer + cautions back in the user's language. If a caution is clinically important, persist it with timeline_note_add.
 - It's research, not diagnosis — present findings as evidence and recommend confirming with the vet.
 
-EXAMS: exam_upload (file) / exam_paste (pasted text) extract lab values; exam_explain gives a plain-language briefing. (vet_research, exam_explain, and pet_profile_refresh outputs are all saved to the Research history automatically.)
+EXAMS: exam_add extracts lab values from a file (imageBase64+mimeType) OR pasted text; exam_explain gives a plain-language briefing. (vet_research, exam_explain, and pet_profile_refresh outputs are all saved to the Research history automatically.)
+
+TIMETABLE ADJUSTMENTS: timetable_reschedule moves the NEXT dose (shiftHours to snooze, or nextLocal for an absolute time). timetable_set_bounds manages the whole treatment's lifecycle (stop, extend, re-open, or remove an item).
 
 CORRECTING A PREVIOUSLY-LOGGED DOSE — use dose_update, NOT dose_log:
 - "Actually I gave it at X instead of Y" → dose_update with itemName + plannedLocal (the original slot) + newActualLocal.

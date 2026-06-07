@@ -307,16 +307,26 @@ export const doseUpdateTool = (_env: Env) =>
 		},
 	});
 
-export const timetableSnoozeTool = (_env: Env) =>
+export const timetableRescheduleTool = (_env: Env) =>
 	createTool({
-		id: "timetable_snooze",
-		description:
-			"Postpone (or pull earlier) the next dose of an item by N hours. Shifts the schedule anchor — no dose row is created. Positive = later, negative = earlier. Decimals OK. For an absolute time prefer timetable_set_anchor.",
+		id: "timetable_reschedule",
+		description: `Move WHEN the next dose of an item is due. Shifts the schedule anchor — no dose row is created. Two ways to say it (pass exactly one):
+- shiftHours: relative nudge. Positive = later, negative = earlier, decimals OK (0.25 = +15min). This is a "snooze".
+- nextLocal: an absolute wall-clock time in the pet's timezone — "HH:mm" (today, rolls to tomorrow if already past), "YYYY-MM-DD HH:mm", or "YYYY-MM-DDTHH:mm".
+
+For starting/stopping/extending a whole treatment, use timetable_set_bounds instead.`,
 		inputSchema: z.object({
 			itemName: z.string(),
-			hours: z.coerce
+			shiftHours: z.coerce
 				.number()
-				.describe("Positive = later, negative = earlier. e.g. 0.25 = +15min."),
+				.optional()
+				.describe("Relative nudge in hours. Positive = later, negative = earlier."),
+			nextLocal: z
+				.string()
+				.optional()
+				.describe(
+					"Absolute next-due wall-clock in the pet's tz: 'HH:mm', 'YYYY-MM-DD HH:mm', or 'YYYY-MM-DDTHH:mm'.",
+				),
 		}),
 		outputSchema: z.object({
 			itemKey: z.string(),
@@ -324,12 +334,35 @@ export const timetableSnoozeTool = (_env: Env) =>
 		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
+			if (
+				(context.shiftHours == null && !context.nextLocal) ||
+				(context.shiftHours != null && context.nextLocal)
+			) {
+				throw new Error(
+					"Pass exactly one of shiftHours (relative) or nextLocal (absolute).",
+				);
+			}
 			const pet = await getSelfPet(env);
 			const tz = pet?.timezone ?? "UTC";
 			const rxRows = await listPrescriptions(env);
 			await ensureScheduleStateForPet(env, rxRows, tz);
 			const key = itemKey(context.itemName);
-			const updated = await shiftAnchorBy(env, key, context.hours);
+
+			let updated: Awaited<ReturnType<typeof setAnchor>>;
+			if (context.shiftHours != null) {
+				updated = await shiftAnchorBy(env, key, context.shiftHours);
+			} else {
+				let anchorIso = wallClockToIso(context.nextLocal as string, tz);
+				const isBareHHmm = /^\d{1,2}:\d{2}$/.test(
+					(context.nextLocal as string).trim(),
+				);
+				if (isBareHHmm && new Date(anchorIso).getTime() <= Date.now()) {
+					anchorIso = new Date(
+						new Date(anchorIso).getTime() + 24 * 60 * 60 * 1000,
+					).toISOString();
+				}
+				updated = await setAnchor(env, key, anchorIso);
+			}
 			if (!updated) {
 				throw new Error(
 					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
@@ -404,83 +437,40 @@ export const scheduleStateListTool = (_env: Env) =>
 		},
 	});
 
-export const scheduleStateDeleteTool = (_env: Env) =>
+export const timetableSetBoundsTool = (_env: Env) =>
 	createTool({
-		id: "schedule_state_delete",
-		description: `Hard-delete a single schedule_state row by id. Use ONLY to clean up orphan/ghost items left by prescription_delete. Past dose history is NOT touched. For "stop but keep history" use timetable_stop_item.`,
-		inputSchema: z.object({
-			id: z
-				.string()
-				.describe(
-					"The schedule_state row id (ss_xxx). From schedule_state_list.",
-				),
-		}),
-		outputSchema: z.object({ deleted: z.boolean() }),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const deleted = await deleteScheduleState(env, context.id);
-			return { deleted };
-		},
-	});
-
-export const timetableStopItemTool = (_env: Env) =>
-	createTool({
-		id: "timetable_stop_item",
-		description: `Stop a treatment — the medicine/meal no longer appears in the timetable. Sets ends_at to now (or a provided ISO) and marks it inactive. Reversible via timetable_set_duration. Past doses are NOT touched.`,
+		id: "timetable_set_bounds",
+		description: `Manage a treatment's LIFECYCLE on the timetable — start, stop, extend, re-open, or remove it. (To move just the next dose's time, use timetable_reschedule instead.) Pick one intent:
+- stop: true → stop now (ends_at = now, item drops off the timetable; past doses kept). Reversible.
+- endsAt / startsAt: set explicit lifecycle bounds (ISO). Extend a course, re-open a stopped one (endsAt: a future date or null), or pin a start. null clears a bound; omit leaves it unchanged.
+- remove: true → HARD-DELETE the schedule row (orphan/ghost cleanup left by prescription_delete). Past dose history is NOT touched.`,
 		inputSchema: z.object({
 			itemName: z.string(),
-			endsAt: z
-				.string()
+			stop: z
+				.boolean()
 				.optional()
-				.describe("Optional ISO timestamp for when it ends. Defaults to now."),
-		}),
-		outputSchema: z.object({
-			itemKey: z.string(),
-			endsAt: z.string().nullable(),
-			active: z.boolean(),
-		}),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const pet = await getSelfPet(env);
-			const tz = pet?.timezone ?? "UTC";
-			const rxRows = await listPrescriptions(env);
-			await ensureScheduleStateForPet(env, rxRows, tz);
-			const key = itemKey(context.itemName);
-			const updated = await endScheduleStateItem(env, key, context.endsAt);
-			if (!updated) {
-				throw new Error(
-					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
-				);
-			}
-			return {
-				itemKey: updated.itemKey,
-				endsAt: updated.endsAt,
-				active: updated.active,
-			};
-		},
-	});
-
-export const timetableSetDurationTool = (_env: Env) =>
-	createTool({
-		id: "timetable_set_duration",
-		description: `Adjust the treatment lifecycle bounds (startsAt / endsAt) for a scheduled item without stopping it. Extend a course, re-open a stopped one, or pin explicit dates. Either bound = null to clear it. To stop immediately, prefer timetable_stop_item.`,
-		inputSchema: z.object({
-			itemName: z.string(),
+				.describe("Stop the treatment now (ends_at = now). Shorthand for endsAt=now."),
 			startsAt: z
 				.string()
 				.nullable()
 				.optional()
-				.describe("ISO timestamp; null to clear; omit to leave unchanged."),
+				.describe("ISO timestamp; null clears; omit leaves unchanged."),
 			endsAt: z
 				.string()
 				.nullable()
 				.optional()
-				.describe("ISO timestamp; null to clear; omit to leave unchanged."),
+				.describe("ISO timestamp; null clears; omit leaves unchanged."),
+			remove: z
+				.boolean()
+				.optional()
+				.describe("Hard-delete the schedule row (cleanup). Mutually exclusive with the others."),
 		}),
 		outputSchema: z.object({
 			itemKey: z.string(),
-			startsAt: z.string().nullable(),
-			endsAt: z.string().nullable(),
+			startsAt: z.string().nullable().optional(),
+			endsAt: z.string().nullable().optional(),
+			active: z.boolean().optional(),
+			removed: z.boolean().optional(),
 		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
@@ -489,6 +479,37 @@ export const timetableSetDurationTool = (_env: Env) =>
 			const rxRows = await listPrescriptions(env);
 			await ensureScheduleStateForPet(env, rxRows, tz);
 			const key = itemKey(context.itemName);
+
+			// remove: resolve itemName → row id → hard delete.
+			if (context.remove) {
+				const row = await getScheduleState(env, key);
+				if (!row) {
+					throw new Error(`No schedule state for "${context.itemName}".`);
+				}
+				const deleted = await deleteScheduleState(env, row.id);
+				return { itemKey: key, removed: deleted };
+			}
+
+			// stop: end_at = now (inactive).
+			if (context.stop) {
+				const updated = await endScheduleStateItem(
+					env,
+					key,
+					context.endsAt ?? undefined,
+				);
+				if (!updated) {
+					throw new Error(
+						`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
+					);
+				}
+				return {
+					itemKey: updated.itemKey,
+					endsAt: updated.endsAt,
+					active: updated.active,
+				};
+			}
+
+			// set explicit bounds.
 			const updated = await setScheduleStateBounds(env, key, {
 				startsAt: context.startsAt ?? undefined,
 				endsAt: context.endsAt ?? undefined,
@@ -502,48 +523,7 @@ export const timetableSetDurationTool = (_env: Env) =>
 				itemKey: updated.itemKey,
 				startsAt: updated.startsAt,
 				endsAt: updated.endsAt,
+				active: updated.active,
 			};
-		},
-	});
-
-export const timetableSetAnchorTool = (_env: Env) =>
-	createTool({
-		id: "timetable_set_anchor",
-		description: `Set the next-due time of an item to a specific wall-clock time (pet's timezone). Accepts "HH:mm" (today, rolls to tomorrow if past), "YYYY-MM-DD HH:mm", or "YYYY-MM-DDTHH:mm".`,
-		inputSchema: z.object({
-			itemName: z.string(),
-			nextLocal: z
-				.string()
-				.describe(
-					"Wall-clock time in pet's tz: 'HH:mm', 'YYYY-MM-DD HH:mm', or 'YYYY-MM-DDTHH:mm'.",
-				),
-		}),
-		outputSchema: z.object({
-			itemKey: z.string(),
-			newAnchorAt: z.string(),
-		}),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const pet = await getSelfPet(env);
-			const tz = pet?.timezone ?? "UTC";
-			const rxRows = await listPrescriptions(env);
-			await ensureScheduleStateForPet(env, rxRows, tz);
-			const key = itemKey(context.itemName);
-
-			let anchorIso = wallClockToIso(context.nextLocal, tz);
-			const isBareHHmm = /^\d{1,2}:\d{2}$/.test(context.nextLocal.trim());
-			if (isBareHHmm && new Date(anchorIso).getTime() <= Date.now()) {
-				anchorIso = new Date(
-					new Date(anchorIso).getTime() + 24 * 60 * 60 * 1000,
-				).toISOString();
-			}
-
-			const updated = await setAnchor(env, key, anchorIso);
-			if (!updated) {
-				throw new Error(
-					`No schedule state for "${context.itemName}" — is the item in a confirmed prescription?`,
-				);
-			}
-			return { itemKey: updated.itemKey, newAnchorAt: updated.anchorAt };
 		},
 	});

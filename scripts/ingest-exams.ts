@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 //
-// Ingest real lab-exam PDFs through the running worker's `exam_upload` MCP
+// Ingest real lab-exam PDFs through the running worker's `exam_add` MCP
 // tool, so Claude vision extracts every parameter and the metrics get charted
 // (e.g. Beto's hemoglobin trend across two hemograms). Unlike the D1 migration,
 // this needs the worker running because extraction goes through the AI Gateway.
@@ -87,7 +87,7 @@ async function main() {
 			const bytes = await readFile(path);
 			const base64 = bytes.toString("base64");
 			process.stdout.write(`  • ${label} … `);
-			const out = (await callTool("exam_upload", {
+			const out = (await callTool("exam_add", {
 				imageBase64: base64,
 				mimeType: mimeFor(path),
 				originalName: label,

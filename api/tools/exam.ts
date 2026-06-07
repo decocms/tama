@@ -79,18 +79,26 @@ function pendingReviewCount(payload: ExamWithMetrics): number {
 	return payload.metrics.filter((m) => m.pendingReview).length;
 }
 
-export const examUploadTool = (_env: Env) =>
+export const examAddTool = (_env: Env) =>
 	createTool({
-		id: "exam_upload",
-		description: `Upload a lab report (PDF or image) and let the vision model extract every parameter. Saves the file in R2 (so the original document stays linked to the episode), runs Claude vision/document extraction, returns a DRAFT exam with structured metrics. The owner then reviews and confirms the exam in the UI.
+		id: "exam_add",
+		description: `Add a lab exam by extracting its parameters with the AI, returning a DRAFT exam with structured metrics for the owner to review/confirm. Two input modes (pass one):
+- A FILE to OCR — set imageBase64 + mimeType (and optional originalName). The file is saved in R2 so the original document stays linked. Accepted: image/jpeg, image/png, image/webp, image/gif, application/pdf.
+- Raw TEXT you already have — set text (pasted email body, screenshot text, OCR transcript). No file is stored.
 
-Use this when you actually have a file to OCR. If you already have the lab values as text (pasted email, screenshot text, etc.), call exam_paste instead — same extractor, no file storage round-trip.
-
-Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf.`,
+Same extractor either way. Confirm the exam (exam_update status='confirmed') to expose it in charts.`,
 		inputSchema: z.object({
-			imageBase64: z.string(),
-			mimeType: z.string(),
+			imageBase64: z
+				.string()
+				.optional()
+				.describe("Base64 file bytes (PDF/image). Requires mimeType."),
+			mimeType: z.string().optional().describe("MIME type of imageBase64."),
 			originalName: z.string().optional(),
+			text: z
+				.string()
+				.min(20)
+				.optional()
+				.describe("Raw lab text, when you don't have a file to OCR."),
 			sourceNotes: z.string().optional(),
 		}),
 		outputSchema: z.object({
@@ -100,56 +108,37 @@ Accepted formats: image/jpeg, image/png, image/webp, image/gif, application/pdf.
 		}),
 		execute: async ({ context, runtimeContext }) => {
 			const env = runtimeContext.env as Env;
-			const file = await saveFile(env, {
-				base64: context.imageBase64,
-				mimeType: context.mimeType,
-				originalName: context.originalName,
-				kind: "exam",
-			});
-			const extracted = await extractExam(env, {
-				imageBase64: context.imageBase64,
-				mimeType: context.mimeType,
-				sourceNotes: context.sourceNotes,
-			});
-			const result = await createExamDraft(env, {
-				fileId: file.id,
-				performedAt: extracted.exam.performedAt ?? null,
-				labName: extracted.exam.labName ?? null,
-				requestId: extracted.exam.requestId ?? null,
-				metrics: extracted.metrics.map(toInputMetric),
-				rawAiText: extracted.rawAiText,
-				sourceNotes: context.sourceNotes,
-				status: "draft",
-			});
-			return {
-				exam: result.exam,
-				metrics: result.metrics,
-				pendingReviewCount: pendingReviewCount(result),
-			};
-		},
-	});
+			const hasFile = !!(context.imageBase64 && context.mimeType);
+			if (!hasFile && !context.text) {
+				throw new Error(
+					"exam_add needs either imageBase64 + mimeType (a file) or text.",
+				);
+			}
 
-export const examPasteTool = (_env: Env) =>
-	createTool({
-		id: "exam_paste",
-		description: `Extract lab parameters from a pasted block of raw text (email body, OCR'd transcript, screenshot text). Same extractor as exam_upload, no file is stored. Returns a DRAFT exam with structured metrics for owner review.`,
-		inputSchema: z.object({
-			text: z.string().min(20),
-			sourceNotes: z.string().optional(),
-		}),
-		outputSchema: z.object({
-			exam: ExamSchema,
-			metrics: z.array(ExamMetricSchema),
-			pendingReviewCount: z.number(),
-		}),
-		execute: async ({ context, runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const extracted = await extractExam(env, {
-				text: context.text,
-				sourceNotes: context.sourceNotes,
-			});
+			// Save the original file only in the file path.
+			const fileId = hasFile
+				? (
+						await saveFile(env, {
+							base64: context.imageBase64 as string,
+							mimeType: context.mimeType as string,
+							originalName: context.originalName,
+							kind: "exam",
+						})
+					).id
+				: null;
+
+			const extracted = await extractExam(
+				env,
+				hasFile
+					? {
+							imageBase64: context.imageBase64 as string,
+							mimeType: context.mimeType as string,
+							sourceNotes: context.sourceNotes,
+						}
+					: { text: context.text as string, sourceNotes: context.sourceNotes },
+			);
 			const result = await createExamDraft(env, {
-				fileId: null,
+				fileId,
 				performedAt: extracted.exam.performedAt ?? null,
 				labName: extracted.exam.labName ?? null,
 				requestId: extracted.exam.requestId ?? null,

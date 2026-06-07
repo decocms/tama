@@ -220,7 +220,7 @@ export const prescriptionCreateTool = (_env: Env) =>
   • You copied items from another prescription.
   • A second prescription was added on top of the first one (each rx stays independent — multiple confirmed prescriptions coexist on an episode).
 
-CRITICAL preflight: BEFORE calling this for an episode that may already have an active treatment plan, call schedule_state_list first to see what items already exist. If a drug is already on the timetable, reuse its EXACT display_name (or use timetable_set_duration / timetable_stop_item to adjust the existing item) — a small name variation like "Sucrafilm Flaconete" vs "SUCRAFILM" produces a duplicate row instead of updating the original. The response of this tool includes an overlapsExisting array that flags likely duplicates after the fact, but checking up front is much cheaper.
+CRITICAL preflight: BEFORE calling this for an episode that may already have an active treatment plan, call schedule_state_list first to see what items already exist. If a drug is already on the timetable, reuse its EXACT display_name (or use timetable_set_bounds to stop/adjust the existing item) — a small name variation like "Sucrafilm Flaconete" vs "SUCRAFILM" produces a duplicate row instead of updating the original. The response of this tool includes an overlapsExisting array that flags likely duplicates after the fact, but checking up front is much cheaper.
 
 Defaults to status='confirmed' so items appear on the timetable immediately. Each prescription keeps its own sourceNotes so provenance (which vet, which document, which chat snippet) stays traceable.
 
@@ -255,7 +255,7 @@ Only fall back to prescription_upload when you truly do not have the text and ne
 					}),
 				)
 				.describe(
-					"Items in the new prescription whose name resembles an existing schedule_state row. 'exact' = same item_key (will update in place — usually fine). 'brand-prefix' / 'substring' = likely duplicate (different label for the same drug, will create a SECOND timetable row). If you see brand-prefix or substring matches, you probably want to delete this prescription and either reuse the canonical name OR adjust the existing item via timetable_set_duration.",
+					"Items in the new prescription whose name resembles an existing schedule_state row. 'exact' = same item_key (will update in place — usually fine). 'brand-prefix' / 'substring' = likely duplicate (different label for the same drug, will create a SECOND timetable row). If you see brand-prefix or substring matches, you probably want to delete this prescription and either reuse the canonical name OR adjust the existing item via timetable_set_bounds.",
 				),
 		}),
 		execute: async ({ context, runtimeContext }) => {
@@ -277,7 +277,7 @@ export const prescriptionDeleteTool = (_env: Env) =>
 		id: "prescription_delete",
 		description: `Delete a prescription. Use to clean up duplicates created by mistake (e.g. a second prescription with slightly different item names that produced extra timetable rows). By default this also marks every schedule_state row pointing at this prescription as active=false so the timetable doesn't keep showing it after the prescription itself is gone — pass deactivateItems=false if you specifically want to orphan the schedule_state rows instead (rare).
 
-Past dose history (the doses table) is never touched. To stop a single item without deleting the whole prescription, use timetable_stop_item.`,
+Past dose history (the doses table) is never touched. To stop a single item without deleting the whole prescription, use timetable_set_bounds (stop=true).`,
 		inputSchema: z.object({
 			prescriptionId: z.string(),
 			deactivateItems: z

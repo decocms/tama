@@ -285,7 +285,10 @@ export function useSnoozeItem() {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (input: { itemName: string; hours: number }) =>
-			callTool(app, "timetable_snooze", input),
+			callTool(app, "timetable_reschedule", {
+				itemName: input.itemName,
+				shiftHours: input.hours,
+			}),
 		onSuccess: () => invalidateAll(qc),
 	});
 }
@@ -295,7 +298,11 @@ export function useStopItem() {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (input: { itemName: string; endsAt?: string }) =>
-			callTool(app, "timetable_stop_item", input),
+			callTool(app, "timetable_set_bounds", {
+				itemName: input.itemName,
+				stop: true,
+				endsAt: input.endsAt,
+			}),
 		onSuccess: () => invalidateAll(qc),
 	});
 }
@@ -446,7 +453,7 @@ export function useApplyRecordingGroup() {
 				summary: string;
 				historyUpdate: string;
 				recordings: Recording[];
-			}>(app, "recording_apply_group", input),
+			}>(app, "recording_apply", input),
 		onSuccess: () => invalidateAll(qc),
 	});
 }
@@ -502,7 +509,7 @@ export function useUploadExam() {
 				exam: Exam;
 				metrics: ExamMetric[];
 				pendingReviewCount: number;
-			}>(app, "exam_upload", input),
+			}>(app, "exam_add", input),
 		onSuccess: () => invalidateAll(qc),
 	});
 }
@@ -516,7 +523,7 @@ export function usePasteExam() {
 				exam: Exam;
 				metrics: ExamMetric[];
 				pendingReviewCount: number;
-			}>(app, "exam_paste", input),
+			}>(app, "exam_add", input),
 		onSuccess: () => invalidateAll(qc),
 	});
 }
