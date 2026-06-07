@@ -201,6 +201,7 @@ export interface ScheduleState {
 	route: string | null;
 	notes: string | null;
 	intervalHours: number;
+	times?: string[];
 	anchorAt: string;
 	durationDays: number | null;
 	prescriptionId: string | null;

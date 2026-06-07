@@ -62,21 +62,21 @@ export function TimetablePage() {
 							)}
 						</Section>
 
-						{activeMeds.length > 0 ? (
-							<Section title="Active treatments" eyebrow="On the schedule">
-								<div className="space-y-2">
-									{activeMeds.map((s) => (
-										<MedicineRow key={s.id} state={s} />
-									))}
-								</div>
-							</Section>
-						) : null}
-
 						{doneToday.length > 0 ? (
 							<Section title="Logged" eyebrow="Recent">
 								<div className="space-y-2">
 									{doneToday.slice(0, 12).map((e) => (
 										<DoseRow key={e.id} entry={e} />
+									))}
+								</div>
+							</Section>
+						) : null}
+
+						{activeMeds.length > 0 ? (
+							<Section title="Active treatments" eyebrow="On the schedule">
+								<div className="space-y-2">
+									{activeMeds.map((s) => (
+										<MedicineRow key={s.id} state={s} />
 									))}
 								</div>
 							</Section>
@@ -180,7 +180,9 @@ function MedicineRow({ state }: { state: ScheduleState }) {
 					{state.displayName}
 				</div>
 				<div className="text-xs text-muted-foreground">
-					every {state.intervalHours}h
+					{state.times && state.times.length > 0
+						? state.times.join(" · ")
+						: `every ${state.intervalHours}h`}
 					{state.dosage ? ` · ${state.dosage}` : ""}
 					{state.endsAt ? ` · ends ${state.endsAt.slice(0, 10)}` : ""}
 				</div>

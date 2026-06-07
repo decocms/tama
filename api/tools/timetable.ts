@@ -23,6 +23,7 @@ import {
 	getScheduleState,
 	itemKey,
 	listScheduleStates,
+	parseScheduleTimes,
 	setAnchor,
 	setScheduleStateBounds,
 	shiftAnchorBy,
@@ -361,6 +362,11 @@ export const scheduleStateListTool = (_env: Env) =>
 					route: z.string().nullable(),
 					notes: z.string().nullable(),
 					intervalHours: z.number(),
+					times: z
+						.array(z.string())
+						.describe(
+							"Explicit daily clock times (HH:mm, pet tz). Non-empty = fixed schedule (irregular spacing OK); empty = even interval.",
+						),
 					anchorAt: z.string(),
 					durationDays: z.number().nullable(),
 					prescriptionId: z.string().nullable(),
@@ -386,6 +392,7 @@ export const scheduleStateListTool = (_env: Env) =>
 					route: s.route,
 					notes: s.notes,
 					intervalHours: s.intervalHours,
+					times: parseScheduleTimes(s),
 					anchorAt: s.anchorAt,
 					durationDays: s.durationDays,
 					prescriptionId: s.prescriptionId,

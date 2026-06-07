@@ -14,6 +14,7 @@ function makeState(overrides: Partial<ScheduleState>): ScheduleState {
 		route: null,
 		notes: null,
 		intervalHours: 24,
+		timesJson: null,
 		anchorAt: "2026-05-16T18:00:00.000Z",
 		durationDays: null,
 		prescriptionId: "rx_1",

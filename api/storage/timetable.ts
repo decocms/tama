@@ -112,38 +112,129 @@ export function wallClockToIso(wallClock: string, timeZone: string): string {
 	);
 }
 
+export function parseTimesJson(json: string | null | undefined): string[] {
+	if (!json) return [];
+	try {
+		const v = JSON.parse(json);
+		return Array.isArray(v)
+			? v.filter((t) => typeof t === "string" && /^\d{1,2}:\d{2}$/.test(t))
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+// Smallest gap (hours) between consecutive daily clock times, wrapping past
+// midnight. Used to size the suppression window so a given/skipped dose hides
+// exactly its slot without swallowing the neighbouring one.
+function minGapHours(times: string[]): number {
+	if (times.length <= 1) return 24;
+	const mins = times
+		.map((t) => {
+			const [h, m] = t.split(":").map(Number);
+			return h * 60 + m;
+		})
+		.sort((a, b) => a - b);
+	let min = Infinity;
+	for (let i = 0; i < mins.length; i++) {
+		const next = i + 1 < mins.length ? mins[i + 1] : mins[0] + 24 * 60;
+		min = Math.min(min, next - mins[i]);
+	}
+	return Math.max(min, 1) / 60;
+}
+
+// Every clock-time slot (UTC ms) that falls inside [fromMs, toMs] for the given
+// daily times in `timeZone`. Walks each calendar day the window touches.
+export function clockSlotsInWindow(
+	times: string[],
+	timeZone: string,
+	fromMs: number,
+	toMs: number,
+): number[] {
+	const slots = new Set<number>();
+	const days = Math.ceil((toMs - fromMs) / (24 * HOUR_MS)) + 2;
+	for (let d = 0; d < days; d++) {
+		const ref = new Date(fromMs + d * 24 * HOUR_MS);
+		const { year, month, day } = zonedDateParts(ref, timeZone);
+		for (const t of times) {
+			const [hh, mm] = t.split(":").map(Number);
+			const ms = zonedDate(year, month, day, hh, mm, timeZone).getTime();
+			if (ms >= fromMs && ms <= toMs) slots.add(ms);
+		}
+	}
+	return [...slots].sort((a, b) => a - b);
+}
+
 /**
  * Derive the timetable from live schedule_state rows + the doses history.
  *
- * Each item's next-due time is `anchor_at`, advanced naturally:
- *   • given dose → anchor moves to given_at + interval (cascade)
- *   • snooze     → anchor += snooze amount
- *   • skip       → anchor += interval (jump over the missed slot)
+ * Two projection modes per item:
+ *   • Fixed clock times (`times_json` set, e.g. 07:00/14:00/22:00): project
+ *     those exact times each day across the window. A given/skipped dose near
+ *     a slot suppresses it (the dose row stands in); a past slot with no dose
+ *     is surfaced as overdue. Supports irregular spacing.
+ *   • Even interval (no times): walk `anchor_at + N × interval_hours`. The
+ *     anchor drifts naturally on give (→ given_at + interval), snooze, skip.
  *
- * Future entries: walk `anchor_at + N × interval_hours` until the window ends.
- * Past entries: pulled directly from the `doses` table (each given/skipped
- * row is its own entry at its actual time). No fuzzy matching, no two-pass
- * adjustment math — past is past, future is future.
+ * Past entries always come from the `doses` table (each given/skipped row at
+ * its actual time).
  */
 export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 	const { scheduleStates, doses, from, to } = input;
 	const fromMs = from.getTime();
 	const toMs = to.getTime();
+	const tz = input.timeZone;
 
 	const entries: TimetableEntry[] = [];
 
-	// Future / current entries: walk each item's anchor forward.
+	// Per-item dose times (non-undone), for suppressing already-acted slots in
+	// fixed-clock mode. Keyed by lowercased item name.
+	const doseMsByName = new Map<string, number[]>();
+	for (const d of doses) {
+		if (d.status === "undone") continue;
+		const k = d.itemName.trim().toLowerCase();
+		const arr = doseMsByName.get(k) ?? [];
+		arr.push(new Date(d.actualAt).getTime());
+		doseMsByName.set(k, arr);
+	}
+
+	// Future / current entries.
 	for (const item of scheduleStates) {
 		if (!item.active) continue;
+
+		const times = parseTimesJson(item.timesJson);
+		if (times.length > 0 && tz) {
+			// Fixed clock-time projection.
+			const halfWindowMs = Math.min(
+				6,
+				Math.max(0.5, minGapHours(times) / 2),
+			) * HOUR_MS;
+			const acted = doseMsByName.get(item.displayName.trim().toLowerCase()) ?? [];
+			for (const slotMs of clockSlotsInWindow(times, tz, fromMs, toMs)) {
+				const suppressed = acted.some(
+					(d) => Math.abs(d - slotMs) <= halfWindowMs,
+				);
+				if (suppressed) continue;
+				entries.push({
+					id: `${item.id}:${new Date(slotMs).toISOString()}`,
+					prescriptionId: item.prescriptionId ?? "",
+					itemName: item.displayName,
+					kind: item.kind,
+					scheduledAt: new Date(slotMs).toISOString(),
+					dosage: item.dosage ?? undefined,
+					route: item.route ?? undefined,
+					notes: item.notes ?? undefined,
+					status: "pending",
+				});
+			}
+			continue;
+		}
+
+		// Even-interval projection: walk the anchor forward.
 		const intervalMs = item.intervalHours * HOUR_MS;
 		if (intervalMs <= 0) continue;
-
 		let cursor = new Date(item.anchorAt).getTime();
-		// If the anchor is before the window, fast-forward to the first slot
-		// that lands inside the window — we surface ONE entry at the
-		// current-or-next slot, not a flood of stale ones.
 		while (cursor < fromMs) cursor += intervalMs;
-
 		while (cursor <= toMs) {
 			entries.push({
 				id: `${item.id}:${new Date(cursor).toISOString()}`,

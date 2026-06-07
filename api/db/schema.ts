@@ -116,6 +116,11 @@ export const scheduleState = sqliteTable("schedule_state", {
 	route: text("route"),
 	notes: text("notes"),
 	intervalHours: real("interval_hours").notNull(),
+	// Explicit clock times ("HH:mm" in the pet's tz), JSON array. When present
+	// the timetable projects these exact times daily (supports irregular
+	// schedules like 07:00/14:00/22:00); when null/[] it falls back to the
+	// even-interval projection from anchorAt + intervalHours.
+	timesJson: text("times_json"),
 	anchorAt: text("anchor_at").notNull(),
 	durationDays: integer("duration_days"),
 	prescriptionId: text("prescription_id").references(() => prescriptions.id, {

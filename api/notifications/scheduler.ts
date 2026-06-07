@@ -16,7 +16,7 @@
 // dose still advances the anchor by the user's real action time, exactly as
 // the existing dose_log path does today.
 
-import { and, between, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import {
 	notificationsSent,
@@ -29,6 +29,7 @@ import {
 	listPushSubscriptions,
 	type PushSubscription,
 } from "../storage/push-subscriptions.ts";
+import { clockSlotsInWindow, parseTimesJson } from "../storage/timetable.ts";
 import { type PushPayload, sendPush } from "./webpush.ts";
 
 // Look-ahead window: any dose anchor in the next 15 minutes is a candidate.
@@ -54,46 +55,53 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 	};
 
 	const now = Date.now();
-	const windowStartIso = new Date(now).toISOString();
-	const windowEndIso = new Date(now + LOOKAHEAD_MS).toISOString();
 
-	// ISO strings sort lexicographically when they're zero-padded UTC, which
-	// is what we always insert (strftime('%Y-%m-%dT%H:%M:%fZ', 'now') and
-	// Date.toISOString()). So BETWEEN on the text column is correct here.
-	const due = await db(env)
+	// One candidate = one (item, planned-time) due in [now, now+15min]. Two
+	// projection modes, matching the timetable: fixed clock times (times_json)
+	// fire at each daily slot; even-interval items fire at their anchor.
+	const pet = await getSelfPet(env);
+	const petName = pet?.name ?? "Pet";
+	const tz = pet?.timezone ?? "UTC";
+
+	const activeRows = await db(env)
 		.select()
 		.from(scheduleState)
-		.where(
-			and(
-				eq(scheduleState.active, true),
-				between(scheduleState.anchorAt, windowStartIso, windowEndIso),
-			),
-		);
+		.where(eq(scheduleState.active, true));
 
-	result.scanned = due.length;
-	if (due.length === 0) return result;
+	const candidates: { row: ScheduleStateRow; plannedAt: string }[] = [];
+	for (const row of activeRows) {
+		const times = parseTimesJson(row.timesJson);
+		if (times.length > 0) {
+			for (const ms of clockSlotsInWindow(times, tz, now, now + LOOKAHEAD_MS)) {
+				candidates.push({ row, plannedAt: new Date(ms).toISOString() });
+			}
+		} else {
+			const a = new Date(row.anchorAt).getTime();
+			if (a >= now && a <= now + LOOKAHEAD_MS) {
+				candidates.push({ row, plannedAt: row.anchorAt });
+			}
+		}
+	}
+
+	result.scanned = candidates.length;
+	if (candidates.length === 0) return result;
 
 	const subs = await listPushSubscriptions(env);
 	if (subs.length === 0) return result;
 
-	const claimedRows: ScheduleStateRow[] = [];
-	for (const row of due) {
-		// Atomic claim: INSERT OR IGNORE returns rowCount 0 if the row was
-		// already there (another tick beat us to it). Drizzle's D1 driver
-		// surfaces .meta.rows_written; cleaner is to .returning() and inspect
-		// length — INSERT OR IGNORE on a duplicate returns no row.
+	// Atomic claim per (scheduleStateId, plannedAt): INSERT OR IGNORE returns no
+	// row if another tick already claimed this exact slot, so each fires once.
+	const claimed: { row: ScheduleStateRow; plannedAt: string }[] = [];
+	for (const c of candidates) {
 		try {
 			const inserted = await db(env)
 				.insert(notificationsSent)
-				.values({
-					scheduleStateId: row.id,
-					plannedAt: row.anchorAt,
-				})
+				.values({ scheduleStateId: c.row.id, plannedAt: c.plannedAt })
 				.onConflictDoNothing()
 				.returning();
 			if (inserted.length > 0) {
 				result.claimed++;
-				claimedRows.push(row);
+				claimed.push(c);
 			}
 		} catch (err) {
 			result.errors++;
@@ -101,8 +109,8 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 		}
 	}
 
-	for (const row of claimedRows) {
-		const payload = await buildPayload(env, row);
+	for (const c of claimed) {
+		const payload = buildPayload(petName, c.row, c.plannedAt);
 		await Promise.allSettled(
 			subs.map(async (sub: PushSubscription) => {
 				const r = await sendPush(env, sub, payload);
@@ -121,17 +129,14 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 	return result;
 }
 
-async function buildPayload(
-	env: Env,
+function buildPayload(
+	petName: string,
 	row: ScheduleStateRow,
-): Promise<PushPayload> {
-	// Pet name is nice context for the title. Single-row read by PK.
-	const pet = await getSelfPet(env);
-	const petName = pet?.name ?? "Pet";
-
+	plannedAtIso: string,
+): PushPayload {
 	const minsAhead = Math.max(
 		1,
-		Math.round((new Date(row.anchorAt).getTime() - Date.now()) / 60_000),
+		Math.round((new Date(plannedAtIso).getTime() - Date.now()) / 60_000),
 	);
 
 	const dosagePart = row.dosage ? ` — ${row.dosage}` : "";
@@ -141,8 +146,8 @@ async function buildPayload(
 		title: `${petName}: ${row.displayName} in ~${minsAhead} min`,
 		body: `${row.kind === "meal" ? "Meal" : "Dose"}${dosagePart}${routePart}. Tap to log.`,
 		url: `/#/timetable`,
-		tag: `dose-${row.id}-${row.anchorAt}`,
+		tag: `dose-${row.id}-${plannedAtIso}`,
 		scheduleStateId: row.id,
-		plannedAt: row.anchorAt,
+		plannedAt: plannedAtIso,
 	};
 }

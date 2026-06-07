@@ -35,6 +35,29 @@ export function deriveIntervalHours(item: ScheduleItem): number {
 	return 24 / n;
 }
 
+// Serialize an item's explicit clock times for storage. Explicit times are the
+// schedule when present — they win over `frequencyHours` (the timetable pins to
+// these exact times, honoring irregular spacing like 07:00/14:00/22:00). Only
+// a frequency-only item (no times) falls back to even-interval drift. Returns
+// null when there are no valid times.
+export function serializeTimes(item: ScheduleItem): string | null {
+	const times = (item.times ?? []).filter((t) => /^\d{1,2}:\d{2}$/.test(t));
+	return times.length > 0 ? JSON.stringify(times) : null;
+}
+
+// Parse the stored clock times for a schedule row. [] when none.
+export function parseScheduleTimes(row: {
+	timesJson?: string | null;
+}): string[] {
+	if (!row.timesJson) return [];
+	try {
+		const v = JSON.parse(row.timesJson);
+		return Array.isArray(v) ? v.filter((t) => typeof t === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
 // Compute the initial anchor (next-due) for a brand-new item, in the pet's
 // timezone. Uses the FIRST entry in `times` applied to today.
 export function deriveInitialAnchor(
@@ -91,6 +114,7 @@ export async function upsertScheduleState(
 	const key = itemKey(input.item.name);
 	const existing = await getScheduleState(env, key);
 	const intervalHours = deriveIntervalHours(input.item);
+	const timesJson = serializeTimes(input.item);
 
 	if (existing) {
 		const [row] = await db(env)
@@ -102,6 +126,7 @@ export async function upsertScheduleState(
 				route: input.item.route ?? null,
 				notes: input.item.notes ?? null,
 				intervalHours,
+				timesJson,
 				durationDays: input.item.durationDays ?? null,
 				prescriptionId: input.prescriptionId,
 				active: true,
@@ -143,6 +168,7 @@ export async function upsertScheduleState(
 			route: input.item.route,
 			notes: input.item.notes,
 			intervalHours,
+			timesJson,
 			anchorAt,
 			durationDays: input.item.durationDays,
 			prescriptionId: input.prescriptionId,
@@ -264,6 +290,7 @@ export async function ensureScheduleStateForPet(
 			const key = itemKey(item.name);
 			const existingRow = existingByKey.get(key);
 			const intervalHours = deriveIntervalHours(item);
+			const timesJson = serializeTimes(item);
 			if (existingRow) {
 				const needs =
 					existingRow.displayName !== item.name ||
@@ -272,6 +299,7 @@ export async function ensureScheduleStateForPet(
 					existingRow.route !== (item.route ?? null) ||
 					existingRow.notes !== (item.notes ?? null) ||
 					existingRow.intervalHours !== intervalHours ||
+					existingRow.timesJson !== timesJson ||
 					existingRow.durationDays !== (item.durationDays ?? null) ||
 					existingRow.prescriptionId !== rx.id ||
 					!existingRow.active;
@@ -286,6 +314,7 @@ export async function ensureScheduleStateForPet(
 								route: item.route ?? null,
 								notes: item.notes ?? null,
 								intervalHours,
+								timesJson,
 								durationDays: item.durationDays ?? null,
 								prescriptionId: rx.id,
 								active: true,
