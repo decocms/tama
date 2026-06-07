@@ -27,6 +27,45 @@ function jsonResponse(body: unknown, status = 200): Response {
 	});
 }
 
+// Constant-time-ish string compare so a wrong token can't be probed byte by
+// byte via timing. Length leak is acceptable for an opaque random token.
+function safeEqual(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	let diff = 0;
+	for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	return diff === 0;
+}
+
+// Bearer-auth gate for the MCP endpoint. Returns a 401 Response when the
+// request should be rejected, or null to let it through.
+//   - Token UNSET (local dev / unconfigured fork): MCP stays open → null.
+//   - Token SET: require `Authorization: Bearer <token>`. Studio sends this
+//     via the connection's configured header; the standalone web UI sends a
+//     token it has stored. Mismatch/missing → 401.
+function mcpAuthRejection(req: Request, env: Env | undefined): Response | null {
+	const expected = env?.MCP_BEARER_TOKEN?.trim();
+	if (!expected) return null; // auth disabled
+	const header = req.headers.get("authorization") ?? "";
+	const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+	const presented = m?.[1]?.trim();
+	if (presented && safeEqual(presented, expected)) return null;
+	return new Response(
+		JSON.stringify({
+			jsonrpc: "2.0",
+			id: null,
+			error: { code: -32001, message: "Unauthorized: missing or invalid bearer token" },
+		}),
+		{
+			status: 401,
+			headers: {
+				"content-type": "application/json",
+				"www-authenticate": 'Bearer realm="tama-mcp"',
+				"cache-control": "no-store",
+			},
+		},
+	);
+}
+
 // Serve an uploaded file (prescription image, PDF, etc.) by fileId. Used by
 // the UI to open the original document the AI extracted a prescription from.
 async function serveFile(env: Env, fileId: string): Promise<Response> {
@@ -95,8 +134,11 @@ function withAssetsAndMcpRoutes(fetcher: Fetcher): Fetcher {
 			}
 		}
 
-		// MCP API at /api/mcp → rewrite to /mcp for the runtime
+		// MCP API at /api/mcp → rewrite to /mcp for the runtime, gated by an
+		// optional bearer token (see mcpAuthRejection).
 		if (url.pathname === "/api/mcp" || url.pathname.startsWith("/api/mcp/")) {
+			const rejected = mcpAuthRejection(req, env);
+			if (rejected) return rejected;
 			url.pathname = url.pathname.slice(4);
 			const rewritten = new Request(url.toString(), req);
 			return fetcher(rewritten, ...args);

@@ -12,3 +12,11 @@ CF_AI_GATEWAY_TOKEN=
 
 # Whisper transcription goes through the same AI Gateway and is billed via
 # AI Gateway credits — no extra secret needed.
+
+# Optional MCP bearer token. Leave UNSET locally to keep the MCP open for dev.
+# In production, generate one (e.g. `openssl rand -hex 32`) and set it with
+#   bunx wrangler secret put MCP_BEARER_TOKEN -c <your-wrangler.toml>
+# Then /api/mcp requires `Authorization: Bearer <token>`. In deco studio, put
+# the same token in the MCP connection's auth header. To use the standalone web
+# app, open it once with ?token=<token> (it's saved to localStorage).
+# MCP_BEARER_TOKEN=

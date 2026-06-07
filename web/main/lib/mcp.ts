@@ -11,15 +11,40 @@ import type { App } from "@modelcontextprotocol/ext-apps/react";
 
 let nextRpcId = 1;
 
+const TOKEN_KEY = "tama_mcp_token";
+
+// The standalone browser tab needs to send the MCP bearer token (when the
+// deploy has one configured). The owner provides it once via `?token=…` in the
+// URL; we persist it to localStorage and strip it from the address bar. Studio
+// embeds don't use this path — they call tools through the Studio channel,
+// which carries the connection's own token.
+function storedMcpToken(): string | null {
+	try {
+		const url = new URL(window.location.href);
+		const fromUrl = url.searchParams.get("token");
+		if (fromUrl) {
+			localStorage.setItem(TOKEN_KEY, fromUrl);
+			url.searchParams.delete("token");
+			window.history.replaceState({}, "", url.toString());
+			return fromUrl;
+		}
+		return localStorage.getItem(TOKEN_KEY);
+	} catch {
+		return null;
+	}
+}
+
 async function callToolHttp<TOut>(
 	name: string,
 	args: Record<string, unknown>,
 ): Promise<TOut> {
+	const token = storedMcpToken();
 	const res = await fetch("/api/mcp", {
 		method: "POST",
 		headers: {
 			"content-type": "application/json",
 			accept: "application/json, text/event-stream",
+			...(token ? { authorization: `Bearer ${token}` } : {}),
 		},
 		body: JSON.stringify({
 			jsonrpc: "2.0",
@@ -28,6 +53,11 @@ async function callToolHttp<TOut>(
 			params: { name, arguments: args },
 		}),
 	});
+	if (res.status === 401) {
+		throw new Error(
+			"This pet's MCP is protected. Open the app with ?token=<your-token> once to unlock it.",
+		);
+	}
 	if (!res.ok) {
 		throw new Error(`MCP HTTP ${res.status}: ${await res.text()}`);
 	}

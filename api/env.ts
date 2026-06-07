@@ -19,6 +19,11 @@ export interface Bindings {
 	ANTHROPIC_API_KEY?: string;
 	PERPLEXITY_API_KEY?: string;
 	OPENAI_API_KEY?: string;
+	// Optional MCP bearer token. When set, the /api/mcp endpoint requires
+	// `Authorization: Bearer <this>` (Studio sends it via the connection's
+	// header; the standalone web UI sends it from a stored token). When unset
+	// (local dev, unconfigured forks) the MCP stays open. See api/app.ts.
+	MCP_BEARER_TOKEN?: string;
 	// Web Push / VAPID. Public key is also surfaced to the frontend via the
 	// push_vapid_public_key tool (VAPID public keys are inherently public).
 	// Generate with `npx web-push generate-vapid-keys` once per environment.
