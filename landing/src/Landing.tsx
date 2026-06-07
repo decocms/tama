@@ -126,28 +126,30 @@ export function Landing({ c, lang }: { c: LandingContent; lang: Lang }) {
 function Hero({ c, lang }: { c: LandingContent; lang: Lang }) {
 	return (
 		<section className="px-6 md:px-12 pt-12 pb-20 md:pt-20 md:pb-32 border-b-4 border-[#2a1f17]">
-			<nav className="max-w-6xl mx-auto flex items-center justify-between mb-16">
+			<nav className="max-w-6xl mx-auto flex items-center justify-between gap-3 flex-wrap mb-16">
 				<div className="flex items-center gap-2 font-bold text-xl">
 					<span className="inline-block w-7 h-7 bg-[#ffbd8e] border-2 border-[#2a1f17]" />
 					Tama
 				</div>
-				<div className="flex items-center gap-2 md:gap-4 text-sm">
+				<div className="flex items-center gap-3 md:gap-4 text-sm">
 					<LangSwitcher lang={lang} />
+					{/* Demo + GitHub are also buttons in the hero, so hide them in the
+					    nav on phones to keep the top bar from wrapping/jumbling. */}
 					<a
 						href={DEMO_URL}
-						className="hover:underline underline-offset-4 decoration-2"
+						className="hidden sm:inline hover:underline underline-offset-4 decoration-2"
 					>
 						{c.nav.demo}
 					</a>
 					<a
 						href={REPO_URL}
-						className="hover:underline underline-offset-4 decoration-2"
+						className="hidden sm:inline hover:underline underline-offset-4 decoration-2"
 					>
 						{c.nav.github}
 					</a>
 					<a
 						href={STUDIO_IMPORT_URL}
-						className="brut bg-[#2a1f17] text-[#fff8ee] px-4 py-2 font-bold inline-flex items-center gap-2 border-2 border-[#2a1f17]"
+						className="brut bg-[#2a1f17] text-[#fff8ee] px-3 py-2 sm:px-4 font-bold inline-flex items-center gap-2 border-2 border-[#2a1f17]"
 					>
 						{c.nav.cta}
 					</a>
