@@ -195,7 +195,9 @@ function CreatureFace({
 	state: CompanionState;
 	svgPack: Record<string, string> | null;
 }) {
-	const svg = svgPack?.[state];
+	// Fall back to idle if this state's frame isn't in the pack yet (e.g. an
+	// older pack generated before "sad" existed) — never show a blank disc.
+	const svg = svgPack?.[state] ?? svgPack?.idle;
 	// Smaller than before so the mood picker + footer fit on a phone screen.
 	const size = "min(58vw, 42vh, 380px)";
 	if (!svg) {

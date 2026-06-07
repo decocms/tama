@@ -18,14 +18,16 @@ export type SpriteState =
 	| "happy"
 	| "hungry"
 	| "pill-time"
-	| "sleeping";
+	| "sleeping"
+	| "sad";
 
-const STATES: SpriteState[] = [
+export const STATES: SpriteState[] = [
 	"idle",
 	"happy",
 	"hungry",
 	"pill-time",
 	"sleeping",
+	"sad",
 ];
 
 // Plain English → CSS-color map. Claude is asked to use phrases like
@@ -420,6 +422,19 @@ function eyes(state: SpriteState, p: Parts, g: Geom): string {
 				lash(`M ${lx - 3.6} ${y} Q ${lx} ${y + 3} ${lx + 3.6} ${y}`, 2) +
 				lash(`M ${rx - 3.6} ${y} Q ${rx} ${y + 3} ${rx + 3.6} ${y}`, 2)
 			);
+		case "sad":
+			// Worried/unwell: smaller eyes looking down + inner-raised "◠" brows.
+			// (Distinct from pill-time, which adds the pill icon + neutral mouth.)
+			return `
+				<ellipse cx="${lx}" cy="${y + 0.8}" rx="3.8" ry="4.1" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
+				<ellipse cx="${rx}" cy="${y + 0.8}" rx="3.8" ry="4.1" fill="${ring}" stroke="#3a2c1e" stroke-width="0.6"/>
+				<ellipse cx="${lx}" cy="${y + 1.6}" rx="2.6" ry="2.9" fill="${ink}"/>
+				<ellipse cx="${rx}" cy="${y + 1.6}" rx="2.6" ry="2.9" fill="${ink}"/>
+				<circle cx="${lx + 0.8}" cy="${y + 0.2}" r="0.7" fill="#fff"/>
+				<circle cx="${rx + 0.8}" cy="${y + 0.2}" r="0.7" fill="#fff"/>
+				${lash(`M ${lx - 4} ${y - 5} Q ${lx + 1} ${y - 6.6} ${lx + 4} ${y - 3.8}`, 1.5)}
+				${lash(`M ${rx - 4} ${y - 3.8} Q ${rx - 1} ${y - 6.6} ${rx + 4} ${y - 5}`, 1.5)}
+			`;
 		default:
 			// idle — eyebrows-relaxed, big round eyes
 			return `${open(lx)}${open(rx)}`;
@@ -453,6 +468,11 @@ function muzzleFeatures(state: SpriteState, p: Parts, g: Geom): string {
 			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 2}" stroke="${p.feat}" stroke-width="1.3" stroke-linecap="round" opacity="0.7"/>
 				<path d="M ${cx - 3} ${my - 0.5} Q ${cx} ${my + 1.5} ${cx + 3} ${my - 0.5}" stroke="${p.feat}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`;
 			break;
+		case "sad":
+			// Downturned frown (corners pulled down).
+			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 1.5}" stroke="${p.feat}" stroke-width="1.4" stroke-linecap="round"/>
+				<path d="M ${cx - 4} ${my + 1.6} Q ${cx} ${my - 1.2} ${cx + 4} ${my + 1.6}" stroke="${p.feat}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+			break;
 		default:
 			// idle — gentle cat/dog "ω" under the nose
 			mouth = `<path d="M ${cx} ${ny + 3} L ${cx} ${my - 1.5}" stroke="${p.feat}" stroke-width="1.4" stroke-linecap="round"/>
@@ -466,7 +486,14 @@ function cheeks(state: SpriteState, p: Parts, g: Geom): string {
 	// Soft blush: a radial gradient that fades to transparent, so there's no
 	// hard pink edge (and it sits gently over the tan cheek fur). Per-state id
 	// to stay unique across the sprites on a page.
-	const peak = state === "happy" ? 0.42 : state === "sleeping" ? 0.26 : 0.34;
+	const peak =
+		state === "happy"
+			? 0.42
+			: state === "sleeping"
+				? 0.26
+				: state === "sad"
+					? 0.2
+					: 0.34;
 	const r = state === "happy" ? 4 : 3.4;
 	const y = g.eyeY + 5.5;
 	const dx = g.eyeDx + 3;
@@ -505,6 +532,12 @@ function extras(state: SpriteState, g: Geom): string {
 		const dx = g.cx + 5;
 		const dy = g.mouthY + 1.5;
 		return `<path d="M ${dx} ${dy} q 1.4 2.6 -0.8 3.6 q -1.4 -1 0.8 -3.6 z" fill="#9bd0e6" opacity="0.85"/>`;
+	}
+	if (state === "sad") {
+		// A single teardrop under the left eye — the "unwell" cue.
+		const tx = g.cx - g.eyeDx - 0.5;
+		const ty = g.eyeY + 5.5;
+		return `<path d="M ${tx} ${ty} q 1.5 2.8 -0.9 3.9 q -1.5 -1.1 0.9 -3.9 z" fill="#7fb4e0" opacity="0.9"/>`;
 	}
 	return "";
 }

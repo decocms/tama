@@ -48,6 +48,7 @@ import {
 import { researchListTool, vetResearchTool } from "./research.ts";
 import {
 	petSpriteAdjustTool,
+	petSpriteFillMissingTool,
 	petSpriteGetTool,
 	petSpriteSvgGenerateTool,
 } from "./sprite.ts";
@@ -92,6 +93,7 @@ export const tools = [
 	petSpriteSvgGenerateTool,
 	petSpriteGetTool,
 	petSpriteAdjustTool,
+	petSpriteFillMissingTool,
 	// Timeline + typed entries
 	timelineGetTool,
 	timelineNoteAddTool,
