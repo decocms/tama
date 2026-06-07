@@ -32,6 +32,20 @@ function Root() {
 	const ctx = useMcpHostContext();
 	const toolName = ctx?.toolInfo?.tool.name;
 
+	// A pinned app tile is rendered straight from its ui:// resource (no
+	// tools/call), so there's no toolInfo to route on — the host doesn't pass
+	// the resource URI either. Each app resource bakes its route into the HTML
+	// as window.__TAMA_ROUTE__ (see api/resources/ui.ts); honor it first so
+	// every tile opens its own app instead of all defaulting to Pet.
+	const baked = (window as unknown as { __TAMA_ROUTE__?: string })
+		.__TAMA_ROUTE__;
+	if (baked) {
+		if (!window.location.hash.startsWith(`#${baked}`)) {
+			window.location.hash = `#${baked}`;
+		}
+		return <MainApp />;
+	}
+
 	if (toolName && TOOL_TO_ROUTE[toolName]) {
 		const target = TOOL_TO_ROUTE[toolName];
 		if (!window.location.hash.startsWith(`#${target}`)) {
