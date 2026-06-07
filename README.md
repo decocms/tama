@@ -12,6 +12,13 @@ your data lives in your account — we never see it.
 → Landing: <https://tama.vet>
 → Live demo: <https://tama-example.deco-ceo.workers.dev> (Pixel, an anemia-recovery case)
 
+> **Development flow (forks):** a live pet runs on a private fork that's just
+> this template **plus one config commit**. Always change the **template
+> first**, then `git checkout <fork> && git rebase tama` and
+> `wrangler deploy -c wrangler.<pet>.toml` — never edit only the fork, so the
+> template keeps advancing. Full loop + Beto specifics in
+> [AGENTS.md](./AGENTS.md#development-flow--template--fork--deploy-read-this-first-when-iterating).
+
 ## What you get
 
 - **Medical log** — upload exams (PDF or photo); Claude vision extracts every

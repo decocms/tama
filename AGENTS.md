@@ -17,6 +17,45 @@ and medical grounding that Studio loads); you customize it in step 1.
 
 ---
 
+## Development flow — template → fork → deploy (READ THIS FIRST when iterating)
+
+`decocms/tama` is **the template**. A live pet runs on a **private fork** (for
+Beto that's `vibegui/beto`) which is just the template **plus one config
+commit** — `wrangler.<pet>.toml`, `app.json` (Studio connection), and the pet's
+`CLAUDE.md` (agent prompt). **Every product/UI/tool change is made on the
+template first, then carried to the fork — never only in the fork**, so the
+template always advances and every pet benefits.
+
+The loop (run from this worktree; branches: `tama` tracks the template, `beto`
+is the fork):
+
+```bash
+# 1. change on the template, push it
+git checkout tama
+# …edit…
+git commit -am "…" && git push origin tama          # origin = decocms/tama
+
+# 2. carry to the fork
+git checkout beto && git rebase tama
+#    CLAUDE.md conflicts every time (the fork's is the pet's agent prompt) —
+#    keep the FORK's version; resolve, then `git rebase --continue`.
+
+# 3. deploy the fork (+ migrate D1 first if a new migration landed)
+bun run build
+bunx wrangler d1 migrations apply <pet> --remote -c wrangler.<pet>.toml   # if needed
+bunx wrangler deploy -c wrangler.<pet>.toml
+git fetch <forkremote> && git push <forkremote> HEAD:main --force-with-lease
+```
+
+For Beto specifically: fork remote `beto` → `git@github.com:vibegui/beto.git`,
+config `wrangler.beto.toml`, worker `beto.deco-ceo.workers.dev`. The MCP is
+bearer-protected (`MCP_BEARER_TOKEN` secret) — the token lives in the CF secret
+and `~/.claude.json`, not the repo. The public Pixel demo deploys separately
+with `wrangler deploy -c wrangler.example.toml` (never touches the fork). Test
+in production and roll forward — that's the intended cadence.
+
+---
+
 ## What this repo is
 
 A single-pet care agent on Cloudflare Workers + D1 + R2. The deployed worker
