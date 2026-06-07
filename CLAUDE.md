@@ -22,8 +22,9 @@ when health topics come up.
 **Medications in use:** &lt;…&gt;
 **Red-flag signs to escalate immediately:** &lt;…&gt;
 
-(Keep this section current — it's the agent's grounding. Regenerate from the
-timeline with `pet_summary_refresh` / `pet_profile_refresh` after big changes.)
+(Keep this section current — it's the agent's grounding. For a targeted fix
+edit the pet sheet directly with `pet_profile_update`; for a full AI
+re-synthesis after big changes use `pet_profile_refresh`.)
 
 ---
 
@@ -47,7 +48,7 @@ don't wait to be asked.
 
 ## Tools and when to use them
 
-- **Profile:** `pet_profile`, `pet_update`, `pet_enrich`, `pet_profile_refresh`, `pet_summary_refresh`
+- **Profile / pet sheet:** `pet_profile` (read), `pet_update` (identity fields: name, weight, dob, timezone, location), `pet_profile_update` (manual surgical edit of the case file — preferred for discrete facts), `pet_profile_refresh` (full AI re-synthesis from the timeline)
 - **Meds & schedule:** `prescription_{list,create,update,delete,upload}`, `timetable_get` (pass the pet's IANA `timeZone`), `timetable_{set_anchor,set_duration,snooze,stop_item}`, `dose_{log,update}`
 - **Symptoms & timeline:** `symptom_{add,list,resolve}`, `timeline_get`, `timeline_note_add`
 - **Visits & vaccines:** `vet_visit_{add,list}`, `vaccine_{add,list}`

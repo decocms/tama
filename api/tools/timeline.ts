@@ -1,11 +1,6 @@
 import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
-import { generatePetSummary } from "../ai/pet-summary.ts";
 import type { Env } from "../env.ts";
-import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
-import { setPetSummary } from "../storage/pets.ts";
-import { listPrescriptions, parseScheduleItems } from "../storage/prescriptions.ts";
-import { listScheduleStates } from "../storage/schedule-state.ts";
 import { addSymptom, listSymptoms, resolveSymptom } from "../storage/symptoms.ts";
 import { addNote, getTimeline } from "../storage/timeline.ts";
 import { addVaccine, listVaccines } from "../storage/vaccines.ts";
@@ -251,41 +246,3 @@ export const symptomListTool = (_env: Env) =>
 		},
 	});
 
-export const petSummaryRefreshTool = (_env: Env) =>
-	createTool({
-		id: "pet_summary_refresh",
-		description:
-			"Regenerate the pet's single evolving status summary from the whole timeline + active medications. Returns the new summary and stores it on the pet profile.",
-		inputSchema: z.object({}),
-		outputSchema: z.object({ summary: z.string() }),
-		execute: async ({ runtimeContext }) => {
-			const env = runtimeContext.env as Env;
-			const pet = await getSelfPet(env);
-			if (!pet) throw new Error("Pet not found");
-
-			const [timeline, states, rx] = await Promise.all([
-				getTimeline(env, { limit: 80 }),
-				listScheduleStates(env),
-				listPrescriptions(env),
-			]);
-			void rx;
-			const activeMedications = states
-				.filter((s) => s.active && s.kind === "medication")
-				.map((s) => `${s.displayName}${s.dosage ? ` (${s.dosage})` : ""}`);
-
-			const summary = await generatePetSummary(env, {
-				pet: {
-					name: pet.name,
-					species: pet.species,
-					breed: pet.breed,
-					dob: pet.dob,
-					weightKg: pet.weightKg,
-					ownerNotes: pet.ownerNotes,
-				},
-				activeMedications,
-				timeline,
-			});
-			await setPetSummary(env, PET_SELF_ID, summary);
-			return { summary };
-		},
-	});

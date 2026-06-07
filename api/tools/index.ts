@@ -20,7 +20,6 @@ import {
 	examUploadTool,
 } from "./exam.ts";
 import {
-	petEnrichTool,
 	petProfileRefreshTool,
 	petProfileTool,
 	petProfileUpdateTool,
@@ -67,7 +66,6 @@ import {
 	timetableStopItemTool,
 } from "./timetable.ts";
 import {
-	petSummaryRefreshTool,
 	symptomAddTool,
 	symptomListTool,
 	symptomResolveTool,
@@ -90,16 +88,16 @@ export const tools = [
 	appRecordingsTool,
 	appAssetsTool,
 	appBreathingTool,
-	// Pet
+	// Pet — the case file ("pet sheet") has one read + two writers: an AI
+	// rebuild (refresh) and a manual surgical edit (update). No separate
+	// one-line summary or enrichment artifact — the sheet is the single source.
 	petProfileTool,
 	petUpdateTool,
-	petEnrichTool,
 	petProfileRefreshTool,
 	petProfileUpdateTool,
 	petSpriteSvgGenerateTool,
 	petSpriteGetTool,
 	petSpriteAdjustTool,
-	petSummaryRefreshTool,
 	// Timeline + typed entries
 	timelineGetTool,
 	timelineNoteAddTool,

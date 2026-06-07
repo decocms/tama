@@ -4,7 +4,7 @@ import { petContextBlock } from "../ai/pet-context.ts";
 import { vetResearch } from "../ai/vet-research.ts";
 import type { Env } from "../env.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
-import { parseEnrichment, parseProfile } from "../storage/pets.ts";
+import { parseProfile } from "../storage/pets.ts";
 import {
 	listPrescriptions,
 	parseScheduleItems,
@@ -55,16 +55,13 @@ Output sections: answer (2–5 sentences), keyPoints (bullets), cautions (red-fl
 			// Single-pet deploy: pet profile + active meds + recent notes are
 			// always auto-attached.
 			const pet = await getSelfPet(env);
-			const enrichment = pet ? parseEnrichment(pet) : null;
 			const profile = pet ? parseProfile(pet) : null;
 			const conditionsParts: string[] = [];
-			// Lead with the structured case file (allergies, chronic conditions,
-			// active concerns, watch-for) so research is grounded in the same
-			// overview as every other AI call.
+			// Ground research in the structured case file (the pet sheet) — the
+			// same overview every other AI call shares: allergies, chronic
+			// conditions, active concerns, current meds, watch-for.
 			if (pet && profile) conditionsParts.push(petContextBlock(pet, profile));
 			else if (pet?.ownerNotes) conditionsParts.push(pet.ownerNotes);
-			if (enrichment?.conditionNotes)
-				conditionsParts.push(`AI research: ${enrichment.conditionNotes}`);
 
 			const activeMedications: {
 				name: string;

@@ -101,11 +101,6 @@ export const uiResources = [
 	),
 	// Inline tool surfaces — rendered as tool RESULTS (toolInfo present), so they
 	// route by tool name in web/app.tsx and don't need a baked route.
-	htmlResource(
-		URI.petEnrich,
-		"Pet research",
-		"Inline view shown after pet_enrich (AI research).",
-	),
 	htmlResource(URI.petGet, "Pet profile", "Inline pet profile view."),
 	htmlResource(
 		URI.prescriptionReview,

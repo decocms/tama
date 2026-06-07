@@ -1,21 +1,18 @@
 import { createTool } from "@decocms/runtime/tools";
 import { z } from "zod";
-import { enrichPet } from "../ai/enrich-pet.ts";
 import { buildPetProfile, PetProfileSchema } from "../ai/pet-context.ts";
 import type { Env } from "../env.ts";
 import { getMetricSeriesForPet } from "../storage/exams.ts";
 import { getSelfPet, PET_SELF_ID } from "../storage/pet-self.ts";
 import {
-	parseEnrichment,
 	parseProfile,
 	parseSpritePack,
 	parseSvgPack,
-	setEnrichment,
 	setProfile,
 	updatePet,
 } from "../storage/pets.ts";
+import { addResearch } from "../storage/researches.ts";
 import { getTimeline } from "../storage/timeline.ts";
-import { EnrichmentSchema } from "./shared.ts";
 import { URI } from "./uris.ts";
 
 const SpritePackSchema = z.object({
@@ -38,7 +35,6 @@ const PetSchema = z.object({
 	ownerNotes: z.string().nullable(),
 	timezone: z.string().nullable(),
 	location: z.string().nullable(),
-	enrichment: EnrichmentSchema.nullable(),
 	spritePack: SpritePackSchema.nullable(),
 	svgPack: z.record(z.string(), z.string()).nullable(),
 	profile: PetProfileSchema.nullable(),
@@ -56,7 +52,6 @@ function toPet(p: NonNullable<Awaited<ReturnType<typeof getSelfPet>>>) {
 		ownerNotes: p.ownerNotes,
 		timezone: p.timezone,
 		location: p.location,
-		enrichment: parseEnrichment(p),
 		spritePack: parseSpritePack(p),
 		svgPack: parseSvgPack(p),
 		profile: parseProfile(p),
@@ -113,48 +108,11 @@ export const petUpdateTool = (_env: Env) =>
 		},
 	});
 
-export const petEnrichTool = (_env: Env) =>
-	createTool({
-		id: "pet_enrich",
-		description:
-			"Research breed-specific health traits, age-appropriate care, and current conditions via Perplexity. Saves findings to the pet profile.",
-		inputSchema: z.object({
-			ageDescription: z
-				.string()
-				.optional()
-				.describe("Free text e.g. '5 years old'"),
-			conditionFocus: z
-				.string()
-				.optional()
-				.describe(
-					"Optional override of owner_notes for this research call (e.g. specific symptoms to focus on).",
-				),
-		}),
-		outputSchema: z.object({ pet: PetSchema }),
-		_meta: { ui: { resourceUri: URI.petEnrich } },
-		annotations: { destructiveHint: false, openWorldHint: true },
-		execute: async ({ context, runtimeContext }) => {
-			const e = runtimeContext.env as Env;
-			const pet = await getSelfPet(e);
-			if (!pet) throw new Error("pet_self row missing");
-			const enrichment = await enrichPet(e, {
-				name: pet.name,
-				species: pet.species,
-				breed: pet.breed ?? undefined,
-				ageDescription: context.ageDescription ?? pet.dob ?? undefined,
-				weightKg: pet.weightKg ?? undefined,
-				ownerNotes: context.conditionFocus ?? pet.ownerNotes ?? undefined,
-			});
-			const saved = await setEnrichment(e, pet.id, enrichment);
-			return { pet: toPet(saved) };
-		},
-	});
-
 export const petProfileRefreshTool = (_env: Env) =>
 	createTool({
 		id: "pet_profile_refresh",
 		description:
-			"Rebuild the pet's structured case file (one-liner, age, weight, allergies, chronic conditions, active concerns, past episodes, current meds, what to watch) by synthesizing the owner notes + timeline + lab exams. This profile is the grounded context injected into all AI research and analysis. Run after big changes (new diagnosis, exams, meds).",
+			"AI REBUILD of the pet's structured case file (the 'pet sheet': one-liner, age, weight, diet, allergies, chronic conditions, active concerns, past episodes, current meds, what to watch). Re-synthesizes the WHOLE sheet from owner notes + timeline + lab exams — overwriting it. Use this for a fresh resync after a lot has changed (new diagnosis, batch of exams). For a targeted fix to one field or list, use pet_profile_update instead — don't regenerate the whole thing. This sheet is the grounded context injected into all AI research and analysis.",
 		inputSchema: z.object({}),
 		outputSchema: z.object({ profile: PetProfileSchema }),
 		execute: async ({ runtimeContext }) => {
@@ -199,7 +157,7 @@ export const petProfileRefreshTool = (_env: Env) =>
 					})
 					.join("\n") || "(no lab metrics)";
 
-			const sourceText = `Owner notes: ${pet.ownerNotes ?? "(none)"}\nCurrent status: ${pet.summary ?? "(none)"}\n\nTimeline (recent first):\n${timelineText}\n\nLab metrics (oldest→newest):\n${examText}`;
+			const sourceText = `Owner notes: ${pet.ownerNotes ?? "(none)"}\n\nTimeline (recent first):\n${timelineText}\n\nLab metrics (oldest→newest):\n${examText}`;
 
 			const profile = await buildPetProfile(env, {
 				pet: {
@@ -209,11 +167,40 @@ export const petProfileRefreshTool = (_env: Env) =>
 					dob: pet.dob,
 					weightKg: pet.weightKg,
 					ownerNotes: pet.ownerNotes,
-					summary: pet.summary,
 				},
 				sourceText,
 			});
 			await setProfile(env, PET_SELF_ID, profile);
+
+			// Log this AI synthesis to the Research history, so every AI output
+			// (vet_research, exam_explain insights, and this case-file rebuild)
+			// lands in one provenance log. Manual edits via pet_profile_update do
+			// NOT log here — only AI runs do.
+			const section = (label: string, arr?: string[] | null) =>
+				arr && arr.length
+					? `${label}:\n${arr.map((x) => `• ${x}`).join("\n")}`
+					: "";
+			const answer =
+				[
+					profile.oneLiner,
+					profile.diet ? `Diet: ${profile.diet}` : "",
+					section("Allergies", profile.allergies),
+					section("Chronic conditions", profile.chronicConditions),
+					section("Active concerns", profile.activeConcerns),
+					section("Current medications", profile.medications),
+					section("Watch for", profile.watchFor),
+					section("Past episodes", profile.pastEpisodes),
+				]
+					.filter(Boolean)
+					.join("\n\n") || "(empty)";
+			await addResearch(env, {
+				question: "Pet sheet rebuilt (AI synthesis)",
+				answer,
+				keyPoints: profile.activeConcerns ?? [],
+				cautions: profile.watchFor ?? [],
+				citations: [],
+			});
+
 			return { profile };
 		},
 	});
@@ -222,7 +209,7 @@ export const petProfileUpdateTool = (_env: Env) =>
 	createTool({
 		id: "pet_profile_update",
 		description:
-			"Directly edit specific fields of the pet's case file (pet sheet) WITHOUT regenerating from the timeline. Only the fields you pass change; everything else is preserved. Array fields (allergies, chronicConditions, activeConcerns, pastEpisodes, medications, watchFor) REPLACE the whole list — read pet_profile first, edit the list, send it back. Use this for surgical fixes (e.g. drop a discontinued medication, fix one allergy) instead of pet_profile_refresh.",
+			"MANUAL edit of specific fields of the pet's case file (the 'pet sheet' shown on the Pet page) — no AI, no regeneration, instant. This is the PREFERRED way to change the sheet: when the owner tells you a fact (a new diagnosis, a med stopped, an allergy, a resolved episode), edit the relevant field directly here instead of running pet_profile_refresh. Only the fields you pass change; everything else is preserved. The array fields (allergies, chronicConditions, activeConcerns, pastEpisodes, medications, watchFor) REPLACE the whole list — so call pet_profile FIRST, take that list, add/remove the one item, and send the full edited list back (don't send a single item, you'd wipe the rest).",
 		inputSchema: z.object({
 			oneLiner: z.string().optional(),
 			sex: z.string().nullable().optional(),

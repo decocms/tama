@@ -2,7 +2,6 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../db/client.ts";
 import { type Pet, pets } from "../db/schema.ts";
 import type { Env } from "../env.ts";
-import type { Enrichment } from "../tools/shared.ts";
 import { newId } from "./ids.ts";
 
 export interface CreatePetInput {
@@ -49,19 +48,6 @@ export async function listPets(env: Env): Promise<Pet[]> {
 		.orderBy(desc(pets.createdAt));
 }
 
-export async function setEnrichment(
-	env: Env,
-	petId: string,
-	enrichment: Enrichment,
-): Promise<Pet> {
-	const [row] = await db(env)
-		.update(pets)
-		.set({ enrichmentJson: JSON.stringify(enrichment) })
-		.where(eq(pets.id, petId))
-		.returning();
-	return row;
-}
-
 // Store the procedural SVG sprite pack (the cheap/crisp alternative to the
 // raster img2img pack). Both can coexist; the companion prefers SVG.
 export async function setSvgPack(
@@ -73,24 +59,6 @@ export async function setSvgPack(
 	const [row] = await db(env)
 		.update(pets)
 		.set({ svgPackJson: JSON.stringify(pack), characterJson })
-		.where(eq(pets.id, petId))
-		.returning();
-	return row ?? null;
-}
-
-// The single evolving status summary (replaces the old per-episode
-// currentStatus). Regenerated from the whole timeline by pet_summary_refresh.
-export async function setPetSummary(
-	env: Env,
-	petId: string,
-	summary: string | null,
-): Promise<Pet | null> {
-	const [row] = await db(env)
-		.update(pets)
-		.set({
-			summary,
-			summaryAt: summary ? new Date().toISOString() : null,
-		})
 		.where(eq(pets.id, petId))
 		.returning();
 	return row ?? null;
@@ -128,15 +96,6 @@ export async function updatePet(
 		.where(eq(pets.id, id))
 		.returning();
 	return row ?? null;
-}
-
-export function parseEnrichment(pet: Pet): Enrichment | null {
-	if (!pet.enrichmentJson) return null;
-	try {
-		return JSON.parse(pet.enrichmentJson) as Enrichment;
-	} catch {
-		return null;
-	}
 }
 
 export interface SpritePack {

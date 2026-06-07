@@ -11,6 +11,10 @@ export const pets = sqliteTable("pets", {
 	dob: text("dob"),
 	weightKg: real("weight_kg"),
 	ownerNotes: text("owner_notes"),
+	// DEPRECATED: the old Perplexity breed/condition "enrichment" artifact.
+	// pet_enrich was removed — the pet sheet (profileJson) is the single source
+	// of case context now, and vet_research covers ad-hoc questions. Column kept
+	// inert so existing rows still read; not written anymore.
 	enrichmentJson: text("enrichment_json"),
 	timezone: text("timezone"),
 	// Owner-facing city/location label, distinct from the IANA timezone.
@@ -27,9 +31,9 @@ export const pets = sqliteTable("pets", {
 	// from the source photo. Cached so re-renders stay on-model.
 	characterJson: text("character_json"),
 	photoFileId: text("photo_file_id"),
-	// The ONE evolving status summary for this pet, regenerated from the whole
-	// timeline by pet_summary_refresh. Replaces the old per-episode
-	// currentStatus — there are no episodes anymore, just a continuous life.
+	// DEPRECATED: the old one-line rolling status. pet_summary_refresh was
+	// removed — it duplicated profileJson.oneLiner (the pet sheet's headline),
+	// which is now the single source. Columns kept inert so old rows still read.
 	summary: text("summary"),
 	summaryAt: text("summary_at"),
 	// Structured "case file" — JSON of the pet's key medical facts (age, weight,

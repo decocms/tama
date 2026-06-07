@@ -43,7 +43,9 @@ Using your normal file/edit tools:
    Claude vision call reads it into a character sheet, then 6 SVG states
    render instantly (free, no extra auth). Wait for it to return; it writes
    the pack to the pet row.
-4. Call `pet_enrich` to seed AI research from the breed + conditions.
+4. Call `pet_profile_refresh` to synthesize the initial pet sheet (case file)
+   from the owner notes + breed + conditions. (Thereafter, edit discrete facts
+   with `pet_profile_update`; only refresh again after big changes.)
 
 ## Commit
 

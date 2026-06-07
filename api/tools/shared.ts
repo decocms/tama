@@ -40,21 +40,6 @@ export type ScheduleItem = z.infer<typeof ScheduleItemSchema>;
 
 export const ScheduleItemsSchema = z.array(ScheduleItemSchema);
 
-export const EnrichmentSchema = z.object({
-	breedNotes: z.string(),
-	ageNotes: z.string(),
-	conditionNotes: z.string(),
-	citations: z.array(
-		z.object({
-			title: z.string(),
-			url: z.string(),
-		}),
-	),
-	generatedAt: z.string(),
-	sourceQuery: z.string(),
-});
-export type Enrichment = z.infer<typeof EnrichmentSchema>;
-
 export const AdjustmentSchema = z.object({
 	kind: z.literal("shift-next-by-h"),
 	hours: z.number().describe("Positive = push later, negative = pull earlier"),

@@ -1,9 +1,24 @@
 // Pure state derivation for the companion (pixel-pet) view. Driven by the
-// live timetable entries + the pet's rolling summary — no episode container.
+// live timetable entries + a short status string from the pet sheet (its
+// one-liner + active concerns) — no episode container, no separate summary.
 //
 // Priority (highest wins): pill-time > hungry > happy > sleeping > idle.
 
-import type { TimetableEntry } from "@/types/api.ts";
+import type { PetProfile, TimetableEntry } from "@/types/api.ts";
+
+// The pet sheet, distilled to a short string the mood derivation scans for
+// illness signals: the one-liner + whatever's actively a concern / on watch.
+export function statusTextFromProfile(
+	profile: PetProfile | null | undefined,
+): string | null {
+	if (!profile) return null;
+	const parts = [
+		profile.oneLiner,
+		...(profile.activeConcerns ?? []),
+		...(profile.watchFor ?? []),
+	].filter(Boolean);
+	return parts.length ? parts.join(". ") : null;
+}
 
 export type CompanionState =
 	| "idle"
@@ -23,7 +38,9 @@ const MINUTE = 60_000;
 interface DeriveInput {
 	entries: TimetableEntry[];
 	petName: string;
-	summary: string | null;
+	/** Short status text scanned for illness signals — the pet sheet's
+	 * one-liner joined with its active concerns / watch-for items. */
+	statusText: string | null;
 	now: Date;
 	timeZone: string;
 }
@@ -49,7 +66,7 @@ function isNighttime(d: Date, tz: string): boolean {
 }
 
 export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
-	const { entries, petName, summary, now } = input;
+	const { entries, petName, statusText, now } = input;
 	const name = petName || "Tama";
 
 	const pending = entries.filter((e) => e.status === "pending");
@@ -65,15 +82,16 @@ export function deriveCompanionStatus(input: DeriveInput): CompanionStatus {
 		(e) => new Date(e.scheduledAt).getTime() < now.getTime(),
 	).length;
 
-	// CONCERNED (pill-time face) — summary flags illness, or doses piling up.
-	const sick = /vomit|lethargic|diarrh|seizur|emergency|not eating|crash/i.test(
-		summary ?? "",
-	);
+	// CONCERNED (pill-time face) — the pet sheet flags illness, or doses piling up.
+	const sick =
+		/vomit|leth|diarr|seizur|emerg|not eating|crash|vômito|letárg|diarr|convuls|emerg|não com/i.test(
+			statusText ?? "",
+		);
 	if (sick) {
 		return {
 			state: "pill-time",
 			headline: `${name} isn't feeling great`,
-			subline: "Check the summary on the Pet page",
+			subline: "Check the pet sheet on the Pet page",
 		};
 	}
 	if (overdueCount >= 2) {

@@ -153,8 +153,8 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | --------------------------- | --------------------------------------------- |
 | `app_pet` / `app_timeline` / `app_timetable` / `app_exams` / `app_research` / `app_recordings` / `app_assets` / `app_breathing` | The eight pinnable top-level apps |
 | `pet_profile` / `pet_update`| Read / patch the singleton pet                |
-| `pet_enrich`                | Perplexity breed/condition research           |
-| `pet_summary_refresh`       | Regenerate the one evolving health summary    |
+| `pet_profile_refresh`       | AI rebuild of the structured case file ("pet sheet") from the timeline |
+| `pet_profile_update`        | Manual surgical edit of the pet sheet (no AI) |
 | `pet_sprite_svg_generate`   | 6-state procedural-SVG companion sprite from a photo (saves v1) |
 | `pet_sprite_get` / `pet_sprite_adjust` | Read / iterate sprite traits (re-render, no new photo) |
 | `timeline_get`              | The merged continuous timeline                |

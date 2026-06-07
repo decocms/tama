@@ -55,8 +55,6 @@ function Root() {
 	}
 
 	switch (toolName) {
-		case "pet_enrich":
-			return <PetCardInline label="Researching pet" />;
 		case "pet_profile":
 			return <PetCardInline label="Loading pet" />;
 		case "prescription_upload":

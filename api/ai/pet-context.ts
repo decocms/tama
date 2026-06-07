@@ -30,7 +30,6 @@ export interface BasePet {
 	dob: string | null;
 	weightKg: number | null;
 	ownerNotes: string | null;
-	summary?: string | null;
 }
 
 // Render the pet + structured profile as a compact text block for prompts.
@@ -50,8 +49,7 @@ export function petContextBlock(
 
 	if (!profile) {
 		const notes = pet.ownerNotes ? `\nOwner notes: ${pet.ownerNotes}` : "";
-		const sum = pet.summary ? `\nCurrent status: ${pet.summary}` : "";
-		return `${head}${notes}${sum}`;
+		return `${head}${notes}`;
 	}
 
 	const list = (label: string, arr: string[] | undefined) =>
@@ -67,7 +65,6 @@ export function petContextBlock(
 		list("Current medications", profile.medications),
 		list("Past episodes", profile.pastEpisodes),
 		list("Watch for", profile.watchFor),
-		pet.summary ? `\nLatest status: ${pet.summary}` : "",
 	].join("");
 }
 

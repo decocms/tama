@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
 	type CompanionState,
 	deriveCompanionStatus,
+	statusTextFromProfile,
 } from "@/companion/state.ts";
 import { usePet, useTimetable } from "../lib/queries.ts";
 
@@ -45,7 +46,7 @@ export function CompanionPage() {
 			deriveCompanionStatus({
 				entries: entries ?? [],
 				petName: pet?.name ?? "Tama",
-				summary: pet?.summary ?? null,
+				statusText: statusTextFromProfile(pet?.profile),
 				now: new Date(),
 				timeZone: pet?.timezone ?? browserTimeZone(),
 			}),

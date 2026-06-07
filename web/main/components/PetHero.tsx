@@ -2,7 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { Cake, MapPin } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
-import { deriveCompanionStatus } from "@/companion/state.ts";
+import {
+	deriveCompanionStatus,
+	statusTextFromProfile,
+} from "@/companion/state.ts";
 import type { Pet, TimetableEntry } from "@/types/api.ts";
 import { Avatar } from "./Avatar.tsx";
 
@@ -43,7 +46,7 @@ export function PetHero({
 			deriveCompanionStatus({
 				entries,
 				petName: pet.name ?? "Tama",
-				summary: pet.summary ?? null,
+				statusText: statusTextFromProfile(pet.profile),
 				now: new Date(),
 				timeZone: pet.timezone ?? browserTimeZone(),
 			}),

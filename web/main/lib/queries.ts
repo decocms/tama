@@ -85,28 +85,6 @@ export function useUpdatePet() {
 	});
 }
 
-export function useEnrichPet() {
-	const app = useMcpApp();
-	const qc = useQueryClient();
-	return useMutation({
-		mutationFn: () =>
-			callTool<{ pet: Pet }>(app, "pet_enrich", {}).then((r) => r.pet),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
-	});
-}
-
-export function useRefreshSummary() {
-	const app = useMcpApp();
-	const qc = useQueryClient();
-	return useMutation({
-		mutationFn: () =>
-			callTool<{ summary: string }>(app, "pet_summary_refresh", {}).then(
-				(r) => r.summary,
-			),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
-	});
-}
-
 export function useRefreshProfile() {
 	const app = useMcpApp();
 	const qc = useQueryClient();

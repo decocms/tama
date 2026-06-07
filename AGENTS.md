@@ -117,8 +117,10 @@ questions at a time, like a person would. Collect:
    tool) with `imageBase64` of the photo and `mimeType`. One Claude vision
    call reads the photo into a character sheet, then 6 SVG states render
    instantly. The tool stores the pack on the pet row automatically.
-4. If the human gave owner notes or breed, also call `pet_enrich` so the
-   dashboard ships with a baseline of AI research.
+4. If the human gave owner notes or breed, also call `pet_profile_refresh` so
+   the dashboard ships with a baseline pet sheet (the structured case file).
+   For later targeted edits use `pet_profile_update` (no AI) rather than
+   regenerating the whole sheet.
 
 ### 2. COMMIT
 

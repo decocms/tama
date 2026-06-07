@@ -1,14 +1,5 @@
 // Mirrors api/tools/* output schemas. Keep in sync.
 
-export interface Enrichment {
-	breedNotes: string;
-	ageNotes: string;
-	conditionNotes: string;
-	citations: { title: string; url: string }[];
-	generatedAt: string;
-	sourceQuery: string;
-}
-
 export interface SpritePack {
 	idle: string;
 	happy: string;
@@ -54,12 +45,9 @@ export interface Pet {
 	ownerNotes: string | null;
 	timezone: string | null;
 	location?: string | null;
-	enrichment: Enrichment | null;
 	spritePack?: SpritePack | null;
 	svgPack?: Record<string, string> | null;
 	profile?: PetProfile | null;
-	summary?: string | null;
-	summaryAt?: string | null;
 	createdAt: string;
 }
 

@@ -8,7 +8,7 @@ import { whisperTranscribe } from "../ai/whisper.ts";
 import type { Env } from "../env.ts";
 import { getFile, readFileBytes, saveFile } from "../storage/files.ts";
 import { getSelfPet } from "../storage/pet-self.ts";
-import { updatePet } from "../storage/pets.ts";
+import { parseProfile, updatePet } from "../storage/pets.ts";
 import {
 	addChunk,
 	createRecording,
@@ -218,7 +218,7 @@ export const recordingSummarizeTool = (_env: Env) =>
 				},
 				episodeContext: {
 					title: `${pet.name}'s timeline`,
-					summary: pet.summary,
+					summary: parseProfile(pet)?.oneLiner ?? null,
 					existingNotes: notesRows.slice(0, 20).map((n) => n.content),
 				},
 				transcript: rec.fullTranscript,
@@ -360,7 +360,7 @@ export const recordingApplyGroupTool = (_env: Env) =>
 				},
 				episodeContext: {
 					title: `${pet.name}'s timeline`,
-					summary: pet.summary,
+					summary: parseProfile(pet)?.oneLiner ?? null,
 					existingNotes: notesRows.slice(0, 20).map((n) => n.content),
 				},
 				transcript: combinedTranscript,

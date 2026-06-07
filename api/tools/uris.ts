@@ -18,7 +18,6 @@ export const URI = {
 	breathing: "ui://tama/breathing",
 	// Inline tool surfaces
 	petGet: "ui://tama/pet-get",
-	petEnrich: "ui://tama/pet-enrich",
 	prescriptionReview: "ui://tama/prescription-review",
 	prescriptionList: "ui://tama/prescription-list",
 	recordingGet: "ui://tama/recording-get",
