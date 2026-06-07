@@ -80,14 +80,25 @@ export function TimeBox({
 
 	return (
 		<div
-			className="shrink-0 flex flex-col items-center justify-center px-2 sm:px-3 py-1.5 sm:py-2 border-2 min-w-[64px] sm:min-w-[80px]"
+			className="shrink-0 flex flex-col items-center justify-center py-1.5 sm:py-2 border-2 w-[84px] sm:w-[104px]"
 			style={{ borderColor: palette.border, backgroundColor: palette.bg }}
 		>
+			{/* DS-Digital isn't monospaced, so lay each glyph in an equal-width
+			    cell — every time is exactly 5 cells wide, so the boxes match. */}
 			<span
-				className="font-digital text-2xl sm:text-3xl leading-none"
+				className="font-digital text-2xl sm:text-3xl leading-none flex"
 				style={{ color: palette.text }}
 			>
-				{time}
+				{time.split("").map((ch, i) => (
+					<span
+						// biome-ignore lint/suspicious/noArrayIndexKey: fixed-position clock glyphs
+						key={i}
+						className="inline-block text-center"
+						style={{ width: "0.62em" }}
+					>
+						{ch}
+					</span>
+				))}
 			</span>
 			<span
 				className="font-time text-[9px] sm:text-[10px] font-bold tracking-[0.16em] mt-1 sm:mt-1.5 opacity-55"
