@@ -29,6 +29,7 @@ Rules:
 - Lead with how the pet is doing right now, then active treatments, then anything to watch.
 - Reference concrete events ("hemoglobin recovering since the May exam", "on Prelone since…") — no generic filler.
 - Do NOT invent facts not in the timeline. Do NOT add disclaimers.
+- Write in the pet owner's language — match the language of the timeline/records (e.g. Brazilian Portuguese when they're in Portuguese).
 - Return ONLY the summary prose, no headings, no JSON.`;
 
 export async function generatePetSummary(

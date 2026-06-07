@@ -42,7 +42,9 @@ You'll get the pet's profile and a list of lab metrics with their values over ti
 
 For each section you include: 1–3 sentences. Say which direction things moved (improving / worsening / stable), name the key numbers, and say plainly whether that's good, concerning, or neutral. Prefer "is recovering", "dropped then climbed back", "still below normal" over jargon. End the whole thing with a one-line **Bottom line** and a reminder to confirm with the vet.
 
-Keep it tight — an owner should read the whole thing in under a minute. Output GitHub-flavored Markdown only, no preamble.`;
+Keep it tight — an owner should read the whole thing in under a minute. Output GitHub-flavored Markdown only, no preamble.
+
+LANGUAGE: Write in the pet owner's language — match the language of the pet's profile/records (e.g. Brazilian Portuguese when they're in Portuguese), and translate the section headings to that language too.`;
 
 export async function explainExams(
 	env: Env,

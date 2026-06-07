@@ -224,11 +224,18 @@
 	--color-tint-meal: var(--color-tint-meal);
 	--color-tint-med: var(--color-tint-med);
 
-	/* Layout */
-	--radius-DEFAULT: 0.625rem;
-	--radius-lg: 0.875rem;
-	--radius-md: 0.625rem;
-	--radius-sm: 0.375rem;
+	/* Layout — SQUARE corners everywhere (the landing's brutalist identity).
+	   Zeroing the whole radius scale squares every rounded-{xs..3xl} utility and
+	   all shadcn components at once; `rounded-full` (pills, avatars, status
+	   dots) is hardcoded by Tailwind and stays round on purpose. */
+	--radius-DEFAULT: 0px;
+	--radius-xs: 0px;
+	--radius-sm: 0px;
+	--radius-md: 0px;
+	--radius-lg: 0px;
+	--radius-xl: 0px;
+	--radius-2xl: 0px;
+	--radius-3xl: 0px;
 
 	/* Sidebar */
 	--color-sidebar: var(--sidebar);

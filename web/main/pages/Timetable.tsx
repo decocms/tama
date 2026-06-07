@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { cn } from "@/lib/utils.ts";
 import type { ScheduleState, TimetableEntry } from "@/types/api.ts";
+import { TimeBox } from "../components/Card.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { Section } from "../components/Section.tsx";
 import {
@@ -111,13 +112,18 @@ function DoseRow({
 			},
 		);
 
+	const tone =
+		overdue
+			? "overdue"
+			: entry.status === "given"
+				? "done"
+				: entry.status === "skipped"
+					? "default"
+					: "upcoming";
+
 	return (
-		<div
-			className={cn(
-				"flex items-center gap-3 rounded-xl bg-card surface p-3",
-				overdue ? "border-[var(--color-status-overdue,#dc2626)]/40" : "",
-			)}
-		>
+		<div className="flex items-center gap-3 bg-card surface p-3">
+			<TimeBox iso={entry.scheduledAt} tone={tone} />
 			<div
 				className={cn(
 					"shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
@@ -133,18 +139,17 @@ function DoseRow({
 				)}
 			</div>
 			<div className="flex-1 min-w-0">
-				<div className="font-medium text-sm truncate">{entry.itemName}</div>
-				<div className="text-xs text-muted-foreground">
-					{entry.dosage ? `${entry.dosage} · ` : ""}
-					{new Date(entry.scheduledAt).toLocaleString(undefined, {
-						weekday: "short",
-						hour: "2-digit",
-						minute: "2-digit",
-					})}
+				<div className="font-semibold text-sm sm:text-base truncate">
+					{entry.itemName}
 				</div>
+				{entry.dosage ? (
+					<div className="text-sm text-muted-foreground truncate">
+						{entry.dosage}
+					</div>
+				) : null}
 			</div>
 			{pending ? (
-				<div className="flex gap-1.5">
+				<div className="flex gap-1.5 shrink-0">
 					<Button
 						size="sm"
 						disabled={log.isPending}
@@ -162,10 +167,7 @@ function DoseRow({
 					</Button>
 				</div>
 			) : (
-				<Badge
-					variant="outline"
-					className="text-[10px] capitalize shrink-0"
-				>
+				<Badge variant="outline" className="text-[10px] capitalize shrink-0">
 					{entry.status}
 				</Badge>
 			)}
@@ -176,15 +178,17 @@ function DoseRow({
 function MedicineRow({ state }: { state: ScheduleState }) {
 	const stop = useStopItem();
 	return (
-		<div className="flex items-center gap-3 rounded-xl bg-card surface p-3">
+		<div className="flex items-center gap-3 bg-card surface p-3">
 			<div className="flex-1 min-w-0">
-				<div className="font-medium text-sm truncate">
+				<div className="font-semibold text-sm sm:text-base truncate">
 					{state.displayName}
 				</div>
-				<div className="text-xs text-muted-foreground">
-					{state.times && state.times.length > 0
-						? state.times.join(" · ")
-						: `every ${state.intervalHours}h`}
+				<div className="text-sm text-muted-foreground">
+					<span className="font-time tabular-nums">
+						{state.times && state.times.length > 0
+							? state.times.join(" · ")
+							: `every ${state.intervalHours}h`}
+					</span>
 					{state.dosage ? ` · ${state.dosage}` : ""}
 					{state.endsAt ? ` · ends ${state.endsAt.slice(0, 10)}` : ""}
 				</div>

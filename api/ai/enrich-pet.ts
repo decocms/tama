@@ -23,7 +23,7 @@ function buildQuery(input: EnrichInput): string {
 	return lines.join("\n");
 }
 
-const SYSTEM_PROMPT = `You research pet health for an owner. Be concrete and cite reputable sources (veterinary schools, peer-reviewed papers, AVMA, etc.).
+const SYSTEM_PROMPT = `You research pet health for an owner. Be concrete and cite reputable sources (veterinary schools, peer-reviewed papers, AVMA, etc.). Write in the owner's language — match the language of the pet description/notes (e.g. Brazilian Portuguese when they're in Portuguese), translating the section headings to that language too.
 
 Given a pet description, produce THREE short, distinct sections — return raw text formatted exactly like:
 

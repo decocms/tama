@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import type { PetProfile, TimetableEntry } from "@/types/api.ts";
+import { TimeBox } from "../components/Card.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
 import { usePet, useRefreshProfile, useTimetable } from "../lib/queries.ts";
@@ -56,14 +57,6 @@ export function PetPage() {
 // Studio has no app→host navigation, so this is an in-bundle hash link: in a
 // pinned Pet tile it swaps that tile to the timetable; standalone it just
 // routes. Either way the owner gets there in one tap.
-function fmtWhen(iso: string): string {
-	return new Date(iso).toLocaleString(undefined, {
-		weekday: "short",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
-
 function TimetableStatusCard({ entries }: { entries: TimetableEntry[] }) {
 	const now = Date.now();
 	const pending = entries.filter((e) => e.status === "pending");
@@ -74,61 +67,55 @@ function TimetableStatusCard({ entries }: { entries: TimetableEntry[] }) {
 		.filter((e) => new Date(e.scheduledAt).getTime() >= now)
 		.sort((a, b) => (a.scheduledAt < b.scheduledAt ? -1 : 1));
 
-	let tone: "overdue" | "upcoming" | "clear" = "clear";
+	const featured = overdue[0] ?? upcoming[0] ?? null;
+	const tboxTone: "overdue" | "upcoming" | "done" =
+		overdue.length > 0 ? "overdue" : "upcoming";
+
 	let headline = "All caught up";
 	let detail = "Nothing due in the window.";
 	if (overdue.length > 0) {
 		const first = overdue[0] as TimetableEntry;
-		tone = "overdue";
 		headline =
 			overdue.length === 1
 				? `${first.itemName} is overdue`
 				: `${overdue.length} doses overdue`;
-		detail = `${first.itemName}${first.dosage ? ` · ${first.dosage}` : ""} — was due ${fmtWhen(first.scheduledAt)}`;
+		detail = `${first.itemName}${first.dosage ? ` · ${first.dosage}` : ""}`;
 	} else if (upcoming.length > 0) {
 		const first = upcoming[0] as TimetableEntry;
-		tone = "upcoming";
 		headline = `Next: ${first.itemName}`;
-		detail = `${first.dosage ? `${first.dosage} · ` : ""}${fmtWhen(first.scheduledAt)}`;
+		detail = first.dosage ?? "Tap to open the timetable";
 	}
-
-	const dot =
-		tone === "overdue"
-			? "var(--color-status-overdue,#dc2626)"
-			: tone === "upcoming"
-				? "var(--color-accent-med,#2563eb)"
-				: "var(--color-accent-given,#16a34a)";
 
 	return (
 		<Link
 			to="/timetable"
-			className="block rounded-2xl bg-card surface p-4 hover:border-primary/30 transition-colors"
+			className="block bg-card surface surface-hover p-4 transition-shadow"
 		>
 			<div className="flex items-center gap-3">
-				<div
-					className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-					style={{ backgroundColor: `${dot}1a`, color: dot }}
-				>
-					<Clock className="w-4 h-4" />
-				</div>
+				{featured ? (
+					<TimeBox iso={featured.scheduledAt} tone={tboxTone} />
+				) : (
+					<div className="shrink-0 w-[68px] flex items-center justify-center">
+						<div className="w-9 h-9 rounded-full flex items-center justify-center bg-[#e3efe6] text-[#3f6b4d]">
+							<Clock className="w-4 h-4" />
+						</div>
+					</div>
+				)}
 				<div className="flex-1 min-w-0">
 					<div className="flex items-center gap-2">
-						<span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground font-semibold">
+						<span className="text-[11px] uppercase tracking-[0.14em] text-[#b88858] font-bold">
 							Timetable
 						</span>
 						{overdue.length > 0 ? (
-							<span
-								className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-								style={{ backgroundColor: `${dot}1a`, color: dot }}
-							>
+							<span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#fbe7da] text-[#b7561e]">
 								Overdue
 							</span>
 						) : null}
 					</div>
-					<div className="font-display text-base font-semibold leading-tight truncate">
+					<div className="font-display text-base sm:text-lg font-bold leading-tight truncate">
 						{headline}
 					</div>
-					<div className="text-xs text-muted-foreground truncate">{detail}</div>
+					<div className="text-sm text-muted-foreground truncate">{detail}</div>
 				</div>
 				<ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
 			</div>

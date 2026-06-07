@@ -73,9 +73,11 @@ export function petContextBlock(
 
 const SYSTEM = `You maintain a structured "case file" for a pet from its records. Extract durable, decision-relevant facts an owner and vet would want at a glance — NOT a narrative. Be specific and concise; use the pet's real data, never invent. Empty arrays are fine when unknown.
 
+LANGUAGE: Write every string VALUE in the same language as the pet's records (the owner's language) — e.g. Brazilian Portuguese when the records are in Portuguese. Keep the JSON keys exactly as below (English).
+
 Return ONLY a single fenced JSON code block matching:
 {
-  "oneLiner": string,            // signalment + case headline, e.g. "6yo M chihuahua, chronic GI + regenerative anemia"
+  "oneLiner": string,            // signalment + case headline, e.g. "Chihuahua macho 6a, GI crônico + anemia regenerativa"
   "sex": string|null,
   "ageText": string|null,
   "weightKg": number|null,
@@ -84,7 +86,7 @@ Return ONLY a single fenced JSON code block matching:
   "chronicConditions": string[],
   "activeConcerns": string[],     // what's open right now
   "pastEpisodes": string[],       // notable resolved events, short
-  "medications": string[],        // current meds with dose if known
+  "medications": string[],        // CURRENT/active meds only, with dose if known — exclude discontinued/suspended drugs (a notably suspended one can go in pastEpisodes)
   "watchFor": string[]            // signs to monitor
 }
 Nothing outside the JSON block.`;
