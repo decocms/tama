@@ -106,7 +106,9 @@ export async function getTimeline(
 									: n.kind === "ai-summary"
 										? "AI summary"
 										: "Note",
-							detail: n.content.slice(0, 280),
+							// Full content — the Timeline UI clamps to a couple lines and
+							// opens the whole note in a reader on click.
+							detail: n.content,
 							refId: n.id,
 							status: null,
 						});

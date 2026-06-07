@@ -1,24 +1,63 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils.ts";
 import { Badge } from "@/components/ui/badge.tsx";
+import { deriveCompanionStatus } from "@/companion/state.ts";
 import type { Pet } from "@/types/api.ts";
+import { useTimetable } from "../lib/queries.ts";
 import { Avatar } from "./Avatar.tsx";
 
+function browserTimeZone(): string {
+	try {
+		return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+	} catch {
+		return "UTC";
+	}
+}
+
 export function PetHero({ pet }: { pet: Pet }) {
+	const { data: entries } = useTimetable();
+
+	// Re-tick each minute so the avatar's mood tracks the live schedule
+	// ("due in 5 min" → "overdue") without waiting for a refetch.
+	const [tick, setTick] = useState(0);
+	useEffect(() => {
+		const id = setInterval(() => setTick((n) => n + 1), 60_000);
+		return () => clearInterval(id);
+	}, []);
+
+	const status = useMemo(
+		() =>
+			deriveCompanionStatus({
+				entries: entries ?? [],
+				petName: pet.name ?? "Tama",
+				summary: pet.summary ?? null,
+				now: new Date(),
+				timeZone: pet.timezone ?? browserTimeZone(),
+			}),
+		// biome-ignore lint/correctness/useExhaustiveDependencies: tick re-derives
+		[entries, pet, tick],
+	);
+
+	// The hero is a diminutive of the full companion: same live state, small.
+	const heroSvg = pet.svgPack?.[status.state] ?? pet.svgPack?.idle ?? null;
+
 	return (
 		<div className="rounded-2xl bg-card surface overflow-hidden">
 			<div className="p-5 flex flex-col sm:flex-row sm:items-center gap-5">
-				{pet.svgPack?.idle ? (
+				{heroSvg ? (
 					<Link
 						to="/companion"
-						aria-label={`Open ${pet.name} full screen`}
+						aria-label={`Open ${pet.name} full screen — ${status.headline}`}
+						title={status.headline}
 						className="group relative shrink-0 mx-auto sm:mx-0 w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-[#e7dfce] border border-border/60 flex items-center justify-center overflow-hidden cursor-pointer transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
 					>
 						{/* biome-ignore lint/security/noDangerouslySetInnerHtml: our own SVG renderer */}
 						<div
+							key={status.state}
 							className="w-[88%] h-[88%] [&>svg]:w-full [&>svg]:h-full"
 							style={{ animation: "breathe 3s ease-in-out infinite" }}
-							dangerouslySetInnerHTML={{ __html: pet.svgPack.idle }}
+							dangerouslySetInnerHTML={{ __html: heroSvg }}
 						/>
 						<span className="absolute inset-x-0 bottom-0 py-1 bg-black/30 text-white text-[9px] uppercase tracking-wider text-center opacity-0 group-hover:opacity-100 transition-opacity">
 							Tap to open

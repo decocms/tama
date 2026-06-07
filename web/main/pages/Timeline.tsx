@@ -8,8 +8,9 @@ import {
 	Stethoscope,
 	Syringe,
 	Thermometer,
+	X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -18,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { formatDateTime } from "@/lib/format.ts";
 import type { TimelineEntry, TimelineType } from "@/types/api.ts";
+import { InsightsText } from "../components/ExamInsights.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { Section } from "../components/Section.tsx";
 import {
@@ -58,6 +60,7 @@ export function TimelinePage() {
 	const [adding, setAdding] = useState<null | "note" | "visit" | "vaccine" | "symptom">(
 		null,
 	);
+	const [selected, setSelected] = useState<TimelineEntry | null>(null);
 
 	const grouped = useMemo(() => groupByDay(entries ?? []), [entries]);
 
@@ -124,7 +127,11 @@ export function TimelinePage() {
 									</div>
 									<ul className="space-y-2">
 										{g.entries.map((e) => (
-											<EntryRow key={e.id} entry={e} />
+											<EntryRow
+												key={e.id}
+												entry={e}
+												onOpen={() => setSelected(e)}
+											/>
 										))}
 									</ul>
 								</div>
@@ -133,15 +140,44 @@ export function TimelinePage() {
 					))}
 				</Section>
 			</div>
+			{selected ? (
+				<EntryReader entry={selected} onClose={() => setSelected(null)} />
+			) : null}
 		</Layout>
 	);
 }
 
-function EntryRow({ entry }: { entry: TimelineEntry }) {
+function EntryRow({
+	entry,
+	onOpen,
+}: {
+	entry: TimelineEntry;
+	onOpen: () => void;
+}) {
 	const m = TYPE_META[entry.type];
 	const Icon = m.icon;
+	// Long-form entries (notes, recording summaries, visit notes) open a reader.
+	const readable = !!entry.detail && entry.detail.length > 0;
 	return (
-		<li className="flex items-start gap-3 rounded-xl bg-card surface p-3">
+		<li
+			className={`flex items-start gap-3 rounded-xl bg-card surface p-3 ${
+				readable ? "cursor-pointer hover:border-primary/30 transition-colors" : ""
+			}`}
+			onClick={readable ? onOpen : undefined}
+			onKeyDown={
+				readable
+					? (e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								e.preventDefault();
+								onOpen();
+							}
+						}
+					: undefined
+			}
+			// biome-ignore lint/a11y/useSemanticElements: row is a list item that doubles as a button
+			role={readable ? "button" : undefined}
+			tabIndex={readable ? 0 : undefined}
+		>
 			<div
 				className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5"
 				style={{ backgroundColor: `${m.color}1a`, color: m.color }}
@@ -170,6 +206,79 @@ function EntryRow({ entry }: { entry: TimelineEntry }) {
 				})}
 			</span>
 		</li>
+	);
+}
+
+// Full-screen reader for a timeline entry — the whole note/summary, scrollable.
+// Esc or backdrop/✕ closes.
+function EntryReader({
+	entry,
+	onClose,
+}: {
+	entry: TimelineEntry;
+	onClose: () => void;
+}) {
+	const m = TYPE_META[entry.type];
+	const Icon = m.icon;
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") onClose();
+		};
+		window.addEventListener("keydown", onKey);
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			window.removeEventListener("keydown", onKey);
+			document.body.style.overflow = prev;
+		};
+	}, [onClose]);
+
+	return (
+		// biome-ignore lint/a11y/useKeyWithClickEvents: Esc handled above; backdrop click closes
+		<div
+			className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-6 companion-backdrop-in"
+			onClick={onClose}
+			role="dialog"
+			aria-modal="true"
+		>
+			{/* biome-ignore lint/a11y/useKeyWithClickEvents: inner guard only */}
+			<div
+				className="bg-background w-full sm:max-w-2xl max-h-[85dvh] rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden"
+				onClick={(e) => e.stopPropagation()}
+			>
+				<div className="flex items-center gap-3 p-4 border-b">
+					<div
+						className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+						style={{ backgroundColor: `${m.color}1a`, color: m.color }}
+					>
+						<Icon className="w-4 h-4" />
+					</div>
+					<div className="flex-1 min-w-0">
+						<div className="font-display font-semibold leading-tight truncate">
+							{entry.title}
+						</div>
+						<div className="text-xs text-muted-foreground">
+							{m.label} · {formatDateTime(entry.at)}
+						</div>
+					</div>
+					<button
+						type="button"
+						onClick={onClose}
+						aria-label="Close"
+						className="w-9 h-9 rounded-full hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground"
+					>
+						<X className="w-4 h-4" />
+					</button>
+				</div>
+				<div className="p-4 overflow-y-auto">
+					{entry.detail ? (
+						<InsightsText text={entry.detail} />
+					) : (
+						<p className="text-sm text-muted-foreground">No details.</p>
+					)}
+				</div>
+			</div>
+		</div>
 	);
 }
 
