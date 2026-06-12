@@ -143,19 +143,42 @@ function minGapHours(times: string[]): number {
 	return Math.max(min, 1) / 60;
 }
 
+// The integer calendar-day ordinal of a date in a timezone (days since the
+// Unix epoch in that zone). Lets us count whole days between two zoned dates
+// regardless of DST.
+function dayOrdinalInZone(ms: number, timeZone: string): number {
+	const { year, month, day } = zonedDateParts(new Date(ms), timeZone);
+	return Math.floor(Date.UTC(year, month - 1, day) / (24 * HOUR_MS));
+}
+
 // Every clock-time slot (UTC ms) that falls inside [fromMs, toMs] for the given
 // daily times in `timeZone`. Walks each calendar day the window touches.
+//
+// `strideDays` > 1 makes it every-N-days: only days whose ordinal is congruent
+// to the anchor day (mod stride) emit slots — so "10:00 every 48h" anchored on
+// the 12th yields the 12th, 14th, 16th… and skips the off-days. `anchorMs` is
+// the schedule's start (its day fixes the parity).
 export function clockSlotsInWindow(
 	times: string[],
 	timeZone: string,
 	fromMs: number,
 	toMs: number,
+	strideDays = 1,
+	anchorMs?: number,
 ): number[] {
+	const stride = Math.max(1, Math.round(strideDays));
+	const anchorOrd =
+		stride > 1 && anchorMs != null ? dayOrdinalInZone(anchorMs, timeZone) : 0;
 	const slots = new Set<number>();
 	const days = Math.ceil((toMs - fromMs) / (24 * HOUR_MS)) + 2;
 	for (let d = 0; d < days; d++) {
-		const ref = new Date(fromMs + d * 24 * HOUR_MS);
-		const { year, month, day } = zonedDateParts(ref, timeZone);
+		const refMs = fromMs + d * 24 * HOUR_MS;
+		if (stride > 1) {
+			const ord = dayOrdinalInZone(refMs, timeZone);
+			// Positive modulo so days before the anchor still align correctly.
+			if ((((ord - anchorOrd) % stride) + stride) % stride !== 0) continue;
+		}
+		const { year, month, day } = zonedDateParts(new Date(refMs), timeZone);
 		for (const t of times) {
 			const [hh, mm] = t.split(":").map(Number);
 			const ms = zonedDate(year, month, day, hh, mm, timeZone).getTime();
@@ -204,13 +227,26 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 
 		const times = parseTimesJson(item.timesJson);
 		if (times.length > 0 && tz) {
-			// Fixed clock-time projection.
+			// Fixed clock-time projection. When the interval spans multiple days
+			// (e.g. frequencyHours 48 → every other day), only emit slots every
+			// `strideDays`, anchored on the schedule's start day — so "10:00 every
+			// 48h" hits the on-days and skips the off-days instead of going daily.
+			const strideDays =
+				item.intervalHours > 24 ? Math.round(item.intervalHours / 24) : 1;
+			const anchorMs = new Date(item.startsAt ?? item.anchorAt).getTime();
 			const halfWindowMs = Math.min(
 				6,
 				Math.max(0.5, minGapHours(times) / 2),
 			) * HOUR_MS;
 			const acted = doseMsByName.get(item.displayName.trim().toLowerCase()) ?? [];
-			for (const slotMs of clockSlotsInWindow(times, tz, fromMs, toMs)) {
+			for (const slotMs of clockSlotsInWindow(
+				times,
+				tz,
+				fromMs,
+				toMs,
+				strideDays,
+				anchorMs,
+			)) {
 				const suppressed = acted.some(
 					(d) => Math.abs(d - slotMs) <= halfWindowMs,
 				);

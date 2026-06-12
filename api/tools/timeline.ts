@@ -35,7 +35,7 @@ export const timelineGetTool = (_env: Env) =>
 			"The pet's continuous timeline — every logged event (vet visits, vaccines, symptoms, doses, exams, recordings, notes, prescriptions) merged into one reverse-chronological feed. This is the full context of the pet's life. Filter by kinds or cap with limit.",
 		inputSchema: z.object({
 			kinds: z.array(z.enum(TIMELINE_TYPES)).optional(),
-			limit: z.number().optional(),
+			limit: z.coerce.number().optional(),
 		}),
 		outputSchema: z.object({ entries: z.array(TimelineEntrySchema) }),
 		_meta: { ui: { resourceUri: URI.timeline } },

@@ -21,13 +21,18 @@ export const ScheduleItemSchema = z.object({
 		.optional()
 		.describe("Administration route (oral, subq, topical)"),
 	times: z
-		.array(z.string().regex(/^\d{2}:\d{2}$/))
-		.min(1)
+		.array(z.string().regex(/^\d{1,2}:\d{2}$/))
+		.optional()
 		.describe(
-			"Times of day in 24h HH:mm format, interpreted in the PET's timezone (e.g. America/Sao_Paulo) — never UTC. The server resolves these against pets.timezone when computing anchors. Example: ['07:30', '14:30', '22:00'] = 7:30 AM, 2:30 PM, 10 PM local.",
+			"Times of day in 24h HH:mm, interpreted in the PET's timezone (never UTC). Example: ['07:30','14:30','22:00'] = 3×/day. Combine with frequencyHours for every-N-days: times ['10:00'] + frequencyHours 48 → 10:00 every other day (anchored on startsAt). OMIT or pass [] for a pure even-interval schedule driven only by frequencyHours + startsAt (e.g. every 8h round the clock).",
 		),
-	frequencyHours: z.number().optional(),
-	durationDays: z.number().optional(),
+	frequencyHours: z.coerce
+		.number()
+		.optional()
+		.describe(
+			"Interval between doses in hours. >24 means every-N-days (48 = every other day, 72 = every third). With `times` set, the time-of-day is the anchor and intermediate days are skipped; without `times`, doses walk forward purely from startsAt at this interval.",
+		),
+	durationDays: z.coerce.number().optional(),
 	startsAt: z
 		.string()
 		.optional()

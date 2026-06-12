@@ -42,7 +42,7 @@ export const timetableGetTool = (_env: Env) =>
 		description:
 			"Get the derived live timetable (next 48h by default). Shows pending, given, and skipped entries for the pet.",
 		inputSchema: z.object({
-			windowHours: z.number().optional(),
+			windowHours: z.coerce.number().optional(),
 			timeZone: z
 				.string()
 				.optional()
@@ -187,7 +187,14 @@ Times: when the user mentions a time WITHOUT a timezone, use plannedLocal/actual
 				}
 			}
 
-			const actualAtFinal = actualAt ?? new Date().toISOString();
+			// The dose's recorded time. A "skipped" dose has no real administration
+			// time, so anchor it to the planned slot when one was given (so a skip
+			// for a future/past slot lands ON that slot, not at "now"). A "given"
+			// dose defaults to now unless an actual time was supplied.
+			const actualAtFinal =
+				actualAt ??
+				(context.status === "skipped" ? plannedAt : undefined) ??
+				new Date().toISOString();
 			const nowIso = new Date().toISOString();
 			const advancesAnchor =
 				(context.status === "given" || context.status === "skipped") &&
@@ -204,7 +211,7 @@ Times: when the user mentions a time WITHOUT a timezone, use plannedLocal/actual
 					itemName: canonical,
 					kind: context.kind ?? canonicalKind,
 					plannedAt,
-					actualAt,
+					actualAt: actualAtFinal,
 					status: context.status,
 					note: context.note,
 				}),
@@ -299,7 +306,9 @@ export const doseUpdateTool = (_env: Env) =>
 			if (context.newNote !== undefined) patch.note = context.newNote;
 
 			if (Object.keys(patch).length === 0) {
-				return { doseId: targetId, updated: false };
+				throw new Error(
+					"dose_update: nothing to change. Pass at least one of newActualLocal / newActualAt (the time it was given), newPlannedLocal / newPlannedAt (the scheduled slot), newStatus, or newNote. (There is no `scheduledAt` field — use newPlannedLocal/newPlannedAt.)",
+				);
 			}
 
 			const updated = await updateDose(env, targetId, patch);

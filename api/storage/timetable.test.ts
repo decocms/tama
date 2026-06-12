@@ -165,6 +165,53 @@ describe("deriveTimetable (anchor model)", () => {
 		expect(todays[0].doseId).toBe("d_late");
 	});
 
+	it("fixed clock time + 48h interval → every other day, skipping off-days", () => {
+		// Beto's Prelone Phase 2: 10:00 local, every 48h, from the 12th.
+		const state = makeState({
+			intervalHours: 48,
+			timesJson: JSON.stringify(["10:00"]),
+			startsAt: "2026-06-12T13:00:00.000Z", // 10:00 in America/Sao_Paulo
+			anchorAt: "2026-06-12T13:00:00.000Z",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [],
+			from: new Date("2026-06-12T00:00:00.000Z"),
+			to: new Date("2026-06-19T00:00:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		const times = entries.map((e) => e.scheduledAt);
+		// On-days present (10:00 BRT = 13:00 UTC):
+		expect(times).toContain("2026-06-12T13:00:00.000Z");
+		expect(times).toContain("2026-06-14T13:00:00.000Z");
+		expect(times).toContain("2026-06-16T13:00:00.000Z");
+		expect(times).toContain("2026-06-18T13:00:00.000Z");
+		// Off-days absent:
+		expect(times).not.toContain("2026-06-13T13:00:00.000Z");
+		expect(times).not.toContain("2026-06-15T13:00:00.000Z");
+		expect(times).not.toContain("2026-06-17T13:00:00.000Z");
+		expect(entries).toHaveLength(4);
+	});
+
+	it("fixed clock times + daily interval → every day (multi-dose)", () => {
+		// Meals 7/14/22, no multi-day interval → daily, unchanged behavior.
+		const state = makeState({
+			intervalHours: 8,
+			timesJson: JSON.stringify(["07:00", "14:00", "22:00"]),
+			startsAt: "2026-06-12T10:00:00.000Z",
+			anchorAt: "2026-06-12T10:00:00.000Z",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [],
+			from: new Date("2026-06-12T00:00:00.000Z"),
+			to: new Date("2026-06-13T23:59:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		// 3 slots/day × 2 days = 6.
+		expect(entries).toHaveLength(6);
+	});
+
 	it("wallClockToIso resolves HH:mm in a timezone to UTC", () => {
 		const iso = wallClockToIso("12:00", "America/Sao_Paulo");
 		expect(iso).toMatch(/T15:00:00\.000Z$/);

@@ -72,7 +72,19 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 	for (const row of activeRows) {
 		const times = parseTimesJson(row.timesJson);
 		if (times.length > 0) {
-			for (const ms of clockSlotsInWindow(times, tz, now, now + LOOKAHEAD_MS)) {
+			// Match the timetable's every-N-days stride so reminders don't fire on
+			// the off-days of e.g. an every-48h schedule.
+			const strideDays =
+				row.intervalHours > 24 ? Math.round(row.intervalHours / 24) : 1;
+			const anchorMs = new Date(row.startsAt ?? row.anchorAt).getTime();
+			for (const ms of clockSlotsInWindow(
+				times,
+				tz,
+				now,
+				now + LOOKAHEAD_MS,
+				strideDays,
+				anchorMs,
+			)) {
 				candidates.push({ row, plannedAt: new Date(ms).toISOString() });
 			}
 		} else {
