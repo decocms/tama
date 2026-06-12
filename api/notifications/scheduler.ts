@@ -70,6 +70,10 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 
 	const candidates: { row: ScheduleStateRow; plannedAt: string }[] = [];
 	for (const row of activeRows) {
+		// Don't remind for slots outside the course's [startsAt, endsAt) bounds.
+		const startMs = row.startsAt ? new Date(row.startsAt).getTime() : -Infinity;
+		const endMs = row.endsAt ? new Date(row.endsAt).getTime() : Infinity;
+		const inBounds = (ms: number) => ms >= startMs && ms < endMs;
 		const times = parseTimesJson(row.timesJson);
 		if (times.length > 0) {
 			// Match the timetable's every-N-days stride so reminders don't fire on
@@ -85,11 +89,13 @@ export async function runReminderTick(env: Env): Promise<TickResult> {
 				strideDays,
 				anchorMs,
 			)) {
-				candidates.push({ row, plannedAt: new Date(ms).toISOString() });
+				if (inBounds(ms)) {
+					candidates.push({ row, plannedAt: new Date(ms).toISOString() });
+				}
 			}
 		} else {
 			const a = new Date(row.anchorAt).getTime();
-			if (a >= now && a <= now + LOOKAHEAD_MS) {
+			if (a >= now && a <= now + LOOKAHEAD_MS && inBounds(a)) {
 				candidates.push({ row, plannedAt: row.anchorAt });
 			}
 		}

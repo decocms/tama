@@ -193,12 +193,54 @@ describe("deriveTimetable (anchor model)", () => {
 		expect(entries).toHaveLength(4);
 	});
 
+	it("does not project clock-time slots past endsAt", () => {
+		// 8-day antibiotic at 15:00 BRT (18:00 UTC), ends 06-15T17:00Z → last dose
+		// is the 06-14 slot; the 06-15 slot (18:00 > 17:00 end) and beyond are cut.
+		const state = makeState({
+			intervalHours: 24,
+			timesJson: JSON.stringify(["15:00"]),
+			startsAt: "2026-06-07T17:00:00.000Z",
+			endsAt: "2026-06-15T17:00:00.000Z",
+			anchorAt: "2026-06-12T18:00:00.000Z",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [],
+			from: new Date("2026-06-12T00:00:00.000Z"),
+			to: new Date("2026-06-19T00:00:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		const times = entries.map((e) => e.scheduledAt);
+		expect(times).toContain("2026-06-14T18:00:00.000Z"); // last valid dose
+		expect(times).not.toContain("2026-06-15T18:00:00.000Z"); // past endsAt
+		expect(times).not.toContain("2026-06-16T18:00:00.000Z");
+	});
+
+	it("does not project interval slots past endsAt", () => {
+		const state = makeState({
+			intervalHours: 24,
+			timesJson: null,
+			anchorAt: "2026-06-12T06:00:00.000Z",
+			endsAt: "2026-06-14T00:00:00.000Z",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [],
+			from: new Date("2026-06-12T00:00:00.000Z"),
+			to: new Date("2026-06-17T00:00:00.000Z"),
+		});
+		const times = entries.map((e) => e.scheduledAt);
+		expect(times).toContain("2026-06-12T06:00:00.000Z");
+		expect(times).toContain("2026-06-13T06:00:00.000Z");
+		expect(times).not.toContain("2026-06-14T06:00:00.000Z"); // past endsAt
+	});
+
 	it("fixed clock times + daily interval → every day (multi-dose)", () => {
 		// Meals 7/14/22, no multi-day interval → daily, unchanged behavior.
 		const state = makeState({
 			intervalHours: 8,
 			timesJson: JSON.stringify(["07:00", "14:00", "22:00"]),
-			startsAt: "2026-06-12T10:00:00.000Z",
+			startsAt: "2026-06-01T00:00:00.000Z", // well before the window
 			anchorAt: "2026-06-12T10:00:00.000Z",
 		});
 		const entries = deriveTimetable({

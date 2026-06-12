@@ -225,6 +225,14 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 	for (const item of scheduleStates) {
 		if (!item.active) continue;
 
+		// A time-bounded course only projects slots within [startsAt, endsAt).
+		// (The item also flips inactive once endsAt passes, but until then the
+		// projection must not spill doses past the course's end — e.g. an 8-day
+		// antibiotic shouldn't show a 9th day, nor an every-48h course a dose
+		// beyond its last on-day.)
+		const startMs = item.startsAt ? new Date(item.startsAt).getTime() : -Infinity;
+		const endMs = item.endsAt ? new Date(item.endsAt).getTime() : Infinity;
+
 		const times = parseTimesJson(item.timesJson);
 		if (times.length > 0 && tz) {
 			// Fixed clock-time projection. When the interval spans multiple days
@@ -247,6 +255,7 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 				strideDays,
 				anchorMs,
 			)) {
+				if (slotMs < startMs || slotMs >= endMs) continue;
 				const suppressed = acted.some(
 					(d) => Math.abs(d - slotMs) <= halfWindowMs,
 				);
@@ -272,6 +281,10 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 		let cursor = new Date(item.anchorAt).getTime();
 		while (cursor < fromMs) cursor += intervalMs;
 		while (cursor <= toMs) {
+			if (cursor < startMs || cursor >= endMs) {
+				cursor += intervalMs;
+				continue;
+			}
 			entries.push({
 				id: `${item.id}:${new Date(cursor).toISOString()}`,
 				prescriptionId: item.prescriptionId ?? "",
