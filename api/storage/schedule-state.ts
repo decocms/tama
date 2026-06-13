@@ -74,6 +74,31 @@ export function deriveInitialAnchor(
 	return wallClockToIso(firstTime, timeZone);
 }
 
+// Lifecycle (start / end / next-due anchor) for an item beginning a FRESH
+// course. Used when a brand-new row is inserted AND when a NEW prescription
+// re-adopts an existing (possibly expired) row — so re-prescribing a drug whose
+// old course ended resets its bounds instead of inheriting the stale endsAt
+// (which the auto-expire sweep would immediately deactivate).
+export function freshCourseLifecycle(
+	item: ScheduleItem,
+	intervalHours: number,
+	timeZone: string,
+): { startsAt: string; endsAt: string | null; anchorAt: string } {
+	const nowIso = new Date().toISOString();
+	const startsAt = item.startsAt ?? nowIso;
+	const anchorAt = item.startsAt
+		? new Date(
+				new Date(item.startsAt).getTime() + intervalHours * 60 * 60 * 1000,
+			).toISOString()
+		: deriveInitialAnchor(item, timeZone);
+	const endsAt = item.durationDays
+		? new Date(
+				new Date(startsAt).getTime() + item.durationDays * 24 * 60 * 60 * 1000,
+			).toISOString()
+		: null;
+	return { startsAt, endsAt, anchorAt };
+}
+
 export async function listScheduleStates(env: Env): Promise<ScheduleState[]> {
 	return db(env)
 		.select()
@@ -117,6 +142,15 @@ export async function upsertScheduleState(
 	const timesJson = serializeTimes(input.item);
 
 	if (existing) {
+		// A DIFFERENT prescription now owns this item → it's a fresh course:
+		// reset the lifecycle bounds + anchor so an old/expired endsAt doesn't
+		// linger (which would auto-expire the reactivated row). Same prescription
+		// re-syncing only refreshes the template fields and preserves the live
+		// anchor drift + bounds.
+		const isNewCourse = existing.prescriptionId !== input.prescriptionId;
+		const life = isNewCourse
+			? freshCourseLifecycle(input.item, intervalHours, input.timeZone)
+			: null;
 		const [row] = await db(env)
 			.update(scheduleState)
 			.set({
@@ -131,6 +165,13 @@ export async function upsertScheduleState(
 				prescriptionId: input.prescriptionId,
 				active: true,
 				updatedAt: new Date().toISOString(),
+				...(life
+					? {
+							startsAt: life.startsAt,
+							endsAt: life.endsAt,
+							anchorAt: life.anchorAt,
+						}
+					: {}),
 			})
 			.where(eq(scheduleState.id, existing.id))
 			.returning();
@@ -210,10 +251,18 @@ export async function setScheduleStateBounds(
 	const patch: {
 		startsAt?: string | null;
 		endsAt?: string | null;
+		active?: boolean;
 		updatedAt: string;
 	} = { updatedAt: new Date().toISOString() };
 	if (bounds.startsAt !== undefined) patch.startsAt = bounds.startsAt;
-	if (bounds.endsAt !== undefined) patch.endsAt = bounds.endsAt;
+	if (bounds.endsAt !== undefined) {
+		patch.endsAt = bounds.endsAt;
+		// Derive active from the new end so set_bounds is deterministic: a future
+		// (or cleared) end RE-OPENS the item; a past end closes it. This is how
+		// you reactivate a treatment whose course was extended.
+		patch.active =
+			bounds.endsAt == null || new Date(bounds.endsAt).getTime() > Date.now();
+	}
 	const [updated] = await db(env)
 		.update(scheduleState)
 		.set(patch)
@@ -292,6 +341,13 @@ export async function ensureScheduleStateForPet(
 			const intervalHours = deriveIntervalHours(item);
 			const timesJson = serializeTimes(item);
 			if (existingRow) {
+				// A new prescription re-adopting this item starts a fresh course —
+				// reset its bounds + anchor (so an expired endsAt from a prior
+				// course doesn't survive and immediately re-deactivate the row).
+				const isNewCourse = existingRow.prescriptionId !== rx.id;
+				const life = isNewCourse
+					? freshCourseLifecycle(item, intervalHours, timeZone)
+					: null;
 				const needs =
 					existingRow.displayName !== item.name ||
 					existingRow.kind !== item.kind ||
@@ -319,6 +375,13 @@ export async function ensureScheduleStateForPet(
 								prescriptionId: rx.id,
 								active: true,
 								updatedAt: nowIso,
+								...(life
+									? {
+											startsAt: life.startsAt,
+											endsAt: life.endsAt,
+											anchorAt: life.anchorAt,
+										}
+									: {}),
 							})
 							.where(eq(scheduleState.id, existingRow.id)),
 					);
