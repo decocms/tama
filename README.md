@@ -61,7 +61,7 @@ flow, in your editor. Cursor, Aider, or doing it by hand from
   cron-driven push notifications, static asset serving.
 - **D1** (`api/db/schema.ts`) — singleton `pets` row + notes / prescriptions /
   doses / schedule_state / recordings / exams / metrics / vet_visits /
-  vaccines / symptoms. Accessed via Drizzle ORM.
+  vaccines / symptoms / vet_team. Accessed via Drizzle ORM.
 - **R2** — uploaded files (the Assets library: exam PDFs, vaccine cards,
   audio chunks, per-pet sprite pack).
 - **Cloudflare AI Gateway** — routes Anthropic (vision extraction, exam
@@ -162,6 +162,7 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | `vet_visit_add` / `_list`   | Log / read vet visits                         |
 | `vaccine_add` / `_list`     | Log / read vaccinations                       |
 | `symptom_add` / `_resolve` / `_list` | Log / resolve / read symptoms        |
+| `vet_team_add` / `_list` / `_update` / `_remove` | The care team — vet/specialist roster |
 | `asset_upload` / `asset_list` | Drop any file → classified into the timeline |
 | `prescription_upload` / `_create` / `_update` / `_list` / `_delete` | Prescriptions |
 | `timetable_get`             | Derived live timetable for next N hours       |

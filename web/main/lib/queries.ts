@@ -16,6 +16,7 @@ import type {
 	TimelineType,
 	TimetableEntry,
 	Vaccine,
+	VetTeamMember,
 	VetVisit,
 } from "@/types/api.ts";
 import { callTool } from "./mcp.ts";
@@ -28,6 +29,7 @@ export const keys = {
 	assets: ["assets"] as const,
 	recordings: ["recordings"] as const,
 	vetVisits: ["vet-visits"] as const,
+	vetTeam: ["vet-team"] as const,
 	vaccines: ["vaccines"] as const,
 	symptoms: ["symptoms"] as const,
 	exams: ["exams"] as const,
@@ -45,6 +47,7 @@ function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
 		"assets",
 		"recordings",
 		"vet-visits",
+		"vet-team",
 		"vaccines",
 		"symptoms",
 		"exams",
@@ -80,7 +83,9 @@ export function useUpdatePet() {
 			ownerNotes?: string | null;
 			timezone?: string | null;
 		}) =>
-			callTool<{ pet: Pet | null }>(app, "pet_update", input).then((r) => r.pet),
+			callTool<{ pet: Pet | null }>(app, "pet_update", input).then(
+				(r) => r.pet,
+			),
 		onSuccess: () => qc.invalidateQueries({ queryKey: keys.pet }),
 	});
 }
@@ -186,6 +191,63 @@ export function useAddVetVisit() {
 			notes?: string;
 		}) => callTool(app, "vet_visit_add", input),
 		onSuccess: () => invalidateAll(qc),
+	});
+}
+
+// ---------- Vet team (care roster) ----------
+
+export function useVetTeam() {
+	const app = useMcpApp();
+	return useQuery({
+		queryKey: keys.vetTeam,
+		queryFn: () =>
+			callTool<{ team: VetTeamMember[] }>(app, "vet_team_list", {}).then(
+				(r) => r.team,
+			),
+		enabled: true,
+	});
+}
+
+export function useAddVetTeamMember() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			name: string;
+			role?: string;
+			clinic?: string;
+			phone?: string;
+			email?: string;
+			notes?: string;
+		}) => callTool(app, "vet_team_add", input),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.vetTeam }),
+	});
+}
+
+export function useUpdateVetTeamMember() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (input: {
+			id: string;
+			name?: string;
+			role?: string | null;
+			clinic?: string | null;
+			phone?: string | null;
+			email?: string | null;
+			notes?: string | null;
+			active?: boolean;
+		}) => callTool(app, "vet_team_update", input),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.vetTeam }),
+	});
+}
+
+export function useRemoveVetTeamMember() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (id: string) => callTool(app, "vet_team_remove", { id }),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.vetTeam }),
 	});
 }
 

@@ -7,6 +7,7 @@ import type { PetProfile, TimetableEntry } from "@/types/api.ts";
 import { TimeBox } from "../components/Card.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
+import { VetTeamCard } from "../components/VetTeamCard.tsx";
 import { usePet, useRefreshProfile, useTimetable } from "../lib/queries.ts";
 
 // The Pet app: profile, a live timetable-status line, the pet sheet, and the
@@ -46,6 +47,8 @@ export function PetPage() {
 								})
 							}
 						/>
+
+						<VetTeamCard />
 					</>
 				)}
 			</div>
@@ -168,7 +171,11 @@ function CaseFileCard({
 					items: profile.medications ?? [],
 					color: "#2f6b4d",
 				},
-				{ label: "De olho em", items: profile.watchFor ?? [], color: "#7c5cc4" },
+				{
+					label: "De olho em",
+					items: profile.watchFor ?? [],
+					color: "#7c5cc4",
+				},
 				{
 					label: "Episódios passados",
 					items: profile.pastEpisodes ?? [],
@@ -198,7 +205,9 @@ function CaseFileCard({
 					disabled={refreshing}
 					className="h-7 gap-1.5 text-xs"
 				>
-					<RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
+					<RefreshCw
+						className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`}
+					/>
 					{refreshing ? "Thinking…" : profile ? "Rebuild" : "Generate"}
 				</Button>
 			</div>
@@ -257,4 +266,3 @@ function CaseFileCard({
 		</div>
 	);
 }
-

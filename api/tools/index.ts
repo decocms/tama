@@ -53,14 +53,6 @@ import {
 	petSpriteSvgGenerateTool,
 } from "./sprite.ts";
 import {
-	doseLogTool,
-	doseUpdateTool,
-	scheduleStateListTool,
-	timetableGetTool,
-	timetableRescheduleTool,
-	timetableSetBoundsTool,
-} from "./timetable.ts";
-import {
 	symptomAddTool,
 	symptomListTool,
 	symptomResolveTool,
@@ -71,6 +63,20 @@ import {
 	vetVisitAddTool,
 	vetVisitListTool,
 } from "./timeline.ts";
+import {
+	doseLogTool,
+	doseUpdateTool,
+	scheduleStateListTool,
+	timetableGetTool,
+	timetableRescheduleTool,
+	timetableSetBoundsTool,
+} from "./timetable.ts";
+import {
+	vetTeamAddTool,
+	vetTeamListTool,
+	vetTeamRemoveTool,
+	vetTeamUpdateTool,
+} from "./vet-team.ts";
 
 export const tools = [
 	// Top-level apps (one pinnable tab each in studio) — order matters: this is
@@ -104,6 +110,12 @@ export const tools = [
 	symptomAddTool,
 	symptomResolveTool,
 	symptomListTool,
+	// Care team — the roster of vets/specialists on the case (Pet-page reference
+	// data, not a timeline event). add/list + update (retire via active=false)/remove.
+	vetTeamAddTool,
+	vetTeamListTool,
+	vetTeamUpdateTool,
+	vetTeamRemoveTool,
 	// Assets intake
 	assetUploadTool,
 	assetListTool,

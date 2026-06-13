@@ -338,6 +338,27 @@ export const researches = sqliteTable("researches", {
 	createdAt: text("created_at").notNull().default(nowSql),
 });
 
+// The pet's care team — the vets and specialists involved in this pet's care.
+// Reference data (a roster shown on the Pet page + consulted by the agent), NOT
+// a timeline event, so it's not merged into getTimeline. active=false keeps a
+// former provider on record without cluttering the live roster.
+export const vetTeam = sqliteTable("vet_team", {
+	id: text("id").primaryKey(),
+	petId: text("pet_id")
+		.notNull()
+		.references(() => pets.id, { onDelete: "cascade" }),
+	name: text("name").notNull(),
+	// Specialty / role, e.g. "Endocrinologista", "Cirurgião", "Clínico geral".
+	role: text("role"),
+	clinic: text("clinic"),
+	phone: text("phone"),
+	email: text("email"),
+	notes: text("notes"),
+	active: integer("active", { mode: "boolean" }).notNull().default(true),
+	createdAt: text("created_at").notNull().default(nowSql),
+	updatedAt: text("updated_at").notNull().default(nowSql),
+});
+
 // Idempotency log for the reminder cron. (scheduleStateId, plannedAt) is the
 // primary key — INSERT OR IGNORE guarantees a single send per dose slot even
 // if cron ticks overlap or retry.
@@ -381,3 +402,5 @@ export type Symptom = typeof symptoms.$inferSelect;
 export type NewSymptom = typeof symptoms.$inferInsert;
 export type Research = typeof researches.$inferSelect;
 export type NewResearch = typeof researches.$inferInsert;
+export type VetTeamMember = typeof vetTeam.$inferSelect;
+export type NewVetTeamMember = typeof vetTeam.$inferInsert;

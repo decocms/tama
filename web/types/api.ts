@@ -109,6 +109,20 @@ export interface Asset {
 	uploadedAt: string;
 }
 
+// A member of the pet's care team — a vet/specialist on the case. Roster
+// reference data shown on the Pet page (see api/tools/vet-team.ts).
+export interface VetTeamMember {
+	id: string;
+	name: string;
+	role: string | null;
+	clinic: string | null;
+	phone: string | null;
+	email: string | null;
+	notes: string | null;
+	active: boolean;
+	createdAt: string;
+}
+
 export interface SpritePackFull {
 	idle: string;
 	happy: string;
