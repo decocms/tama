@@ -42,6 +42,7 @@ don't wait to be asked.
 | `app_research` | Past vet-research briefings; ask new grounded questions |
 | `app_recordings` | Vet-visit audio, transcripts, AI summaries |
 | `app_assets` | Library of raw uploaded files; drop anything to file it |
+| `app_vet_team` | The care team — roster of vets/specialists on the case |
 | `app_breathing` | Measure resting respiratory rate (BPM) with the camera |
 
 ---
@@ -52,6 +53,7 @@ don't wait to be asked.
 - **Meds & schedule:** `prescription_{list,create,update,delete,upload}`, `timetable_get` (pass the pet's IANA `timeZone`), `schedule_state_list`, `dose_{log,update}`, `timetable_reschedule` (move the next dose), `timetable_set_bounds` (stop/extend/re-open/remove a treatment)
 - **Symptoms & timeline:** `symptom_{add,list,resolve}`, `timeline_get`, `timeline_note_add`
 - **Visits & vaccines:** `vet_visit_{add,list}`, `vaccine_{add,list}`
+- **Care team (Vet team app):** `vet_team_{add,list,update,remove}` (roster of vets/specialists; `active:false` retires), `vet_team_extract` (AI: auto-fill the roster from visits/recordings/notes)
 - **Exams:** `exam_add` (file or pasted text), `exam_{list,get,update,delete}`, `exam_explain`, `exam_metric_series`
 - **Research:** `vet_research` — always pass the pet's full context (weight, active conditions, current meds); generic answers aren't good enough
 - **Recordings:** `recording_{create,add_chunk,transcribe,apply,get,list}` (apply analyzes + summarizes inline)

@@ -215,6 +215,7 @@ the opening tool in `web/app.tsx` (`TOOL_TO_ROUTE`).
 | Research | `/research` | `app_research` |
 | Recordings | `/recordings` | `app_recordings` |
 | Assets | `/assets` | `app_assets` |
+| Vet team | `/vet-team` | `app_vet_team` |
 | Respiratory rate | `/breathing` | `app_breathing` |
 
 Non-app routes: `/companion` (ambient PWA `start_url`), `/sprite-lab`,

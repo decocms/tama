@@ -69,9 +69,9 @@ flow, in your editor. Cursor, Aider, or doing it by hand from
   research). No API keys live in the Worker; the gateway holds BYOK.
 - **Workers AI** — Whisper transcription for audio recordings. (The companion
   sprite is procedural SVG — no image model, instant + free.)
-- **React UI** (`web/`) — bundled to a single HTML by Vite. **Eight top-level
-  apps** — Pet, Timeline, Timetable, Exams, Research, Recordings, Assets, and
-  Respiratory rate — each a pinnable MCP app (`app_*` tool → `ui://tama/*`
+- **React UI** (`web/`) — bundled to a single HTML by Vite. **Nine top-level
+  apps** — Pet, Timeline, Timetable, Exams, Research, Recordings, Assets, Vet
+  team, and Respiratory rate — each a pinnable MCP app (`app_*` tool → `ui://tama/*`
   resource → a hash route in the one bundle). Plus the ambient `/companion`
   and `/sprite-lab`, all served from the same Worker. When embedded in studio,
   studio's pinned-app bar is the navigation, so the in-app header is hidden;
@@ -151,7 +151,7 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 
 | Tool                        | What it does                                  |
 | --------------------------- | --------------------------------------------- |
-| `app_pet` / `app_timeline` / `app_timetable` / `app_exams` / `app_research` / `app_recordings` / `app_assets` / `app_breathing` | The eight pinnable top-level apps |
+| `app_pet` / `app_timeline` / `app_timetable` / `app_exams` / `app_research` / `app_recordings` / `app_assets` / `app_vet_team` / `app_breathing` | The nine pinnable top-level apps |
 | `pet_profile` / `pet_update`| Read / patch the singleton pet                |
 | `pet_profile_refresh`       | AI rebuild of the structured case file ("pet sheet") from the timeline |
 | `pet_profile_update`        | Manual surgical edit of the pet sheet (no AI) |
@@ -162,7 +162,8 @@ Every tool acts on **the** pet (no `petId` argument anywhere).
 | `vet_visit_add` / `_list`   | Log / read vet visits                         |
 | `vaccine_add` / `_list`     | Log / read vaccinations                       |
 | `symptom_add` / `_resolve` / `_list` | Log / resolve / read symptoms        |
-| `vet_team_add` / `_list` / `_update` / `_remove` | The care team — vet/specialist roster |
+| `vet_team_add` / `_list` / `_update` / `_remove` | The care team — vet/specialist roster (its own app) |
+| `vet_team_extract` | AI: auto-fill the team from visits, recordings, and notes |
 | `asset_upload` / `asset_list` | Drop any file → classified into the timeline |
 | `prescription_upload` / `_create` / `_update` / `_list` / `_delete` | Prescriptions |
 | `timetable_get`             | Derived live timetable for next N hours       |

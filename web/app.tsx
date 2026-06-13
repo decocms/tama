@@ -20,12 +20,15 @@ const TOOL_TO_ROUTE: Record<string, string> = {
 	app_recordings: "/recordings",
 	app_assets: "/assets",
 	app_breathing: "/breathing",
+	app_vet_team: "/vet-team",
 	timeline_get: "/timeline",
 	timetable_get: "/timetable",
 	recording_list: "/recordings",
 	recording_create: "/recordings",
 	research_list: "/research",
 	vet_research: "/research",
+	vet_team_list: "/vet-team",
+	vet_team_extract: "/vet-team",
 };
 
 function Root() {

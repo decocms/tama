@@ -96,6 +96,18 @@ export const appAssetsTool = (_env: Env) =>
 		execute: async () => ({}),
 	});
 
+export const appVetTeamTool = (_env: Env) =>
+	createTool({
+		id: "app_vet_team",
+		description:
+			"Open the Vet team app — the roster of vets and specialists on the pet's case (name, specialty, clinic, contact). The agent can auto-fill it from the records with vet_team_extract.",
+		inputSchema: z.object({}),
+		outputSchema: z.object({}),
+		_meta: { ui: { resourceUri: URI.vetTeam } },
+		annotations: { title: "Vet team", readOnlyHint: true },
+		execute: async () => ({}),
+	});
+
 export const appBreathingTool = (_env: Env) =>
 	createTool({
 		id: "app_breathing",

@@ -251,6 +251,22 @@ export function useRemoveVetTeamMember() {
 	});
 }
 
+// AI: scan the records (visits, recordings, notes) and auto-add any vets not
+// already on the team. Returns how many were found and created.
+export function useExtractVetTeam() {
+	const app = useMcpApp();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (extraContext?: string) =>
+			callTool<{
+				created: VetTeamMember[];
+				foundCount: number;
+				alreadyOnTeam: number;
+			}>(app, "vet_team_extract", extraContext ? { extraContext } : {}),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.vetTeam }),
+	});
+}
+
 export function useVaccines() {
 	const app = useMcpApp();
 	return useQuery({

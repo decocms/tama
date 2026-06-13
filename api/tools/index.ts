@@ -7,6 +7,7 @@ import {
 	appResearchTool,
 	appTimelineTool,
 	appTimetableTool,
+	appVetTeamTool,
 } from "./app-surfaces.ts";
 import { assetListTool, assetUploadTool } from "./assets.ts";
 import {
@@ -73,6 +74,7 @@ import {
 } from "./timetable.ts";
 import {
 	vetTeamAddTool,
+	vetTeamExtractTool,
 	vetTeamListTool,
 	vetTeamRemoveTool,
 	vetTeamUpdateTool,
@@ -88,6 +90,7 @@ export const tools = [
 	appResearchTool,
 	appRecordingsTool,
 	appAssetsTool,
+	appVetTeamTool,
 	appBreathingTool,
 	// Pet — the case file ("pet sheet") has one read + two writers: an AI
 	// rebuild (refresh) and a manual surgical edit (update). No separate
@@ -116,6 +119,7 @@ export const tools = [
 	vetTeamListTool,
 	vetTeamUpdateTool,
 	vetTeamRemoveTool,
+	vetTeamExtractTool,
 	// Assets intake
 	assetUploadTool,
 	assetListTool,

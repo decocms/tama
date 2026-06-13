@@ -26,6 +26,7 @@ import { SpriteLabPage } from "./pages/SpriteLab.tsx";
 import { SubscribePage } from "./pages/Subscribe.tsx";
 import { TimelinePage } from "./pages/Timeline.tsx";
 import { TimetablePage } from "./pages/Timetable.tsx";
+import { VetTeamPage } from "./pages/VetTeam.tsx";
 
 const queryClient = new QueryClient({
 	defaultOptions: { queries: { staleTime: 10_000, retry: 1 } },
@@ -96,6 +97,12 @@ const breathing = createRoute({
 	component: BreathingPage,
 });
 
+const vetTeam = createRoute({
+	getParentRoute: () => rootRoute,
+	path: "/vet-team",
+	component: VetTeamPage,
+});
+
 const spriteLab = createRoute({
 	getParentRoute: () => rootRoute,
 	path: "/sprite-lab",
@@ -124,6 +131,7 @@ const routeTree = rootRoute.addChildren([
 	assets,
 	companion,
 	breathing,
+	vetTeam,
 	spriteLab,
 	subscribe,
 ]);

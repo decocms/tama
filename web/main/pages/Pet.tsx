@@ -7,7 +7,6 @@ import type { PetProfile, TimetableEntry } from "@/types/api.ts";
 import { TimeBox } from "../components/Card.tsx";
 import { Layout } from "../components/Layout.tsx";
 import { PetHero } from "../components/PetHero.tsx";
-import { VetTeamCard } from "../components/VetTeamCard.tsx";
 import { usePet, useRefreshProfile, useTimetable } from "../lib/queries.ts";
 
 // The Pet app: profile, a live timetable-status line, the pet sheet, and the
@@ -47,8 +46,6 @@ export function PetPage() {
 								})
 							}
 						/>
-
-						<VetTeamCard />
 					</>
 				)}
 			</div>

@@ -99,6 +99,12 @@ export const uiResources = [
 		"Measure resting breaths-per-minute with the camera.",
 		"/breathing",
 	),
+	htmlResource(
+		URI.vetTeam,
+		"Vet team",
+		"The roster of vets and specialists on the pet's case — name, specialty, clinic, contact.",
+		"/vet-team",
+	),
 	// Inline tool surfaces — rendered as tool RESULTS (toolInfo present), so they
 	// route by tool name in web/app.tsx and don't need a baked route.
 	htmlResource(URI.petGet, "Pet profile", "Inline pet profile view."),
