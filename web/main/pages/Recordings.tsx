@@ -1,9 +1,8 @@
 import { Check, Mic, Sparkles, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { cn } from "@/lib/utils.ts";
 import type { Recording } from "@/types/api.ts";
 import { Layout } from "../components/Layout.tsx";
@@ -18,38 +17,20 @@ import {
 } from "../lib/queries.ts";
 
 // Recordings surface. Drop one or more audio files → each is decoded into
-// Whisper-sized WAV chunks in the browser, uploaded, and transcribed. Then
-// tick the ones you want analyzed together and the agent writes a single
-// summary into the pet's timeline + long-term notes. Pet-scoped — no episodes.
+// Whisper-sized WAV chunks in the browser, uploaded, transcribed, and then
+// automatically summarized into the pet's timeline (files dropped together
+// become one combined note). Each transcribed row also has its own "Analyze"
+// button to (re)summarize it on demand. Pet-scoped — no episodes.
 export function RecordingsPage() {
 	const { data: recordings } = useRecordings();
 	const [progress, setProgress] = useState<string | null>(null);
-	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const create = useCreateRecording();
 	const addChunk = useAddChunk();
 	const transcribe = useTranscribeRecording();
 	const applyGroup = useApplyRecordingGroup();
 
-	// Auto-select every freshly-transcribed recording so a typical flow is
-	// "drop files → wait → click Analyze" without manual ticking. Only flips
-	// the box from unchecked → checked; never un-checks user choices.
-	useEffect(() => {
-		if (!recordings) return;
-		setSelected((prev) => {
-			let changed = false;
-			const next = new Set(prev);
-			for (const r of recordings) {
-				if (r.status === "transcribed" && !next.has(r.id)) {
-					next.add(r.id);
-					changed = true;
-				}
-			}
-			return changed ? next : prev;
-		});
-	}, [recordings]);
-
-	const handleFile = async (file: File) => {
+	const handleFile = async (file: File): Promise<string> => {
 		const label = file.name;
 		setProgress(`reading ${label}…`);
 		const original = await fileToBase64(file);
@@ -90,8 +71,8 @@ export function RecordingsPage() {
 			}
 			// Carry the batch all the way to the timeline: the files dropped
 			// together are analyzed together into ONE summary note. Without this
-			// the upload stopped at "transcribed" and waited for a manual Analyze
-			// click — which read as "nothing happened".
+			// the upload stopped at "transcribed" and waited for a manual click —
+			// which read as "nothing happened".
 			if (ids.length > 0) {
 				setProgress(
 					ids.length === 1 ? "analyzing…" : `analyzing ${ids.length} together…`,
@@ -110,42 +91,6 @@ export function RecordingsPage() {
 		}
 	};
 
-	const toggleSelect = (id: string) => {
-		setSelected((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	};
-
-	const selectableIds = (recordings ?? [])
-		.filter((r) => r.status === "transcribed" || r.status === "summarized")
-		.map((r) => r.id);
-
-	const handleAnalyze = () => {
-		const ids = Array.from(selected).filter((id) => selectableIds.includes(id));
-		if (ids.length === 0) return;
-		applyGroup.mutate(
-			{ recordingIds: ids },
-			{
-				onSuccess: () => {
-					setSelected(new Set());
-					toast.success(
-						ids.length === 1
-							? "Analysis applied to the timeline"
-							: `Analysis from ${ids.length} recordings applied to the timeline`,
-					);
-				},
-				onError: (e) => toast.error((e as Error).message),
-			},
-		);
-	};
-
-	const eligibleSelectedCount = Array.from(selected).filter((id) =>
-		selectableIds.includes(id),
-	).length;
-
 	return (
 		<Layout breadcrumb="Recordings">
 			<div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
@@ -153,50 +98,34 @@ export function RecordingsPage() {
 					eyebrow="Voice notes & vet visits"
 					title="Recordings"
 					action={
-						<div className="flex items-center gap-2">
-							<label className="inline-flex">
-								<input
-									type="file"
-									accept="audio/*,video/mp4,video/quicktime"
-									multiple
-									className="sr-only"
-									onChange={(e) => {
-										const fs = Array.from(e.target.files ?? []);
-										if (fs.length > 0) handleFiles(fs);
-										e.target.value = "";
-									}}
-									disabled={!!progress}
-								/>
-								<Button
-									size="sm"
-									variant="outline"
-									type="button"
-									disabled={!!progress}
-									onClick={(e) => {
-										const input = (
-											e.currentTarget.parentElement as HTMLLabelElement
-										).querySelector("input");
-										input?.click();
-									}}
-								>
-									<Mic className="w-3.5 h-3.5" /> Upload audio
-								</Button>
-							</label>
-							{eligibleSelectedCount > 0 ? (
-								<Button
-									size="sm"
-									onClick={handleAnalyze}
-									disabled={applyGroup.isPending}
-								>
-									<Sparkles className="w-3.5 h-3.5" />
-									{applyGroup.isPending
-										? "Analyzing…"
-										: eligibleSelectedCount === 1
-											? "Analyze 1 recording"
-											: `Analyze ${eligibleSelectedCount} together`}
-								</Button>
-							) : null}
-						</div>
+						<label className="inline-flex">
+							<input
+								type="file"
+								accept="audio/*,video/mp4,video/quicktime"
+								multiple
+								className="sr-only"
+								onChange={(e) => {
+									const fs = Array.from(e.target.files ?? []);
+									if (fs.length > 0) handleFiles(fs);
+									e.target.value = "";
+								}}
+								disabled={!!progress}
+							/>
+							<Button
+								size="sm"
+								variant="outline"
+								type="button"
+								disabled={!!progress}
+								onClick={(e) => {
+									const input = (
+										e.currentTarget.parentElement as HTMLLabelElement
+									).querySelector("input");
+									input?.click();
+								}}
+							>
+								<Mic className="w-3.5 h-3.5" /> Upload audio
+							</Button>
+						</label>
 					}
 				>
 					<div className="rounded-2xl bg-card border border-border/60 overflow-hidden">
@@ -209,12 +138,7 @@ export function RecordingsPage() {
 						{recordings && recordings.length > 0 ? (
 							<ul className="divide-y divide-border/60">
 								{recordings.map((r) => (
-									<RecordingRow
-										key={r.id}
-										recording={r}
-										selected={selected.has(r.id)}
-										onToggle={() => toggleSelect(r.id)}
-									/>
+									<RecordingRow key={r.id} recording={r} />
 								))}
 							</ul>
 						) : (
@@ -232,38 +156,31 @@ export function RecordingsPage() {
 	);
 }
 
-function RecordingRow({
-	recording,
-	selected,
-	onToggle,
-}: {
-	recording: Recording;
-	selected: boolean;
-	onToggle: () => void;
-}) {
-	const canSelect =
+function RecordingRow({ recording }: { recording: Recording }) {
+	const apply = useApplyRecordingGroup();
+	const canAnalyze =
 		recording.status === "transcribed" || recording.status === "summarized";
 	const isApplied = recording.status === "applied";
 	const isError = recording.status === "error";
 
+	const analyze = () =>
+		apply.mutate(
+			{ recordingIds: [recording.id] },
+			{
+				onSuccess: () => toast.success("Added to the timeline"),
+				onError: (e) => toast.error((e as Error).message),
+			},
+		);
+
 	return (
-		<li
-			className={cn(
-				"flex items-start gap-3 px-4 py-3",
-				canSelect && selected ? "bg-primary/5" : "",
-			)}
-		>
+		<li className="flex items-start gap-3 px-4 py-3">
 			<div className="w-6 flex items-center justify-center mt-0.5">
-				{canSelect ? (
-					<Checkbox
-						checked={selected}
-						onCheckedChange={onToggle}
-						aria-label="Select for analysis"
-					/>
-				) : isApplied ? (
+				{isApplied ? (
 					<Check className="w-4 h-4 text-[var(--color-status-given)]" />
 				) : isError ? (
 					<X className="w-4 h-4 text-[var(--color-status-overdue)]" />
+				) : canAnalyze ? (
+					<div className="w-2 h-2 rounded-full bg-primary" />
 				) : (
 					<div className="w-2 h-2 rounded-full bg-muted-foreground/40 animate-pulse" />
 				)}
@@ -277,9 +194,8 @@ function RecordingRow({
 					{recording.numChunks} chunk{recording.numChunks === 1 ? "" : "s"}
 					{recording.error ? ` · ${recording.error}` : ""}
 				</div>
-				{/* Quick glance at what's in each recording — the AI summary once
-				    it's been generated/applied. Falls back to a transcript snippet
-				    so transcribed-but-not-yet-analyzed rows still preview. */}
+				{/* Quick glance: the AI summary once analyzed, else a transcript
+				    snippet so transcribed-but-not-yet-analyzed rows still preview. */}
 				{recording.summary ? (
 					<p className="mt-1 text-xs text-foreground/75 line-clamp-2 leading-snug">
 						{recording.summary}
@@ -290,7 +206,24 @@ function RecordingRow({
 					</p>
 				) : null}
 			</div>
-			<StatusBadge status={recording.status} />
+			<div className="flex items-center gap-2 shrink-0">
+				{canAnalyze ? (
+					<Button
+						size="sm"
+						variant={recording.status === "summarized" ? "outline" : "default"}
+						onClick={analyze}
+						disabled={apply.isPending}
+					>
+						<Sparkles className="w-3.5 h-3.5" />
+						{apply.isPending
+							? "Analyzing…"
+							: recording.status === "summarized"
+								? "Re-analyze"
+								: "Analyze"}
+					</Button>
+				) : null}
+				<StatusBadge status={recording.status} />
+			</div>
 		</li>
 	);
 }
