@@ -79,18 +79,30 @@ export function RecordingsPage() {
 
 		setProgress(`${label} · transcribing…`);
 		await transcribe.mutateAsync({ recordingId: rec.id });
+		return rec.id;
 	};
 
 	const handleFiles = async (files: File[]) => {
 		try {
+			const ids: string[] = [];
 			for (const f of files) {
-				await handleFile(f);
+				ids.push(await handleFile(f));
+			}
+			// Carry the batch all the way to the timeline: the files dropped
+			// together are analyzed together into ONE summary note. Without this
+			// the upload stopped at "transcribed" and waited for a manual Analyze
+			// click — which read as "nothing happened".
+			if (ids.length > 0) {
+				setProgress(
+					ids.length === 1 ? "analyzing…" : `analyzing ${ids.length} together…`,
+				);
+				await applyGroup.mutateAsync({ recordingIds: ids });
 			}
 			setProgress(null);
 			toast.success(
 				files.length === 1
-					? "Audio uploaded and transcribed"
-					: `${files.length} audios uploaded and transcribed`,
+					? "Audio transcribed and added to the timeline"
+					: `${files.length} audios transcribed and added to the timeline`,
 			);
 		} catch (err) {
 			setProgress(`failed: ${(err as Error).message}`);
@@ -208,9 +220,9 @@ export function RecordingsPage() {
 						) : (
 							<div className="px-4 py-10 text-sm text-muted-foreground text-center">
 								No recordings yet. Drop one or more audio files above — a vet
-								visit you recorded, a voice memo about a symptom. They'll be
-								transcribed automatically, then you can analyze the ones you
-								choose together into a single timeline entry.
+								visit you recorded, a voice memo about a symptom. They're
+								transcribed and summarized into your timeline automatically;
+								files dropped together become one combined note.
 							</div>
 						)}
 					</div>
