@@ -53,7 +53,10 @@ function mcpAuthRejection(req: Request, env: Env | undefined): Response | null {
 		JSON.stringify({
 			jsonrpc: "2.0",
 			id: null,
-			error: { code: -32001, message: "Unauthorized: missing or invalid bearer token" },
+			error: {
+				code: -32001,
+				message: "Unauthorized: missing or invalid bearer token",
+			},
 		}),
 		{
 			status: 401,
@@ -152,7 +155,22 @@ function withAssetsAndMcpRoutes(fetcher: Fetcher): Fetcher {
 		// Static UI files come from the ASSETS binding (Workers static assets)
 		if (env?.ASSETS) {
 			try {
-				return await env.ASSETS.fetch(req);
+				const res = await env.ASSETS.fetch(req);
+				// The whole SPA is inlined into ONE index.html (Vite singlefile — no
+				// hashed JS chunks), so the only way a deploy reaches the client is if
+				// that HTML isn't served stale. Force revalidation on HTML; the ETag
+				// still yields a cheap 304 when nothing changed.
+				const ct = res.headers.get("content-type") ?? "";
+				if (ct.includes("text/html")) {
+					const headers = new Headers(res.headers);
+					headers.set("cache-control", "no-cache, must-revalidate");
+					return new Response(res.body, {
+						status: res.status,
+						statusText: res.statusText,
+						headers,
+					});
+				}
+				return res;
 			} catch {
 				// fall through to runtime
 			}
