@@ -368,7 +368,34 @@ export function useLogDose() {
 			status?: "given" | "skipped" | "undone";
 			note?: string;
 		}) => callTool(app, "dose_log", input),
-		onSuccess: () => invalidateAll(qc),
+		// Optimistic: flip the clicked slot's status immediately so the row leaves
+		// the pending section the instant you tap, instead of waiting for the
+		// server round-trip. Needs plannedAt to know which slot (an item can have
+		// several). Reconciled by the invalidate in onSettled; rolled back on error.
+		onMutate: async (input) => {
+			if (!input.plannedAt || input.status === "undone") return;
+			await qc.cancelQueries({ queryKey: keys.timetable });
+			const prev = qc.getQueryData<TimetableEntry[]>(keys.timetable);
+			if (prev) {
+				const next = input.status === "skipped" ? "skipped" : "given";
+				qc.setQueryData<TimetableEntry[]>(
+					keys.timetable,
+					prev.map((e) =>
+						e.status === "pending" &&
+						e.itemName === input.itemName &&
+						e.scheduledAt === input.plannedAt
+							? { ...e, status: next }
+							: e,
+					),
+				);
+			}
+			return { prev };
+		},
+		onError: (_e, _input, ctx) => {
+			const prev = (ctx as { prev?: TimetableEntry[] } | undefined)?.prev;
+			if (prev) qc.setQueryData(keys.timetable, prev);
+		},
+		onSettled: () => invalidateAll(qc),
 	});
 }
 

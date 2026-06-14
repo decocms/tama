@@ -210,15 +210,25 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 
 	const entries: TimetableEntry[] = [];
 
-	// Per-item dose times (non-undone), for suppressing already-acted slots in
-	// fixed-clock mode. Keyed by lowercased item name.
-	const doseMsByName = new Map<string, number[]>();
+	// Per-item dose info (non-undone), for suppressing already-acted slots in
+	// fixed-clock mode. A dose tagged with a plannedAt (logged against a specific
+	// slot — e.g. the Give/Skip buttons, or the agent passing a planned time)
+	// clears THAT slot exactly, however late it was logged. An untagged/ad-hoc
+	// dose falls back to proximity (nearest slot). Keyed by lowercased item name.
+	const dosePlannedByName = new Map<string, Set<number>>();
+	const doseActualByName = new Map<string, number[]>();
 	for (const d of doses) {
 		if (d.status === "undone") continue;
 		const k = d.itemName.trim().toLowerCase();
-		const arr = doseMsByName.get(k) ?? [];
-		arr.push(new Date(d.actualAt).getTime());
-		doseMsByName.set(k, arr);
+		if (d.plannedAt) {
+			const set = dosePlannedByName.get(k) ?? new Set<number>();
+			set.add(new Date(d.plannedAt).getTime());
+			dosePlannedByName.set(k, set);
+		} else {
+			const arr = doseActualByName.get(k) ?? [];
+			arr.push(new Date(d.actualAt).getTime());
+			doseActualByName.set(k, arr);
+		}
 	}
 
 	// Future / current entries.
@@ -253,18 +263,22 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 				anchorMs,
 			).filter((s) => s >= startMs && s < endMs);
 
-			// A given/skipped dose clears the ONE slot it belongs to: its NEAREST
-			// projected slot, if within half the spacing between slots. Tying the
-			// tolerance to the real cadence — ~12h for once-daily, 24h for every-48h,
-			// a couple hours for 4×/day meals — means a dose logged hours off its
-			// scheduled time still clears that slot, while one dose never swallows the
-			// neighbouring slot (nearest-only). The old flat 6h cap left a once/twice-
-			// daily med given >6h late stranded as "overdue" beside its own "given" row.
+			// A dose logged against a specific slot (plannedAt — the Give/Skip
+			// buttons send it) clears THAT slot exactly, however late it was tapped.
+			// An untagged/ad-hoc dose falls back to its NEAREST slot within half the
+			// cadence (~12h once-daily, 24h every-48h, a couple hours for 4×/day) —
+			// one dose never swallows the neighbouring slot (nearest-only).
 			const gapHours = times.length > 1 ? minGapHours(times) : strideDays * 24;
 			const toleranceMs = (gapHours / 2) * HOUR_MS;
-			const acted =
-				doseMsByName.get(item.displayName.trim().toLowerCase()) ?? [];
+			const nameLc = item.displayName.trim().toLowerCase();
+			const plannedSet = dosePlannedByName.get(nameLc);
+			const acted = doseActualByName.get(nameLc) ?? [];
 			const claimed = new Set<number>();
+			if (plannedSet) {
+				for (const slotMs of slots) {
+					if (plannedSet.has(slotMs)) claimed.add(slotMs);
+				}
+			}
 			for (const d of acted) {
 				let best = -1;
 				let bestDist = Infinity;

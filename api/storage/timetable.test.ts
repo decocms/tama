@@ -230,6 +230,42 @@ describe("deriveTimetable (anchor model)", () => {
 		expect(prelone[0].status).toBe("given");
 	});
 
+	it("a dose tagged with its slot (plannedAt) clears that slot however late", () => {
+		// 4×/day meal at 07/13/18/23 BRT (proximity tolerance only ~2.5h). The
+		// 07:00 slot given at 23:00 — 16h late — but the Give button tags the dose
+		// with plannedAt=07:00, so that exact slot clears. Proximity alone would
+		// have cleared the WRONG slot (the 23:00 one, nearest the actual time).
+		const state = makeState({
+			displayName: "PAPA (refeição)",
+			kind: "meal",
+			intervalHours: 8,
+			timesJson: JSON.stringify(["07:00", "13:00", "18:00", "23:00"]),
+			startsAt: "2026-06-01T00:00:00.000Z",
+			anchorAt: "2026-06-13T10:00:00.000Z",
+		});
+		const slot07Utc = "2026-06-13T10:00:00.000Z"; // 07:00 BRT
+		const tagged = makeDose({
+			id: "d_tagged",
+			itemName: "PAPA (refeição)",
+			kind: "meal",
+			plannedAt: slot07Utc,
+			actualAt: "2026-06-14T02:00:00.000Z", // 23:00 BRT — 16h after the slot
+			status: "given",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [tagged],
+			from: new Date("2026-06-13T00:00:00.000Z"),
+			to: new Date("2026-06-14T03:00:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		const pendingTimes = entries
+			.filter((e) => e.status === "pending")
+			.map((e) => e.scheduledAt);
+		expect(pendingTimes).not.toContain(slot07Utc); // exact tagged slot cleared
+		expect(pendingTimes).toContain("2026-06-13T16:00:00.000Z"); // 13:00 BRT untouched
+	});
+
 	it("a once-daily dose clears only its own slot, not the next day's", () => {
 		// Daily at 10:00 BRT (13:00 UTC). A dose given 3h late on the 13th must
 		// clear the 13th's slot but leave the 14th's pending — one dose, one slot.

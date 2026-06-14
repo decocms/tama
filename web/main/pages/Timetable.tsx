@@ -104,10 +104,16 @@ function DoseRow({
 
 	const give = (status: "given" | "skipped") =>
 		log.mutate(
-			{ itemName: entry.itemName, kind: entry.kind, status },
 			{
-				onSuccess: () =>
-					toast.success(`${entry.itemName} ${status}`),
+				itemName: entry.itemName,
+				kind: entry.kind,
+				status,
+				// Tag the dose to THIS slot so it always clears this row (not a guess
+				// by time-proximity), and so the optimistic update knows which row.
+				plannedAt: entry.scheduledAt,
+			},
+			{
+				onSuccess: () => toast.success(`${entry.itemName} ${status}`),
 				onError: (e) => toast.error((e as Error).message),
 			},
 		);
