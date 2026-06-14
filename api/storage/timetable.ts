@@ -230,7 +230,9 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 		// projection must not spill doses past the course's end — e.g. an 8-day
 		// antibiotic shouldn't show a 9th day, nor an every-48h course a dose
 		// beyond its last on-day.)
-		const startMs = item.startsAt ? new Date(item.startsAt).getTime() : -Infinity;
+		const startMs = item.startsAt
+			? new Date(item.startsAt).getTime()
+			: -Infinity;
 		const endMs = item.endsAt ? new Date(item.endsAt).getTime() : Infinity;
 
 		const times = parseTimesJson(item.timesJson);
@@ -242,24 +244,42 @@ export function deriveTimetable(input: DeriveInput): TimetableEntry[] {
 			const strideDays =
 				item.intervalHours > 24 ? Math.round(item.intervalHours / 24) : 1;
 			const anchorMs = new Date(item.startsAt ?? item.anchorAt).getTime();
-			const halfWindowMs = Math.min(
-				6,
-				Math.max(0.5, minGapHours(times) / 2),
-			) * HOUR_MS;
-			const acted = doseMsByName.get(item.displayName.trim().toLowerCase()) ?? [];
-			for (const slotMs of clockSlotsInWindow(
+			const slots = clockSlotsInWindow(
 				times,
 				tz,
 				fromMs,
 				toMs,
 				strideDays,
 				anchorMs,
-			)) {
-				if (slotMs < startMs || slotMs >= endMs) continue;
-				const suppressed = acted.some(
-					(d) => Math.abs(d - slotMs) <= halfWindowMs,
-				);
-				if (suppressed) continue;
+			).filter((s) => s >= startMs && s < endMs);
+
+			// A given/skipped dose clears the ONE slot it belongs to: its NEAREST
+			// projected slot, if within half the spacing between slots. Tying the
+			// tolerance to the real cadence — ~12h for once-daily, 24h for every-48h,
+			// a couple hours for 4×/day meals — means a dose logged hours off its
+			// scheduled time still clears that slot, while one dose never swallows the
+			// neighbouring slot (nearest-only). The old flat 6h cap left a once/twice-
+			// daily med given >6h late stranded as "overdue" beside its own "given" row.
+			const gapHours = times.length > 1 ? minGapHours(times) : strideDays * 24;
+			const toleranceMs = (gapHours / 2) * HOUR_MS;
+			const acted =
+				doseMsByName.get(item.displayName.trim().toLowerCase()) ?? [];
+			const claimed = new Set<number>();
+			for (const d of acted) {
+				let best = -1;
+				let bestDist = Infinity;
+				for (const s of slots) {
+					const dist = Math.abs(d - s);
+					if (dist < bestDist) {
+						bestDist = dist;
+						best = s;
+					}
+				}
+				if (best >= 0 && bestDist <= toleranceMs) claimed.add(best);
+			}
+
+			for (const slotMs of slots) {
+				if (claimed.has(slotMs)) continue;
 				entries.push({
 					id: `${item.id}:${new Date(slotMs).toISOString()}`,
 					prescriptionId: item.prescriptionId ?? "",

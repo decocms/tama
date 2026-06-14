@@ -193,6 +193,73 @@ describe("deriveTimetable (anchor model)", () => {
 		expect(entries).toHaveLength(4);
 	});
 
+	it("a clock-time dose given hours late still clears its slot (no phantom overdue)", () => {
+		// Beto's bug: Prelone Phase 2 at 10:00 BRT (13:00 UTC) every 48h from the
+		// 11th, given at 18:44 BRT (21:44 UTC) on the 13th — ~8.7h late. The old
+		// flat 6h suppression window left the 10:00 slot stuck as overdue beside
+		// the given row. The dose must clear its slot.
+		const state = makeState({
+			displayName: "PRELONE 3mg/ml",
+			intervalHours: 48,
+			timesJson: JSON.stringify(["10:00"]),
+			startsAt: "2026-06-11T13:00:00.000Z",
+			endsAt: "2026-06-18T13:00:00.000Z",
+			anchorAt: "2026-06-11T13:00:00.000Z",
+		});
+		const late = makeDose({
+			id: "d_late_prelone",
+			itemName: "PRELONE 3mg/ml",
+			actualAt: "2026-06-13T21:44:00.000Z",
+			status: "given",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [late],
+			from: new Date("2026-06-13T00:00:00.000Z"),
+			to: new Date("2026-06-14T00:00:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		// The 06-13 10:00 (13:00 UTC) slot is suppressed by the late dose…
+		const pending = entries.filter((e) => e.status === "pending");
+		expect(
+			pending.find((e) => e.scheduledAt === "2026-06-13T13:00:00.000Z"),
+		).toBeUndefined();
+		// …and the only PRELONE entry that day is the given dose at its real time.
+		const prelone = entries.filter((e) => e.itemName === "PRELONE 3mg/ml");
+		expect(prelone).toHaveLength(1);
+		expect(prelone[0].status).toBe("given");
+	});
+
+	it("a once-daily dose clears only its own slot, not the next day's", () => {
+		// Daily at 10:00 BRT (13:00 UTC). A dose given 3h late on the 13th must
+		// clear the 13th's slot but leave the 14th's pending — one dose, one slot.
+		const state = makeState({
+			displayName: "PRELONE 3mg/ml",
+			intervalHours: 24,
+			timesJson: JSON.stringify(["10:00"]),
+			startsAt: "2026-06-01T13:00:00.000Z",
+			anchorAt: "2026-06-13T13:00:00.000Z",
+		});
+		const given = makeDose({
+			id: "d_daily",
+			itemName: "PRELONE 3mg/ml",
+			actualAt: "2026-06-13T16:00:00.000Z",
+			status: "given",
+		});
+		const entries = deriveTimetable({
+			scheduleStates: [state],
+			doses: [given],
+			from: new Date("2026-06-13T00:00:00.000Z"),
+			to: new Date("2026-06-15T00:00:00.000Z"),
+			timeZone: "America/Sao_Paulo",
+		});
+		const pendingTimes = entries
+			.filter((e) => e.status === "pending")
+			.map((e) => e.scheduledAt);
+		expect(pendingTimes).not.toContain("2026-06-13T13:00:00.000Z");
+		expect(pendingTimes).toContain("2026-06-14T13:00:00.000Z");
+	});
+
 	it("does not project clock-time slots past endsAt", () => {
 		// 8-day antibiotic at 15:00 BRT (18:00 UTC), ends 06-15T17:00Z → last dose
 		// is the 06-14 slot; the 06-15 slot (18:00 > 17:00 end) and beyond are cut.
