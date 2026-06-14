@@ -6,7 +6,12 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@/components/ui/tabs.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { formatDateTime } from "@/lib/format.ts";
 import type { Exam, ExamMetricSeriesPoint } from "@/types/api.ts";
@@ -37,6 +42,7 @@ import {
 // Per-body-system accent colors — the panels read as a color-coded chart.
 const PANEL_COLOR: Record<string, string> = {
 	cbc: "#c0492b",
+	leukogram: "#4f46c7",
 	"biochem-liver": "#b07d1a",
 	"biochem-kidney": "#2b5ba1",
 	"biochem-protein": "#2f6b4d",
@@ -56,9 +62,7 @@ export function ExamsPage() {
 	const hasData = (series ?? []).length > 0;
 
 	return (
-		<Layout
-			breadcrumb={<span>exams</span>}
-		>
+		<Layout breadcrumb={<span>exams</span>}>
 			<div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
 				<Section
 					title="Panel overview"
@@ -212,11 +216,7 @@ function UploadCard({ onCreated }: { onCreated: (examId: string) => void }) {
 						value={pasteText}
 						onChange={(e) => setPasteText(e.target.value)}
 					/>
-					<Button
-						size="sm"
-						onClick={handlePaste}
-						disabled={paste.isPending}
-					>
+					<Button size="sm" onClick={handlePaste} disabled={paste.isPending}>
 						<FlaskConical className="w-3.5 h-3.5" />
 						{paste.isPending ? "Extracting…" : "Extract metrics"}
 					</Button>

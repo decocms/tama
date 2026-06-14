@@ -4,6 +4,7 @@
 
 export type Panel =
 	| "cbc"
+	| "leukogram"
 	| "biochem-liver"
 	| "biochem-kidney"
 	| "biochem-protein"
@@ -26,12 +27,12 @@ export const LAB_TAXONOMY: MetricDef[] = [
 	{ key: "mcv", label: "MCV", unit: "fL", panel: "cbc" },
 	{ key: "mchc", label: "MCHC", unit: "g/dL", panel: "cbc" },
 	{ key: "reticulocytes", label: "Reticulocytes", unit: "/µL", panel: "cbc" },
-	{ key: "wbc", label: "WBC", unit: "10^3/µL", panel: "cbc" },
-	{ key: "neutrophils", label: "Neutrophils", unit: "/µL", panel: "cbc" },
-	{ key: "lymphocytes", label: "Lymphocytes", unit: "/µL", panel: "cbc" },
-	{ key: "monocytes", label: "Monocytes", unit: "/µL", panel: "cbc" },
-	{ key: "eosinophils", label: "Eosinophils", unit: "/µL", panel: "cbc" },
-	{ key: "basophils", label: "Basophils", unit: "/µL", panel: "cbc" },
+	{ key: "wbc", label: "WBC", unit: "10^3/µL", panel: "leukogram" },
+	{ key: "neutrophils", label: "Neutrophils", unit: "/µL", panel: "leukogram" },
+	{ key: "lymphocytes", label: "Lymphocytes", unit: "/µL", panel: "leukogram" },
+	{ key: "monocytes", label: "Monocytes", unit: "/µL", panel: "leukogram" },
+	{ key: "eosinophils", label: "Eosinophils", unit: "/µL", panel: "leukogram" },
+	{ key: "basophils", label: "Basophils", unit: "/µL", panel: "leukogram" },
 	{ key: "platelets", label: "Platelets", unit: "10^3/µL", panel: "cbc" },
 	{ key: "alt", label: "ALT (TGP)", unit: "U/L", panel: "biochem-liver" },
 	{ key: "ast", label: "AST (TGO)", unit: "U/L", panel: "biochem-liver" },
@@ -100,8 +101,11 @@ export const TAXONOMY_BY_KEY: Record<string, MetricDef> = Object.fromEntries(
 	LAB_TAXONOMY.map((m) => [m.key, m]),
 );
 
+// Order = render order in the overview. White series (leukogram) sits second,
+// right after the red-series CBC — the two halves of the blood count side by side.
 export const PANELS: Panel[] = [
 	"cbc",
+	"leukogram",
 	"biochem-liver",
 	"biochem-kidney",
 	"biochem-protein",
@@ -113,6 +117,7 @@ export const PANELS: Panel[] = [
 
 export const PANEL_LABEL: Record<Panel, string> = {
 	cbc: "CBC",
+	leukogram: "White series",
 	"biochem-liver": "Liver",
 	"biochem-kidney": "Kidney",
 	"biochem-protein": "Protein",
@@ -126,6 +131,7 @@ export const PANEL_LABEL: Record<Panel, string> = {
 // commonly tracked across labs so first impressions are signal-dense.
 export const PANEL_DEFAULT_KEYS: Record<Panel, string[]> = {
 	cbc: ["hemoglobin", "hematocrit", "platelets"],
+	leukogram: ["wbc", "neutrophils"],
 	"biochem-liver": ["alt", "alp"],
 	"biochem-kidney": ["urea", "creatinine"],
 	"biochem-protein": ["albumin", "total_protein"],

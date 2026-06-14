@@ -1,4 +1,4 @@
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
@@ -15,11 +15,11 @@ import { MetricChart } from "../components/MetricChart.tsx";
 import { Section } from "../components/Section.tsx";
 import { useMetricSeries, usePet } from "../lib/queries.ts";
 import {
-	type Panel,
-	PANELS,
 	PANEL_LABEL,
-	TAXONOMY_BY_KEY,
+	PANELS,
+	type Panel,
 	panelOf,
+	TAXONOMY_BY_KEY,
 } from "../lib/taxonomy.ts";
 
 interface ExamsDetailSearch {
@@ -30,6 +30,7 @@ export function ExamsDetailPage() {
 	const search = useSearch({ from: "/exams/detail" }) as
 		| ExamsDetailSearch
 		| undefined;
+	const navigate = useNavigate();
 	const { data: pet } = usePet();
 	const { data: series, isLoading } = useMetricSeries([]);
 
@@ -38,13 +39,17 @@ export function ExamsDetailPage() {
 		return new Set(raw);
 	}, [search?.keys]);
 
+	// Toggle via the router (same as how the overview enters this view) instead
+	// of hand-writing window.location.hash. The manual hash write desynced from
+	// TanStack's search-param state, so clicking a metric dropped you out of the
+	// charted view. `replace` keeps the back button sane while toggling.
 	const setSelectedKeys = (next: Set<string>) => {
 		const csv = Array.from(next).sort().join(",");
-		const url = new URL(window.location.href);
-		const hash = url.hash.replace(/^#/, "");
-		const [path] = hash.split("?");
-		const newHash = csv ? `${path}?keys=${encodeURIComponent(csv)}` : path;
-		window.location.hash = `#${newHash}`;
+		navigate({
+			to: "/exams/detail",
+			search: { keys: csv || undefined },
+			replace: true,
+		});
 	};
 
 	const toggleKey = (k: string) => {
@@ -110,7 +115,8 @@ export function ExamsDetailPage() {
 								Metrics
 							</span>
 							<span className="text-xs text-muted-foreground">
-								{selectedArr.length} selected · {filtersOpen ? "hide" : "change"}
+								{selectedArr.length} selected ·{" "}
+								{filtersOpen ? "hide" : "change"}
 							</span>
 						</Button>
 						{filtersOpen ? (
@@ -158,10 +164,7 @@ export function ExamsDetailPage() {
 									keys={selectedArr}
 									height={360}
 								/>
-								<MetricLegend
-									series={series ?? []}
-									keys={selectedArr}
-								/>
+								<MetricLegend series={series ?? []} keys={selectedArr} />
 							</div>
 						)}
 					</Section>

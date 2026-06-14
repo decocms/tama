@@ -10,6 +10,7 @@
 
 export type Panel =
 	| "cbc"
+	| "leukogram"
 	| "biochem-liver"
 	| "biochem-kidney"
 	| "biochem-protein"
@@ -50,7 +51,13 @@ export const LAB_TAXONOMY: MetricDef[] = [
 		label: "RBC",
 		unit: "10^6/µL",
 		panel: "cbc",
-		synonyms: ["hemácias", "hemacias", "eritrócitos", "eritrocitos", "red blood cells"],
+		synonyms: [
+			"hemácias",
+			"hemacias",
+			"eritrócitos",
+			"eritrocitos",
+			"red blood cells",
+		],
 		refByCanine: { low: 5.5, high: 8.5 },
 	},
 	{
@@ -80,43 +87,48 @@ export const LAB_TAXONOMY: MetricDef[] = [
 		key: "wbc",
 		label: "WBC",
 		unit: "10^3/µL",
-		panel: "cbc",
-		synonyms: ["leucócitos", "leucocitos", "white blood cells", "global de leucócitos"],
+		panel: "leukogram",
+		synonyms: [
+			"leucócitos",
+			"leucocitos",
+			"white blood cells",
+			"global de leucócitos",
+		],
 		refByCanine: { low: 6.0, high: 17.0 },
 	},
 	{
 		key: "neutrophils",
 		label: "Neutrophils",
 		unit: "/µL",
-		panel: "cbc",
+		panel: "leukogram",
 		synonyms: ["neutrófilos", "neutrofilos", "segmentados"],
 	},
 	{
 		key: "lymphocytes",
 		label: "Lymphocytes",
 		unit: "/µL",
-		panel: "cbc",
+		panel: "leukogram",
 		synonyms: ["linfócitos", "linfocitos"],
 	},
 	{
 		key: "monocytes",
 		label: "Monocytes",
 		unit: "/µL",
-		panel: "cbc",
+		panel: "leukogram",
 		synonyms: ["monócitos", "monocitos"],
 	},
 	{
 		key: "eosinophils",
 		label: "Eosinophils",
 		unit: "/µL",
-		panel: "cbc",
+		panel: "leukogram",
 		synonyms: ["eosinófilos", "eosinofilos"],
 	},
 	{
 		key: "basophils",
 		label: "Basophils",
 		unit: "/µL",
-		panel: "cbc",
+		panel: "leukogram",
 		synonyms: ["basófilos", "basofilos"],
 	},
 	{
@@ -133,7 +145,12 @@ export const LAB_TAXONOMY: MetricDef[] = [
 		label: "ALT (TGP)",
 		unit: "U/L",
 		panel: "biochem-liver",
-		synonyms: ["tgp", "alt", "alanina aminotransferase", "alanina aminotransferase (tgp)"],
+		synonyms: [
+			"tgp",
+			"alt",
+			"alanina aminotransferase",
+			"alanina aminotransferase (tgp)",
+		],
 		refByCanine: { low: 4, high: 66 },
 	},
 	{
@@ -229,7 +246,13 @@ export const LAB_TAXONOMY: MetricDef[] = [
 		label: "Canine pancreatic lipase (cPLI)",
 		unit: "ng/mL",
 		panel: "pancreas",
-		synonyms: ["cpli", "cpl", "pancreatic lipase", "lipase pancreática", "spec cpl"],
+		synonyms: [
+			"cpli",
+			"cpl",
+			"pancreatic lipase",
+			"lipase pancreática",
+			"spec cpl",
+		],
 	},
 	{
 		key: "amylase",
@@ -302,6 +325,7 @@ export const TAXONOMY_BY_KEY: Record<string, MetricDef> = Object.fromEntries(
 
 export const PANEL_LABEL: Record<Panel, string> = {
 	cbc: "CBC",
+	leukogram: "White series",
 	"biochem-liver": "Liver",
 	"biochem-kidney": "Kidney",
 	"biochem-protein": "Protein",
