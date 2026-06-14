@@ -11,7 +11,7 @@ import {
 	useExplainState,
 } from "../components/ExamInsights.tsx";
 import { Layout } from "../components/Layout.tsx";
-import { MetricChart } from "../components/MetricChart.tsx";
+import { MetricChart, metricColorMap } from "../components/MetricChart.tsx";
 import { Section } from "../components/Section.tsx";
 import { useMetricSeries, usePet } from "../lib/queries.ts";
 import {
@@ -61,6 +61,9 @@ export function ExamsDetailPage() {
 
 	const byPanel = useMemo(() => groupByPanel(series ?? []), [series]);
 	const selectedArr = Array.from(selectedKeys);
+	// Same key → color map the chart uses, so the title + legend labels match
+	// their lines.
+	const colors = metricColorMap(series ?? [], selectedArr);
 	const explain = useExplainState();
 	const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -128,11 +131,24 @@ export function ExamsDetailPage() {
 
 					<Section
 						title={
-							selectedArr.length === 0
-								? "Pick metrics to chart"
-								: selectedArr
-										.map((k) => TAXONOMY_BY_KEY[k]?.label ?? k)
-										.join(" · ")
+							selectedArr.length === 0 ? (
+								"Pick metrics to chart"
+							) : (
+								<span className="inline-flex flex-wrap items-baseline gap-x-1.5">
+									{selectedArr.map((k, i) => (
+										<span key={k} className="inline-flex items-baseline">
+											{i > 0 ? (
+												<span className="text-muted-foreground/40 font-normal mr-1.5">
+													·
+												</span>
+											) : null}
+											<span style={{ color: colors[k] }}>
+												{TAXONOMY_BY_KEY[k]?.label ?? k}
+											</span>
+										</span>
+									))}
+								</span>
+							)
 						}
 						eyebrow="Evolution"
 						action={
@@ -228,6 +244,7 @@ function MetricLegend({
 	series: ExamMetricSeriesPoint[];
 	keys: string[];
 }) {
+	const colors = metricColorMap(series, keys);
 	return (
 		<ul className="mt-3 text-xs text-muted-foreground space-y-1">
 			{keys.map((k) => {
@@ -236,7 +253,7 @@ function MetricLegend({
 				if (!last) return null;
 				return (
 					<li key={k}>
-						<span className="font-medium text-foreground">
+						<span className="font-semibold" style={{ color: colors[k] }}>
 							{TAXONOMY_BY_KEY[k]?.label ?? k}
 						</span>
 						{last.valueNum != null ? (

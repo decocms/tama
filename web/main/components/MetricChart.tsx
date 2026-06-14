@@ -35,6 +35,27 @@ const PALETTE = [
 	"#0891b2", // cyan
 ];
 
+// Key → line color, in the exact order the chart assigns them: each metric
+// takes the next palette slot the first time it appears (with a numeric value)
+// in `series`. Exported so labels/legends elsewhere can match the line colors.
+// MUST stay in sync with the seenKeys logic in MetricChart's data builder.
+export function metricColorMap(
+	series: ExamMetricSeriesPoint[],
+	keys: string[],
+): Record<string, string> {
+	const seen: string[] = [];
+	for (const p of series) {
+		if (!keys.includes(p.canonicalKey)) continue;
+		if (p.valueNum == null) continue;
+		if (!seen.includes(p.canonicalKey)) seen.push(p.canonicalKey);
+	}
+	const out: Record<string, string> = {};
+	seen.forEach((k, i) => {
+		out[k] = PALETTE[i % PALETTE.length];
+	});
+	return out;
+}
+
 function fmtTick(iso: string): string {
 	try {
 		// performedAt is a date-only string ("2026-06-05"); `new Date(that)`
@@ -153,8 +174,7 @@ export function MetricChart({
 				const base = baseByKey.get(k);
 				if (!base) continue;
 				const refs = series.filter(
-					(p) =>
-						p.canonicalKey === k && p.refLow != null && p.refHigh != null,
+					(p) => p.canonicalKey === k && p.refLow != null && p.refHigh != null,
 				);
 				if (refs.length === 0) continue;
 				lows.push((median(refs.map((p) => p.refLow as number)) / base) * 100);
