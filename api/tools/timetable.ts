@@ -49,6 +49,9 @@ export const timetableGetTool = (_env: Env) =>
 				.describe(
 					"IANA tz used for the day-boundary anchor (defaults to the pet's stored tz, then UTC).",
 				),
+			// Client cache-buster (the UI passes Date.now()); ignored here. Keeps the
+			// embedded tool-call transport from returning a stale cached read.
+			nonce: z.coerce.number().optional(),
 		}),
 		outputSchema: z.object({ entries: z.array(TimetableEntrySchema) }),
 		_meta: { ui: { resourceUri: URI.timetable } },
@@ -329,7 +332,9 @@ For starting/stopping/extending a whole treatment, use timetable_set_bounds inst
 			shiftHours: z.coerce
 				.number()
 				.optional()
-				.describe("Relative nudge in hours. Positive = later, negative = earlier."),
+				.describe(
+					"Relative nudge in hours. Positive = later, negative = earlier.",
+				),
 			nextLocal: z
 				.string()
 				.optional()
@@ -392,6 +397,8 @@ export const scheduleStateListTool = (_env: Env) =>
 				.describe(
 					"Default true. When false, only active=true items are returned.",
 				),
+			// Client cache-buster (the UI passes Date.now()); ignored here.
+			nonce: z.coerce.number().optional(),
 		}),
 		outputSchema: z.object({
 			scheduleStates: z.array(
@@ -458,7 +465,9 @@ export const timetableSetBoundsTool = (_env: Env) =>
 			stop: z
 				.boolean()
 				.optional()
-				.describe("Stop the treatment now (ends_at = now). Shorthand for endsAt=now."),
+				.describe(
+					"Stop the treatment now (ends_at = now). Shorthand for endsAt=now.",
+				),
 			startsAt: z
 				.string()
 				.nullable()
@@ -472,7 +481,9 @@ export const timetableSetBoundsTool = (_env: Env) =>
 			remove: z
 				.boolean()
 				.optional()
-				.describe("Hard-delete the schedule row (cleanup). Mutually exclusive with the others."),
+				.describe(
+					"Hard-delete the schedule row (cleanup). Mutually exclusive with the others.",
+				),
 		}),
 		outputSchema: z.object({
 			itemKey: z.string(),

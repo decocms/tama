@@ -334,8 +334,13 @@ export function useTimetable() {
 	return useQuery({
 		queryKey: keys.timetable,
 		queryFn: () =>
+			// nonce: a per-call cache-buster. The embedded (Studio) tool-call
+			// transport caches read-only results by (name, args); without a varying
+			// arg a refetch right after logging a dose could return a stale snapshot
+			// (the "takes minutes to update" symptom). The server ignores nonce.
 			callTool<{ entries: TimetableEntry[] }>(app, "timetable_get", {
 				timeZone: browserTimeZone(),
+				nonce: Date.now(),
 			}).then((r) => r.entries),
 		enabled: true,
 		refetchInterval: 30_000,
@@ -350,7 +355,7 @@ export function useScheduleStates() {
 			callTool<{ scheduleStates: ScheduleState[] }>(
 				app,
 				"schedule_state_list",
-				{},
+				{ nonce: Date.now() },
 			).then((r) => r.scheduleStates),
 		enabled: true,
 	});
@@ -360,6 +365,8 @@ export function useLogDose() {
 	const app = useMcpApp();
 	const qc = useQueryClient();
 	return useMutation({
+		// Shared key so concurrent dose logs can coordinate the reconcile below.
+		mutationKey: ["dose-log"],
 		mutationFn: (input: {
 			itemName: string;
 			kind?: "medication" | "meal";
@@ -395,7 +402,12 @@ export function useLogDose() {
 			const prev = (ctx as { prev?: TimetableEntry[] } | undefined)?.prev;
 			if (prev) qc.setQueryData(keys.timetable, prev);
 		},
-		onSettled: () => invalidateAll(qc),
+		// Only refetch once the LAST in-flight dose log settles. Otherwise the
+		// first click's refetch lands before a second click's write has committed
+		// and clobbers the second row's optimistic flip ("the other one undoes").
+		onSettled: () => {
+			if (qc.isMutating({ mutationKey: ["dose-log"] }) === 1) invalidateAll(qc);
+		},
 	});
 }
 
