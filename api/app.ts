@@ -1,4 +1,5 @@
 import { withRuntime } from "@decocms/runtime";
+import { zipSync } from "fflate";
 import { type Env, StateSchema } from "./env.ts";
 import { prompts } from "./prompts/index.ts";
 import { uiResources } from "./resources/ui.ts";
@@ -69,6 +70,59 @@ function mcpAuthRejection(req: Request, env: Env | undefined): Response | null {
 	);
 }
 
+// Bundle several stored files into one zip (the Assets "download selected").
+// Streams from R2; files with no stored object are skipped. Entry names use the
+// file's original name, deduped. Built in-memory — fine for the handful of
+// PDFs/images an owner selects.
+async function serveFilesZip(env: Env, idsParam: string): Promise<Response> {
+	const ids = idsParam
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean)
+		.slice(0, 300);
+	if (ids.length === 0) return new Response("No file ids", { status: 400 });
+
+	const entries: Record<string, Uint8Array> = {};
+	const used = new Set<string>();
+	for (const id of ids) {
+		const file = await getFile(env, id);
+		if (!file) continue;
+		const obj = await env.FILES.get(file.r2Key);
+		if (!obj) continue; // file row exists but no bytes (legacy) → skip
+		const bytes = new Uint8Array(await obj.arrayBuffer());
+		let name =
+			(file.originalName ?? "").trim() ||
+			file.r2Key.split("/").pop() ||
+			`${id}`;
+		name = name.replace(/[/\\]/g, "_");
+		if (used.has(name)) {
+			const dot = name.lastIndexOf(".");
+			const base = dot > 0 ? name.slice(0, dot) : name;
+			const ext = dot > 0 ? name.slice(dot) : "";
+			let n = 2;
+			while (used.has(`${base} (${n})${ext}`)) n++;
+			name = `${base} (${n})${ext}`;
+		}
+		used.add(name);
+		entries[name] = bytes;
+	}
+
+	if (Object.keys(entries).length === 0) {
+		return new Response("None of the selected files have stored content.", {
+			status: 404,
+		});
+	}
+	// level 0 (store): PDFs/images are already compressed — skip the CPU.
+	const zipped = zipSync(entries, { level: 0 });
+	return new Response(zipped, {
+		headers: {
+			"content-type": "application/zip",
+			"content-disposition": 'attachment; filename="assets.zip"',
+			"cache-control": "no-store",
+		},
+	});
+}
+
 // Serve an uploaded file (prescription image, PDF, etc.) by fileId. Used by
 // the UI to open the original document the AI extracted a prescription from.
 async function serveFile(env: Env, fileId: string): Promise<Response> {
@@ -88,6 +142,12 @@ function withAssetsAndMcpRoutes(fetcher: Fetcher): Fetcher {
 	return async (req: Request, ...args) => {
 		const url = new URL(req.url);
 		const env = args[0] as Env | undefined;
+
+		// Bulk download: /api/files/zip?ids=a,b,c → one zip. Must come BEFORE the
+		// single-file matcher ("zip" otherwise matches the fileId pattern).
+		if (env && url.pathname === "/api/files/zip") {
+			return serveFilesZip(env, url.searchParams.get("ids") ?? "");
+		}
 
 		// File downloads: /api/files/:fileId → R2 bytes with original mime type.
 		const fileMatch = FILES_PATH_RE.exec(url.pathname);
