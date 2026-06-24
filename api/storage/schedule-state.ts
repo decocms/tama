@@ -114,10 +114,7 @@ export async function getScheduleState(
 		.select()
 		.from(scheduleState)
 		.where(
-			and(
-				eq(scheduleState.petId, PET_SELF_ID),
-				eq(scheduleState.itemKey, key),
-			),
+			and(eq(scheduleState.petId, PET_SELF_ID), eq(scheduleState.itemKey, key)),
 		);
 	return rows[0] ?? null;
 }
@@ -288,6 +285,42 @@ export async function syncPrescriptionToScheduleState(
 	}
 }
 
+// Resolve each itemKey to its SINGLE owning prescription + item. The same drug
+// can sit in several confirmed prescriptions (re-prescribed, or a consolidated
+// schedule that supersedes older single-drug ones), and a key can repeat within
+// one prescription's items. The newest confirmed prescription wins (sorted
+// createdAt-ascending, later overwrites the earlier).
+//
+// This dedup is load-bearing: ensureScheduleStateForPet writes one row per key.
+// Without it, two prescriptions claiming the same key would push concurrent
+// UPDATEs to the SAME schedule_state row in one call — a Promise.all race whose
+// winner flips times_json/startsAt/anchorAt per request, so the timetable
+// flickers between states (overdue appears/disappears) with nobody touching it.
+export function resolveScheduleOwners(prescriptions: Prescription[]): {
+	owners: Map<string, { item: ScheduleItem; rx: Prescription }>;
+	duplicates: Map<string, string[]>;
+} {
+	const sorted = [...prescriptions].sort(
+		(a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+	);
+	const owners = new Map<string, { item: ScheduleItem; rx: Prescription }>();
+	const claimants = new Map<string, string[]>();
+	for (const rx of sorted) {
+		if (rx.status !== "confirmed") continue;
+		for (const item of parseScheduleItems(rx)) {
+			const key = itemKey(item.name);
+			owners.set(key, { item, rx });
+			const list = claimants.get(key) ?? [];
+			if (!list.includes(rx.id)) list.push(rx.id);
+			claimants.set(key, list);
+		}
+	}
+	const duplicates = new Map(
+		[...claimants].filter(([, ids]) => ids.length > 1),
+	);
+	return { owners, duplicates };
+}
+
 // Lazy backfill: ensure schedule_state rows exist for every confirmed-rx item.
 // Idempotent — upsert preserves anchors for existing rows. For NEW rows, we
 // anchor on `lastDose + interval` so already-given slots aren't marked overdue.
@@ -326,16 +359,20 @@ export async function ensureScheduleStateForPet(
 		}
 	}
 
-	const sorted = [...prescriptions].sort(
-		(a, b) =>
-			new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-	);
+	// Collapse to ONE owner per itemKey before writing (see resolveScheduleOwners).
+	const { owners: ownerByKey, duplicates } =
+		resolveScheduleOwners(prescriptions);
+	for (const [key, ids] of duplicates) {
+		console.warn(
+			`timetable: itemKey "${key}" in ${ids.length} confirmed prescriptions [${ids.join(", ")}] — using newest (${ownerByKey.get(key)?.rx.id})`,
+		);
+	}
+
 	let touched = false;
 	const writes: Promise<unknown>[] = [];
 	const nowIso = new Date().toISOString();
-	for (const rx of sorted) {
-		if (rx.status !== "confirmed") continue;
-		for (const item of parseScheduleItems(rx)) {
+	for (const { item, rx } of ownerByKey.values()) {
+		{
 			const key = itemKey(item.name);
 			const existingRow = existingByKey.get(key);
 			const intervalHours = deriveIntervalHours(item);

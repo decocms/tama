@@ -29,7 +29,10 @@ export function TimetablePage() {
 	const upcoming = pending
 		.filter((e) => new Date(e.scheduledAt).getTime() >= now)
 		.sort((a, b) => (a.scheduledAt < b.scheduledAt ? -1 : 1));
-	const doneToday = (entries ?? []).filter((e) => e.status !== "pending");
+	const doneToday = (entries ?? [])
+		.filter((e) => e.status !== "pending")
+		// Chronological (morning → evening) so the day reads top-to-bottom.
+		.sort((a, b) => (a.scheduledAt < b.scheduledAt ? -1 : 1));
 
 	const activeMeds = (states ?? []).filter((s) => s.active);
 
@@ -40,6 +43,17 @@ export function TimetablePage() {
 					<Skeleton className="h-48 w-full rounded-2xl" />
 				) : (
 					<>
+						{/* Logged first: at a glance, what was already given today. */}
+						{doneToday.length > 0 ? (
+							<Section title="Logged" eyebrow="Given today">
+								<div className="space-y-2">
+									{doneToday.slice(0, 12).map((e) => (
+										<DoseRow key={e.id} entry={e} />
+									))}
+								</div>
+							</Section>
+						) : null}
+
 						{overdue.length > 0 ? (
 							<Section title="Overdue" eyebrow="Give these now">
 								<div className="space-y-2">
@@ -64,16 +78,6 @@ export function TimetablePage() {
 								</div>
 							)}
 						</Section>
-
-						{doneToday.length > 0 ? (
-							<Section title="Logged" eyebrow="Recent">
-								<div className="space-y-2">
-									{doneToday.slice(0, 12).map((e) => (
-										<DoseRow key={e.id} entry={e} />
-									))}
-								</div>
-							</Section>
-						) : null}
 
 						{activeMeds.length > 0 ? (
 							<Section title="Active treatments" eyebrow="On the schedule">
