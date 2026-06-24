@@ -95,7 +95,11 @@ Item matching:
 - Scheduled item: pass its existing display_name. Anchor advances.
 - One-off / ad-hoc dose ("gave Luftal for gas"): pass the name as-is. Recorded normally, no anchor advanced.
 
-Times: when the user mentions a time WITHOUT a timezone, use plannedLocal/actualLocal in "HH:mm" or "YYYY-MM-DD HH:mm" — resolved to UTC via the pet's timezone.`,
+Times — DEFAULT TO NOW. The common case is "gave it now":
+- "gave it" / "gave it now" / "agora" / "acabei de dar" / no time mentioned → pass ONLY { itemName, status } and OMIT actualLocal and plannedLocal. The dose is stamped at the CURRENT time and auto-matched to the nearest scheduled slot. Do this unless the user explicitly states a different time.
+- Pass actualLocal ONLY when the user states WHEN it actually happened as a real PAST time ("gave it at 8am", "por volta do meio-dia") — "HH:mm" or "YYYY-MM-DD HH:mm" in the pet's timezone (server converts to UTC; do not hand-convert).
+- NEVER log a dose at a future time, and NEVER substitute a scheduled clock time (e.g. tonight's 20:00 slot) for "now". "Now" means the wall clock right now, NOT the next planned slot.
+- plannedLocal only TAGS which slot a given dose satisfies; it is rarely needed (proximity handles slot-clearing) and does NOT set a "given" dose's time.`,
 		inputSchema: z.object({
 			itemName: z.string(),
 			kind: z.enum(["medication", "meal"]).default("medication"),
