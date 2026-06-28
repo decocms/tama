@@ -143,9 +143,17 @@ Times — DEFAULT TO NOW. The common case is "gave it now":
 			// that doesn't know the exact display_name, e.g. "papa" for "PAPA
 			// (refeição)" or "prelone" for "PRELONE 3mg/ml"), resolve it to the
 			// scheduled item so the dose clears the right slot instead of orphaning.
-			const ssRow =
-				(await getScheduleState(env, key)) ??
-				(await findScheduleStateByLooseName(env, context.itemName));
+			// Prefer an ACTIVE schedule item. An exact-key hit on an INACTIVE row (a
+			// stale stopped/renamed item — e.g. a dead "papa" shadowing the live "PAPA
+			// (refeição)", or "prelone" shadowing "PRELONE 3mg/ml") must NOT
+			// short-circuit the loose resolver, or the dose lands on the dead row and
+			// never clears the live slot. Fall through to the active-only resolver;
+			// keep the inactive exact row only if nothing active matches.
+			const exactRow = await getScheduleState(env, key);
+			const ssRow = exactRow?.active
+				? exactRow
+				: ((await findScheduleStateByLooseName(env, context.itemName)) ??
+					exactRow);
 			// The key the dose actually belongs to (loose match → the resolved row's
 			// key), used for the anchor update below.
 			const resolvedKey = ssRow?.itemKey ?? key;

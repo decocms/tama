@@ -201,4 +201,22 @@ describe("matchScheduleByLooseName", () => {
 		];
 		expect(matchScheduleByLooseName("papa", inactive)).toBeNull();
 	});
+
+	it("skips an inactive SHADOW row and resolves to the active item", () => {
+		// The real bug: a dead "papa" row (exact key) shadowed the live "PAPA
+		// (refeição)". The resolver must ignore the inactive exact-key row and
+		// land on the active one (dose_log relies on this to bypass its own
+		// getScheduleState exact hit when that row is inactive).
+		const shadowed = [
+			{ displayName: "PAPA", itemKey: "papa", active: false },
+			{
+				displayName: "PAPA (refeição)",
+				itemKey: "papa (refeição)",
+				active: true,
+			},
+		];
+		expect(matchScheduleByLooseName("papa", shadowed)?.itemKey).toBe(
+			"papa (refeição)",
+		);
+	});
 });
