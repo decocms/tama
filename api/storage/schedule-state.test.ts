@@ -2,7 +2,9 @@ import { describe, expect, it } from "bun:test";
 import type { Prescription } from "../db/schema.ts";
 import type { ScheduleItem } from "../tools/shared.ts";
 import {
+	coreItemName,
 	freshCourseLifecycle,
+	matchScheduleByLooseName,
 	resolveScheduleOwners,
 } from "./schedule-state.ts";
 
@@ -127,5 +129,76 @@ describe("resolveScheduleOwners", () => {
 		expect(owners.get("doxiciclina (suspensão)")?.item.times).toEqual([
 			"22:30",
 		]);
+	});
+});
+
+describe("coreItemName", () => {
+	it("strips parenthetical qualifiers and dosage tokens", () => {
+		expect(coreItemName("PAPA (refeição)")).toBe("papa");
+		expect(coreItemName("PRELONE 3mg/ml")).toBe("prelone");
+		expect(coreItemName("DOXICICLINA (suspensão)")).toBe("doxiciclina");
+		expect(coreItemName("AMYTRIL 10mg")).toBe("amytril");
+		expect(coreItemName("VONAU VET")).toBe("vonau vet");
+	});
+});
+
+describe("matchScheduleByLooseName", () => {
+	const rows = [
+		{
+			displayName: "PAPA (refeição)",
+			itemKey: "papa (refeição)",
+			active: true,
+		},
+		{ displayName: "PRELONE 3mg/ml", itemKey: "prelone 3mg/ml", active: true },
+		{ displayName: "SUCRAFILM", itemKey: "sucrafilm", active: true },
+		{
+			displayName: "DOXICICLINA (suspensão)",
+			itemKey: "doxiciclina (suspensão)",
+			active: true,
+		},
+	];
+
+	it("resolves the loose names the concierge bridge sent", () => {
+		// The actual bug: decopilot logged "PAPA" / "PRELONE", which never matched
+		// "PAPA (refeição)" / "PRELONE 3mg/ml", so the 07:00 slots stayed overdue.
+		expect(matchScheduleByLooseName("PAPA", rows)?.itemKey).toBe(
+			"papa (refeição)",
+		);
+		expect(matchScheduleByLooseName("prelone", rows)?.itemKey).toBe(
+			"prelone 3mg/ml",
+		);
+	});
+
+	it("still matches an exact display_name", () => {
+		expect(matchScheduleByLooseName("PAPA (refeição)", rows)?.itemKey).toBe(
+			"papa (refeição)",
+		);
+	});
+
+	it("returns null for a genuine ad-hoc name (no scheduled item)", () => {
+		expect(matchScheduleByLooseName("Luftal", rows)).toBeNull();
+	});
+
+	it("returns null (ambiguous) when two active rows share a core", () => {
+		const dup = [
+			{
+				displayName: "PRELONE 3mg/ml",
+				itemKey: "prelone 3mg/ml",
+				active: true,
+			},
+			{ displayName: "PRELONE 5mg", itemKey: "prelone 5mg", active: true },
+		];
+		expect(matchScheduleByLooseName("prelone", dup)).toBeNull();
+	});
+
+	it("ignores inactive rows", () => {
+		const inactive = [
+			{
+				displayName: "PAPA (refeição)",
+				itemKey: "papa (refeição)",
+				active: false,
+			},
+		];
+		expect(matchScheduleByLooseName("papa", inactive)).toBeNull();
 	});
 });

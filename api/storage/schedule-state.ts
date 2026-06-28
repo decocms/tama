@@ -23,6 +23,45 @@ export function itemKey(name: string): string {
 	return name.trim().toLowerCase();
 }
 
+// Reduce an item name to its "core" for loose matching: lowercase, drop
+// parenthetical qualifiers ("(refeição)"), dosage tokens ("3mg/ml", "2ml",
+// "1/4 comp"), and collapse punctuation. So "PRELONE 3mg/ml" → "prelone" and
+// "PAPA (refeição)" → "papa" — what a bridge agent (or the user) is likely to
+// type when logging "gave prelone now".
+export function coreItemName(name: string): string {
+	return name
+		.toLowerCase()
+		.replace(/\([^)]*\)/g, " ") // "(refeição)"
+		.replace(/\b\d+\s*\/\s*\d+\b/g, " ") // "1/4"
+		.replace(
+			/\b\d+([.,]\d+)?\s*(mg\/ml|mcg|mg|ml|g|ui|kg|comprimidos?|comp|gotas?|c[aá]psulas?|caps?|doses?)\b/gu,
+			" ",
+		)
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim()
+		.replace(/\s+/g, " ");
+}
+
+// Find the single active row that loosely matches `name`. Exact item_key wins;
+// otherwise compare normalized cores (equal, or one a word-prefix of the
+// other). Returns null when nothing matches OR ≥2 rows match (ambiguous) — so
+// the caller can fall back to an ad-hoc dose instead of guessing wrong.
+export function matchScheduleByLooseName<
+	T extends { displayName: string; itemKey: string; active: boolean },
+>(name: string, rows: T[]): T | null {
+	const key = itemKey(name);
+	const exact = rows.find((r) => r.active && r.itemKey === key);
+	if (exact) return exact;
+	const g = coreItemName(name);
+	if (!g) return null;
+	const candidates = rows.filter((r) => {
+		if (!r.active) return false;
+		const c = coreItemName(r.displayName);
+		return !!c && (c === g || c.startsWith(`${g} `) || g.startsWith(`${c} `));
+	});
+	return candidates.length === 1 ? candidates[0] : null;
+}
+
 // Compute the interval in hours for a prescription item:
 //   1. Honor item.frequencyHours if set.
 //   2. Else derive from the number of times in the day (24 / count).
@@ -117,6 +156,17 @@ export async function getScheduleState(
 			and(eq(scheduleState.petId, PET_SELF_ID), eq(scheduleState.itemKey, key)),
 		);
 	return rows[0] ?? null;
+}
+
+// Resolve a loosely-typed item name ("papa", "prelone") to its active schedule
+// row ("PAPA (refeição)", "PRELONE 3mg/ml"). Used by dose_log so a dose logged
+// via a bridge/agent that doesn't know the exact display_name still clears the
+// right scheduled slot instead of landing as an orphan ad-hoc dose.
+export async function findScheduleStateByLooseName(
+	env: Env,
+	name: string,
+): Promise<ScheduleState | null> {
+	return matchScheduleByLooseName(name, await listScheduleStates(env));
 }
 
 export interface UpsertScheduleStateInput {

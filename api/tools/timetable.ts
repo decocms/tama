@@ -20,6 +20,7 @@ import {
 	deleteScheduleState,
 	endScheduleStateItem,
 	ensureScheduleStateForPet,
+	findScheduleStateByLooseName,
 	getScheduleState,
 	itemKey,
 	listScheduleStates,
@@ -92,8 +93,8 @@ Behavior:
 - status=undone: tombstones the most recent matching prior dose (case-insensitive itemName, near plannedLocal/plannedAt within ±2h). Does NOT rewind the anchor.
 
 Item matching:
-- Scheduled item: pass its existing display_name. Anchor advances.
-- One-off / ad-hoc dose ("gave Luftal for gas"): pass the name as-is. Recorded normally, no anchor advanced.
+- Scheduled item: pass its display_name. A close name also resolves — "prelone" matches "PRELONE 3mg/ml", "papa" matches "PAPA (refeição)" (dosage/parenthetical are ignored), so the dose clears the right slot and the anchor advances.
+- One-off / ad-hoc dose ("gave Luftal for gas"): pass the name as-is. Recorded normally, no anchor advanced. (Only names that don't loosely match any scheduled item land as ad-hoc.)
 
 Times — DEFAULT TO NOW. The common case is "gave it now":
 - "gave it" / "gave it now" / "agora" / "acabei de dar" / no time mentioned → pass ONLY { itemName, status } and OMIT actualLocal and plannedLocal. The dose is stamped at the CURRENT time and auto-matched to the nearest scheduled slot. Do this unless the user explicitly states a different time.
@@ -118,7 +119,16 @@ Times — DEFAULT TO NOW. The common case is "gave it now":
 			const env = runtimeContext.env as Env;
 			const key = itemKey(context.itemName);
 
-			const ssRow = await getScheduleState(env, key);
+			// Exact item_key first; if the caller used a loose name (a bridge/agent
+			// that doesn't know the exact display_name, e.g. "papa" for "PAPA
+			// (refeição)" or "prelone" for "PRELONE 3mg/ml"), resolve it to the
+			// scheduled item so the dose clears the right slot instead of orphaning.
+			const ssRow =
+				(await getScheduleState(env, key)) ??
+				(await findScheduleStateByLooseName(env, context.itemName));
+			// The key the dose actually belongs to (loose match → the resolved row's
+			// key), used for the anchor update below.
+			const resolvedKey = ssRow?.itemKey ?? key;
 
 			let canonical: string;
 			let canonicalKind: "medication" | "meal";
@@ -229,7 +239,7 @@ Times — DEFAULT TO NOW. The common case is "gave it now":
 							.where(
 								and(
 									eq(scheduleState.petId, PET_SELF_ID),
-									eq(scheduleState.itemKey, key),
+									eq(scheduleState.itemKey, resolvedKey),
 								),
 							)
 					: Promise.resolve(),
