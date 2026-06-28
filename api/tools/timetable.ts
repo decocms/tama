@@ -104,10 +104,30 @@ Times — DEFAULT TO NOW. The common case is "gave it now":
 		inputSchema: z.object({
 			itemName: z.string(),
 			kind: z.enum(["medication", "meal"]).default("medication"),
-			plannedAt: z.string().optional(),
-			plannedLocal: z.string().optional(),
-			actualAt: z.string().optional(),
-			actualLocal: z.string().optional(),
+			plannedAt: z
+				.string()
+				.optional()
+				.describe(
+					"UTC ISO of the scheduled SLOT this dose satisfies. Rarely needed (proximity auto-clears the nearest slot). Omit unless you must pin a specific slot.",
+				),
+			plannedLocal: z
+				.string()
+				.optional()
+				.describe(
+					"Wall-clock of the scheduled SLOT ('HH:mm', pet tz). Same as plannedAt but local. Omit for a plain 'gave it now'.",
+				),
+			actualAt: z
+				.string()
+				.optional()
+				.describe(
+					"UTC ISO of when the dose was ACTUALLY given. OMIT for 'now'/'agora'/no stated time — the server stamps the real current time. NEVER fabricate, guess, or copy a timestamp from other doses or context; if you don't have a time the user explicitly stated, leave this empty.",
+				),
+			actualLocal: z
+				.string()
+				.optional()
+				.describe(
+					"Wall-clock of when the dose was actually given ('HH:mm' or 'YYYY-MM-DD HH:mm', pet tz). ONLY for an explicit PAST time the user stated ('gave it at 8am'). For 'now'/no time, OMIT it — do NOT invent a clock time.",
+				),
 			status: z.enum(["given", "skipped", "undone"]).default("given"),
 			note: z.string().optional(),
 		}),
@@ -208,11 +228,21 @@ Times — DEFAULT TO NOW. The common case is "gave it now":
 			// time, so anchor it to the planned slot when one was given (so a skip
 			// for a future/past slot lands ON that slot, not at "now"). A "given"
 			// dose defaults to now unless an actual time was supplied.
-			const actualAtFinal =
+			const nowIso = new Date().toISOString();
+			let actualAtFinal =
 				actualAt ??
 				(context.status === "skipped" ? plannedAt : undefined) ??
-				new Date().toISOString();
-			const nowIso = new Date().toISOString();
+				nowIso;
+			// Safety net: a dose that was GIVEN cannot have happened in the future.
+			// If an agent fabricates a future actual time, clamp it to now rather
+			// than recording an impossible administration. (Skipped doses legitimately
+			// anchor to a future planned slot, so only guard "given".)
+			if (
+				context.status === "given" &&
+				new Date(actualAtFinal).getTime() > Date.now()
+			) {
+				actualAtFinal = nowIso;
+			}
 			const advancesAnchor =
 				(context.status === "given" || context.status === "skipped") &&
 				intervalHoursOrNull !== null;
